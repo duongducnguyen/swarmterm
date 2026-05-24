@@ -3,7 +3,9 @@ mod pty;
 mod tray;
 
 use pty::AppState;
+use std::sync::atomic::Ordering;
 use tauri::Manager;
+use tauri::WindowEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,6 +20,16 @@ pub fn run() {
         .setup(|app| {
             tray::setup_tray(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                let state = app.state::<crate::pty::AppState>();
+                if !state.quitting.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .manage(AppState::default())
         .plugin(tauri_plugin_dialog::init())
