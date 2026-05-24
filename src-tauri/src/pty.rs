@@ -238,11 +238,13 @@ fn read_loop(
         let _ = on_data.send(PtyOut::Data(String::from_utf8_lossy(&pending).into_owned()));
     }
     let exit_code = child.wait().map(|s| s.exit_code() as i32).unwrap_or(-1);
-    let _ = on_data.send(PtyOut::Exit { exit_code });
 
+    // Remove from the registry BEFORE notifying the renderer: a retry triggered by
+    // the exit event must find the id free, since create rejects a duplicate live id.
     if let Some(state) = app.try_state::<AppState>() {
         state.terminals.lock().unwrap().remove(&id);
     }
+    let _ = on_data.send(PtyOut::Exit { exit_code });
 }
 
 #[cfg(test)]

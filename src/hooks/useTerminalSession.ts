@@ -59,14 +59,19 @@ export function useTerminalSession(p: Params): {
           setStatus({ kind: 'exited', exitCode: msg.payload.exitCode })
         }
       }
-    ).then((result) => {
-      if (cancelled) return
-      if (!result.ok) {
-        setStatus({ kind: 'error', message: result.error ?? 'Unknown error' })
-        return
-      }
-      if (!exitedRef.current) setStatus({ kind: 'running' })
-    })
+    )
+      .then((result) => {
+        if (cancelled) return
+        if (!result.ok) {
+          setStatus({ kind: 'error', message: result.error ?? 'Unknown error' })
+          return
+        }
+        if (!exitedRef.current) setStatus({ kind: 'running' })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setStatus({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+      })
 
     return () => {
       cancelled = true
