@@ -77,9 +77,10 @@ pub fn default_shell() -> (String, Vec<String>) {
 }
 
 /// Drain the largest valid-UTF-8 prefix from `buf`, leaving any incomplete
-/// trailing multibyte sequence behind for the next read. If the leftover is too
-/// long to be a single incomplete char, it is genuinely invalid, so decode the
-/// whole thing lossily to avoid stalling.
+/// trailing multibyte sequence behind for the next read. Bytes that cannot begin
+/// or continue a valid sequence are genuinely invalid, so they are flushed
+/// lossily immediately rather than stalling the stream waiting for a completion
+/// that will never come.
 pub fn take_valid_utf8(buf: &mut Vec<u8>) -> Option<String> {
     if buf.is_empty() {
         return None;
@@ -88,16 +89,22 @@ pub fn take_valid_utf8(buf: &mut Vec<u8>) -> Option<String> {
         Ok(s) => s.len(),
         Err(e) => e.valid_up_to(),
     };
-    let remaining = buf.len() - valid_up_to;
-    if remaining >= 4 {
-        // Not an incomplete char (max 4 bytes) -> invalid bytes present; flush all.
+    if valid_up_to == 0 {
+        // Nothing decodes yet. Wait for more bytes only if the leading byte could
+        // plausibly start a multibyte sequence and we haven't already buffered a
+        // full char's worth (max 4 bytes). Otherwise the bytes are invalid —
+        // flush lossily so the stream never stalls.
+        let leads_multibyte = matches!(buf[0], 0xC2..=0xDF | 0xE0..=0xEF | 0xF0..=0xF4);
+        if leads_multibyte && buf.len() < 4 {
+            return None;
+        }
         let s = String::from_utf8_lossy(buf).into_owned();
         buf.clear();
         return Some(s);
     }
-    if valid_up_to == 0 {
-        return None;
-    }
-    let valid: Vec<u8> = buf.drain(..valid_up_to).collect();
-    Some(String::from_utf8(valid).expect("valid_up_to guarantees valid utf8"))
+    let s = std::str::from_utf8(&buf[..valid_up_to])
+        .expect("valid_up_to guarantees valid utf8")
+        .to_owned();
+    buf.drain(..valid_up_to);
+    Some(s)
 }
