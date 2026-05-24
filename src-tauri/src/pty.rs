@@ -170,11 +170,18 @@ pub fn spawn_terminal(
 
     let mut writer = match pair.master.take_writer() {
         Ok(w) => w,
-        Err(e) => return CreateTerminalResult::err(e.to_string()),
+        Err(e) => {
+            // The child already spawned; don't leave it orphaned.
+            let _ = child.clone_killer().kill();
+            return CreateTerminalResult::err(e.to_string());
+        }
     };
     let reader = match pair.master.try_clone_reader() {
         Ok(r) => r,
-        Err(e) => return CreateTerminalResult::err(e.to_string()),
+        Err(e) => {
+            let _ = child.clone_killer().kill();
+            return CreateTerminalResult::err(e.to_string());
+        }
     };
 
     // Run the template's first command (clearing the screen first for the
@@ -215,7 +222,9 @@ fn read_loop(
     let mut chunk = vec![0u8; READ_BUF_BYTES];
     loop {
         match reader.read(&mut chunk) {
-            Ok(0) | Err(_) => break,
+            Ok(0) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
             Ok(n) => {
                 pending.extend_from_slice(&chunk[..n]);
                 if let Some(text) = take_valid_utf8(&mut pending) {
