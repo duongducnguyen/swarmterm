@@ -52,8 +52,12 @@ fn show_main(app: &tauri::AppHandle) {
 fn quit(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
     state.quitting.store(true, Ordering::SeqCst);
-    for (_id, t) in state.terminals.lock().unwrap().iter_mut() {
-        let _ = t.killer.kill();
+    // Use `if let Ok` rather than `unwrap` so the process still exits even if the
+    // terminals lock was somehow poisoned.
+    if let Ok(mut map) = state.terminals.lock() {
+        for (_id, t) in map.iter_mut() {
+            let _ = t.killer.kill();
+        }
     }
     app.exit(0);
 }
