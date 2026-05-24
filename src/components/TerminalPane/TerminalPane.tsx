@@ -1,44 +1,18 @@
-import { useEffect, useRef } from 'react'
-import { Terminal, type ITheme } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
+import { useEffect, useRef, useState } from 'react'
 import { Columns2, Rows2, X, RotateCw, AlertTriangle, Terminal as TerminalIcon } from 'lucide-react'
-import '@xterm/xterm/css/xterm.css'
 import type { LeafNode } from '@/lib/layout-tree'
 import { useAppStore } from '@/store/app-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { writeTerminal, resizeTerminal, killTerminal } from '@/tauri/terminal'
-import { useTerminalSession } from '@/hooks/useTerminalSession'
-
-/**
- * Windows Terminal's default "Campbell" scheme — the full 16-color ANSI palette
- * plus native background/foreground. Used verbatim (regardless of the app's
- * light/dark theme) so the terminal shows the same colors as a real shell.
- */
-const CAMPBELL_THEME: ITheme = {
-  background: '#0C0C0C',
-  foreground: '#CCCCCC',
-  cursor: '#FFFFFF',
-  cursorAccent: '#0C0C0C',
-  selectionBackground: 'rgba(255,255,255,0.3)',
-  black: '#0C0C0C',
-  brightBlack: '#767676',
-  red: '#C50F1F',
-  brightRed: '#E74856',
-  green: '#13A10E',
-  brightGreen: '#16C60C',
-  yellow: '#C19C00',
-  brightYellow: '#F9F1A5',
-  blue: '#0037DA',
-  brightBlue: '#3B78FF',
-  magenta: '#881798',
-  brightMagenta: '#B4009E',
-  cyan: '#3A96DD',
-  brightCyan: '#61D6D6',
-  white: '#CCCCCC',
-  brightWhite: '#F2F2F2'
-}
+import {
+  attachTerminal,
+  detachTerminal,
+  focusTerminal,
+  getTerminalStatus,
+  retryTerminal,
+  subscribeTerminalStatus,
+  type TerminalStatus
+} from '@/lib/terminal-registry'
 
 interface TerminalPaneProps {
   leaf: LeafNode
@@ -47,88 +21,45 @@ interface TerminalPaneProps {
   isFocused: boolean
 }
 
-/** Fit the terminal to its container, skipping when the container has no size. */
-function safeFit(container: HTMLElement | null, fit: FitAddon): boolean {
-  if (!container || container.clientWidth === 0 || container.clientHeight === 0) return false
-  try {
-    fit.fit()
-    return true
-  } catch {
-    return false
-  }
-}
-
 /**
- * One terminal pane: an xterm.js viewport bound to a Rust pty over the Tauri
- * bridge. Owns the pty for its lifetime — created on mount, killed on unmount
- * (so closing the pane closes the shell).
+ * One terminal pane: a mount point for a live terminal owned by the registry.
+ * The xterm instance and its pty persist in the registry across mounts, so
+ * this component only attaches/detaches the terminal's DOM — closing a sibling
+ * pane (which remounts this one as the split tree collapses) no longer kills or
+ * re-spawns the shell. The pty is killed only when the leaf is truly removed.
  */
 export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const fitRef = useRef<FitAddon | null>(null)
 
   const splitPane = useAppStore((s) => s.splitPane)
   const closePane = useAppStore((s) => s.closePane)
   const setFocusedLeaf = useAppStore((s) => s.setFocusedLeaf)
 
   const { id: leafId, terminalId, initialCommand } = leaf
+  const [status, setStatus] = useState<TerminalStatus>(() => getTerminalStatus(terminalId))
 
-  // Create the xterm instance and wire input + resize. Runs once per pane.
+  // Attach the live terminal to this pane's container and mirror its status.
+  // Detach (but never kill) on unmount: remounts re-attach the same terminal.
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    const term = new Terminal({
-      cursorBlink: true,
-      fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
-      fontSize: 13,
-      scrollback: 5000,
-      theme: CAMPBELL_THEME
-    })
-    const fit = new FitAddon()
-    term.loadAddon(fit)
-    term.loadAddon(new WebLinksAddon())
-    term.open(container)
-    termRef.current = term
-    fitRef.current = fit
-    safeFit(container, fit)
-
-    const input = term.onData((data) => writeTerminal(terminalId, data))
-
-    const observer = new ResizeObserver(() => {
-      if (safeFit(container, fit)) {
-        resizeTerminal(terminalId, term.cols, term.rows)
-      }
-    })
-    observer.observe(container)
+    attachTerminal(terminalId, container, { cwd, initialCommand })
+    setStatus(getTerminalStatus(terminalId))
+    const unsubscribe = subscribeTerminalStatus(terminalId, () =>
+      setStatus(getTerminalStatus(terminalId))
+    )
 
     return () => {
-      observer.disconnect()
-      input.dispose()
-      killTerminal(terminalId)
-      term.dispose()
-      termRef.current = null
-      fitRef.current = null
+      unsubscribe()
+      detachTerminal(terminalId)
     }
-  }, [terminalId])
-
-  // Spawn the pty + stream output. This MUST be registered after the xterm
-  // creation effect above: React runs effects in registration order, so the
-  // terminal instance exists (termRef is set) before the session reads it.
-  const { status, retry } = useTerminalSession({
-    getTerm: () => termRef.current,
-    getFit: () => fitRef.current,
-    getContainer: () => containerRef.current,
-    terminalId,
-    cwd,
-    initialCommand
-  })
+  }, [terminalId, cwd, initialCommand])
 
   // Pull keyboard focus into xterm when this pane becomes the focused one.
   useEffect(() => {
-    if (isFocused) termRef.current?.focus()
-  }, [isFocused])
+    if (isFocused) focusTerminal(terminalId)
+  }, [isFocused, terminalId])
 
   return (
     <div
@@ -179,7 +110,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
             title="Could not start the terminal"
             detail={status.message}
             actionLabel="Retry"
-            onAction={retry}
+            onAction={() => retryTerminal(terminalId)}
           />
         )}
         {status.kind === 'exited' && (
@@ -187,7 +118,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
             title="Process exited"
             detail={`Exit code ${status.exitCode}`}
             actionLabel="Restart"
-            onAction={retry}
+            onAction={() => retryTerminal(terminalId)}
           />
         )}
       </div>
