@@ -13,7 +13,10 @@ use tauri::{AppHandle, Manager};
 #[serde(rename_all = "camelCase", tag = "type", content = "payload")]
 pub enum PtyOut {
     Data(String),
-    Exit { exit_code: i32 },
+    Exit {
+        #[serde(rename = "exitCode")]
+        exit_code: i32,
+    },
 }
 
 /// Options the renderer passes when asking the backend to spawn a pty.
