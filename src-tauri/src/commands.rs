@@ -1,3 +1,5 @@
+use portable_pty::PtySize;
+use std::io::Write;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
@@ -15,10 +17,24 @@ pub fn create_terminal(
 }
 
 #[tauri::command]
-pub fn write_terminal(_state: State<'_, AppState>, _id: String, _data: String) {}
+pub fn write_terminal(state: State<'_, AppState>, id: String, data: String) {
+    if let Some(t) = state.terminals.lock().unwrap().get_mut(&id) {
+        let _ = t.writer.write_all(data.as_bytes());
+        let _ = t.writer.flush();
+    }
+}
 
 #[tauri::command]
-pub fn resize_terminal(_state: State<'_, AppState>, _id: String, _cols: u16, _rows: u16) {}
+pub fn resize_terminal(state: State<'_, AppState>, id: String, cols: u16, rows: u16) {
+    if let Some(t) = state.terminals.lock().unwrap().get(&id) {
+        let _ = t.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
+    }
+}
 
 #[tauri::command]
-pub fn kill_terminal(_state: State<'_, AppState>, _id: String) {}
+pub fn kill_terminal(state: State<'_, AppState>, id: String) {
+    if let Some(t) = state.terminals.lock().unwrap().get_mut(&id) {
+        let _ = t.killer.kill();
+    }
+    // The reader thread observes EOF, sends Exit, and removes the entry.
+}
