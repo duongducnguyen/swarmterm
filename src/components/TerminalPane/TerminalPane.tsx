@@ -74,15 +74,6 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
 
   const { id: leafId, terminalId, initialCommand } = leaf
 
-  const { status, retry } = useTerminalSession({
-    getTerm: () => termRef.current,
-    getFit: () => fitRef.current,
-    getContainer: () => containerRef.current,
-    terminalId,
-    cwd,
-    initialCommand
-  })
-
   // Create the xterm instance and wire input + resize. Runs once per pane.
   useEffect(() => {
     const container = containerRef.current
@@ -121,6 +112,18 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
       fitRef.current = null
     }
   }, [terminalId])
+
+  // Spawn the pty + stream output. This MUST be registered after the xterm
+  // creation effect above: React runs effects in registration order, so the
+  // terminal instance exists (termRef is set) before the session reads it.
+  const { status, retry } = useTerminalSession({
+    getTerm: () => termRef.current,
+    getFit: () => fitRef.current,
+    getContainer: () => containerRef.current,
+    terminalId,
+    cwd,
+    initialCommand
+  })
 
   // Pull keyboard focus into xterm when this pane becomes the focused one.
   useEffect(() => {
