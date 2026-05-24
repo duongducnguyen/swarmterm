@@ -1,5 +1,6 @@
 mod commands;
 mod pty;
+mod tray;
 
 use pty::AppState;
 use tauri::Manager;
@@ -14,6 +15,10 @@ pub fn run() {
                 let _ = win.set_focus();
             }
         }))
+        .setup(|app| {
+            tray::setup_tray(app)?;
+            Ok(())
+        })
         .manage(AppState::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
