@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 
-use portable_pty::{ChildKiller, MasterPty};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager};
 
 /// Output streamed to the renderer over a per-terminal channel.
 #[derive(Clone, Serialize)]
@@ -107,4 +109,173 @@ pub fn take_valid_utf8(buf: &mut Vec<u8>) -> Option<String> {
         .to_owned();
     buf.drain(..valid_up_to);
     Some(s)
+}
+
+const READ_BUF_BYTES: usize = 64 * 1024;
+
+/// Spawn a pty, register it in state, and start a reader thread that streams
+/// decoded output (and finally the exit code) over `on_data`.
+pub fn spawn_terminal(
+    app: &AppHandle,
+    state: &AppState,
+    id: String,
+    options: CreateTerminalOptions,
+    on_data: Channel<PtyOut>,
+) -> CreateTerminalResult {
+    if state.terminals.lock().unwrap().contains_key(&id) {
+        return CreateTerminalResult::err(format!("Terminal \"{id}\" already exists"));
+    }
+
+    let (shell, args) = match &options.shell {
+        Some(custom) => (custom.clone(), Vec::new()),
+        None => default_shell(),
+    };
+
+    let pty_system = native_pty_system();
+    let pair = match pty_system.openpty(PtySize {
+        rows: options.rows,
+        cols: options.cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    }) {
+        Ok(p) => p,
+        Err(e) => return CreateTerminalResult::err(e.to_string()),
+    };
+
+    let mut cmd = CommandBuilder::new(&shell);
+    for a in &args {
+        cmd.arg(a);
+    }
+    // Inherit the parent environment, then advertise truecolor so CLIs emit
+    // 24-bit color sequences that ConPTY forwards and xterm renders verbatim.
+    for (k, v) in std::env::vars() {
+        cmd.env(k, v);
+    }
+    cmd.env("COLORTERM", "truecolor");
+    cmd.env("TERM", "xterm-256color");
+    let cwd = options.cwd.clone().unwrap_or_else(|| {
+        app.path()
+            .home_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| ".".to_string())
+    });
+    cmd.cwd(cwd);
+
+    let child = match pair.slave.spawn_command(cmd) {
+        Ok(c) => c,
+        Err(e) => return CreateTerminalResult::err(e.to_string()),
+    };
+    let pid = child.process_id();
+    let killer = child.clone_killer();
+
+    let mut writer = match pair.master.take_writer() {
+        Ok(w) => w,
+        Err(e) => return CreateTerminalResult::err(e.to_string()),
+    };
+    let reader = match pair.master.try_clone_reader() {
+        Ok(r) => r,
+        Err(e) => return CreateTerminalResult::err(e.to_string()),
+    };
+
+    // Run the template's first command (clearing the screen first for the
+    // platform default shell so the prompt/echo don't linger above the program).
+    if let Some(ic) = &options.initial_command {
+        let line = if options.shell.is_some() {
+            format!("{ic}\r")
+        } else {
+            let clear = if cfg!(windows) { "Clear-Host" } else { "clear" };
+            format!("{clear}; {ic}\r")
+        };
+        let _ = writer.write_all(line.as_bytes());
+        let _ = writer.flush();
+    }
+
+    state.terminals.lock().unwrap().insert(
+        id.clone(),
+        ManagedTerminal { writer, master: pair.master, killer },
+    );
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        read_loop(app, id, reader, child, on_data);
+    });
+
+    CreateTerminalResult { ok: true, pid, shell: Some(shell), error: None }
+}
+
+/// Blocking read loop: stream decoded output, then wait for exit and clean up.
+fn read_loop(
+    app: AppHandle,
+    id: String,
+    mut reader: Box<dyn Read + Send>,
+    mut child: Box<dyn portable_pty::Child + Send + Sync>,
+    on_data: Channel<PtyOut>,
+) {
+    let mut pending: Vec<u8> = Vec::new();
+    let mut chunk = vec![0u8; READ_BUF_BYTES];
+    loop {
+        match reader.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                pending.extend_from_slice(&chunk[..n]);
+                if let Some(text) = take_valid_utf8(&mut pending) {
+                    let _ = on_data.send(PtyOut::Data(text));
+                }
+            }
+        }
+    }
+    // Flush any trailing bytes (lossily) so nothing is lost.
+    if !pending.is_empty() {
+        let _ = on_data.send(PtyOut::Data(String::from_utf8_lossy(&pending).into_owned()));
+    }
+    let exit_code = child.wait().map(|s| s.exit_code() as i32).unwrap_or(-1);
+    let _ = on_data.send(PtyOut::Exit { exit_code });
+
+    if let Some(state) = app.try_state::<AppState>() {
+        state.terminals.lock().unwrap().remove(&id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_shell_is_nonempty() {
+        let (cmd, _args) = default_shell();
+        assert!(!cmd.is_empty());
+    }
+
+    #[test]
+    fn take_valid_utf8_returns_complete_prefix_and_holds_partial_tail() {
+        // "é" is 0xC3 0xA9; feed only the first byte after an ascii char.
+        let mut buf = vec![b'h', b'i', 0xC3];
+        let out = take_valid_utf8(&mut buf).unwrap();
+        assert_eq!(out, "hi");
+        assert_eq!(buf, vec![0xC3]); // incomplete tail retained
+    }
+
+    #[test]
+    fn take_valid_utf8_completes_across_chunks() {
+        let mut buf = vec![0xC3, 0xA9]; // full "é"
+        let out = take_valid_utf8(&mut buf).unwrap();
+        assert_eq!(out, "é");
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn take_valid_utf8_flushes_long_invalid_runs() {
+        let mut buf = vec![0xFF, 0xFE, 0xFD, 0xFC, 0xFB];
+        let out = take_valid_utf8(&mut buf).unwrap();
+        assert!(!out.is_empty()); // lossy, but does not stall
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn take_valid_utf8_flushes_short_invalid_runs() {
+        let mut buf = vec![0xFF, 0xFE, 0xFD]; // 3 invalid bytes, not a multibyte lead
+        let out = take_valid_utf8(&mut buf).unwrap();
+        assert!(!out.is_empty());
+        assert!(buf.is_empty()); // flushed immediately, not stalled
+    }
 }

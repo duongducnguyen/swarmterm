@@ -5,13 +5,13 @@ use crate::pty::{AppState, CreateTerminalOptions, CreateTerminalResult, PtyOut};
 
 #[tauri::command]
 pub fn create_terminal(
-    _app: AppHandle,
-    _state: State<'_, AppState>,
-    _id: String,
-    _options: CreateTerminalOptions,
-    _on_data: Channel<PtyOut>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    options: CreateTerminalOptions,
+    on_data: Channel<PtyOut>,
 ) -> CreateTerminalResult {
-    CreateTerminalResult::err("not implemented yet")
+    crate::pty::spawn_terminal(&app, &state, id, options, on_data)
 }
 
 #[tauri::command]
