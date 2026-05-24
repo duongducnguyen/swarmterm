@@ -12,9 +12,15 @@
   "app": {
     "windows": [
       {
-        "title": "swarmterm",
-        "width": 800,
-        "height": 600
+        "title": "Command Center",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 860,
+        "minHeight": 560,
+        "resizable": true,
+        "decorations": false,
+        "visible": false,
+        "backgroundColor": "#09090b"
       }
     ],
     "security": {
