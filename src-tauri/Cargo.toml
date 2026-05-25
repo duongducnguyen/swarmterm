@@ -25,3 +25,13 @@ portable-pty = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+[target.'cfg(windows)'.dependencies]
+# Job Objects so killing a terminal tears down the shell's whole process tree
+# (children/grandchildren) instead of just the shell itself.
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }
+

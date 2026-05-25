@@ -8,6 +8,88 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 
+/// Windows Job Object helper. Killing a pty's shell with `TerminateProcess`
+/// leaves its child/grandchild processes running (Windows does not cascade a
+/// kill down the tree). Putting the shell in a job created with
+/// `KILL_ON_JOB_CLOSE` means terminating — or merely dropping — the job tears
+/// down every descendant, so closing a pane/workspace actually frees the CPU+RAM.
+#[cfg(windows)]
+mod job {
+    use std::ffi::c_void;
+    use std::mem;
+    use std::ptr;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+
+    /// Owns a kill-on-close job handle. On drop the last handle closes, which
+    /// terminates any process still in the job — a safety net against orphans.
+    pub struct JobHandle(HANDLE);
+
+    // A job handle is an opaque kernel handle; it is sound to move/share across
+    // threads (it lives in the Mutex-guarded terminal map).
+    unsafe impl Send for JobHandle {}
+    unsafe impl Sync for JobHandle {}
+
+    impl JobHandle {
+        /// Create a kill-on-close job and place process `pid` in it. Every process
+        /// the shell spawns afterwards inherits the job, so the whole tree is
+        /// captured. Returns `None` if any Win32 step fails (caller degrades to
+        /// the plain single-process kill).
+        pub fn capturing(pid: u32) -> Option<Self> {
+            unsafe {
+                let job = CreateJobObjectW(ptr::null(), ptr::null());
+                if job.is_null() {
+                    return None;
+                }
+                let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = mem::zeroed();
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                let set = SetInformationJobObject(
+                    job,
+                    JobObjectExtendedLimitInformation,
+                    &info as *const _ as *const c_void,
+                    mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                );
+                if set == 0 {
+                    CloseHandle(job);
+                    return None;
+                }
+                let proc = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+                if proc.is_null() {
+                    CloseHandle(job);
+                    return None;
+                }
+                let assigned = AssignProcessToJobObject(job, proc);
+                CloseHandle(proc);
+                if assigned == 0 {
+                    CloseHandle(job);
+                    return None;
+                }
+                Some(JobHandle(job))
+            }
+        }
+
+        /// Immediately terminate the shell and all of its descendants.
+        pub fn terminate(&self) {
+            unsafe {
+                TerminateJobObject(self.0, 1);
+            }
+        }
+    }
+
+    impl Drop for JobHandle {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+}
+
 /// Output streamed to the renderer over a per-terminal channel.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type", content = "payload")]
@@ -47,11 +129,28 @@ impl CreateTerminalResult {
 }
 
 /// A live pty the manager owns. `master` is kept for resize; `writer` for input;
-/// `killer` to terminate the child from the command thread.
+/// `killer` to terminate the child from the command thread. On Windows `job`
+/// (when set) owns the shell's whole process tree so closing the terminal frees
+/// every descendant, not just the shell.
 pub struct ManagedTerminal {
     pub writer: Box<dyn Write + Send>,
     pub master: Box<dyn MasterPty + Send>,
     pub killer: Box<dyn ChildKiller + Send + Sync>,
+    #[cfg(windows)]
+    pub job: Option<job::JobHandle>,
+}
+
+impl ManagedTerminal {
+    /// Terminate the terminal's whole process tree. On Windows this nukes the job
+    /// (shell + every descendant); the `killer` call is a fallback for when the
+    /// job could not be created and on non-Windows platforms.
+    pub fn kill(&mut self) {
+        #[cfg(windows)]
+        if let Some(job) = &self.job {
+            job.terminate();
+        }
+        let _ = self.killer.kill();
+    }
 }
 
 /// Global backend state managed by Tauri.
@@ -187,6 +286,11 @@ pub fn spawn_terminal(
         }
     };
 
+    // Capture the shell in a job BEFORE running any command, so every process the
+    // command tree spawns is born inside the job and dies with it.
+    #[cfg(windows)]
+    let job = pid.and_then(job::JobHandle::capturing);
+
     // Run the template's first command (clearing the screen first for the
     // platform default shell so the prompt/echo don't linger above the program).
     if let Some(ic) = &options.initial_command {
@@ -202,7 +306,13 @@ pub fn spawn_terminal(
 
     state.terminals.lock().unwrap().insert(
         id.clone(),
-        ManagedTerminal { writer, master: pair.master, killer },
+        ManagedTerminal {
+            writer,
+            master: pair.master,
+            killer,
+            #[cfg(windows)]
+            job,
+        },
     );
 
     let app = app.clone();
