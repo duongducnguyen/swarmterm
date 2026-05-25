@@ -34,7 +34,7 @@ pub fn resize_terminal(state: State<'_, AppState>, id: String, cols: u16, rows: 
 #[tauri::command]
 pub fn kill_terminal(state: State<'_, AppState>, id: String) {
     if let Some(t) = state.terminals.lock().unwrap().get_mut(&id) {
-        let _ = t.killer.kill();
+        t.kill();
     }
     // The reader thread observes EOF, sends Exit, and removes the entry.
 }
