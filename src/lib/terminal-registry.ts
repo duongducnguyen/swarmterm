@@ -39,7 +39,7 @@ const CAMPBELL_THEME: ITheme = {
 /** Per-terminal options that persist across re-attaches (size is read live). */
 export interface AttachConfig {
   cwd?: string
-  shell?: string
+  shellId?: import('@/lib/terminal-pref').ShellId
   initialCommand?: string
 }
 
@@ -109,7 +109,14 @@ function getOrCreate(id: string): Entry {
  */
 export function attachTerminal(id: string, container: HTMLElement, config: AttachConfig): void {
   const entry = getOrCreate(id)
-  entry.config = config
+  entry.config = {
+    ...config,
+    // shellId is locked at first attach: subsequent remounts (e.g. when a sibling
+    // pane closes and the split tree collapses) must NOT swap the retry shell
+    // out from under the user. cwd / initialCommand are stable leaf props, so
+    // overwriting them is a no-op anyway.
+    shellId: entry.config.shellId ?? config.shellId
+  }
   container.appendChild(entry.host)
 
   if (!entry.opened) {

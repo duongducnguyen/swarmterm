@@ -106,7 +106,7 @@ pub enum PtyOut {
 #[serde(rename_all = "camelCase")]
 pub struct CreateTerminalOptions {
     pub cwd: Option<String>,
-    pub shell: Option<String>,
+    pub shell_id: Option<String>,
     pub initial_command: Option<String>,
     pub cols: u16,
     pub rows: u16,
@@ -228,10 +228,11 @@ pub fn spawn_terminal(
         return CreateTerminalResult::err(format!("Terminal \"{id}\" already exists"));
     }
 
-    let (shell, args) = match &options.shell {
-        Some(custom) => (custom.clone(), Vec::new()),
-        None => default_shell(),
-    };
+    let (shell, args) = options
+        .shell_id
+        .as_deref()
+        .and_then(crate::shell::resolve_shell)
+        .unwrap_or_else(default_shell);
 
     let pty_system = native_pty_system();
     let pair = match pty_system.openpty(PtySize {
@@ -294,7 +295,7 @@ pub fn spawn_terminal(
     // Run the template's first command (clearing the screen first for the
     // platform default shell so the prompt/echo don't linger above the program).
     if let Some(ic) = &options.initial_command {
-        let line = if options.shell.is_some() {
+        let line = if options.shell_id.as_deref().is_some_and(|id| id != "default") {
             format!("{ic}\r")
         } else {
             let clear = if cfg!(windows) { "Clear-Host" } else { "clear" };
