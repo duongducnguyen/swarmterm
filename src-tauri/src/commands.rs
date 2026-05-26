@@ -38,3 +38,8 @@ pub fn kill_terminal(state: State<'_, AppState>, id: String) {
     }
     // The reader thread observes EOF, sends Exit, and removes the entry.
 }
+
+#[tauri::command]
+pub fn list_available_shells() -> Vec<crate::shell::ShellEntry> {
+    crate::shell::list_shells().to_vec()
+}

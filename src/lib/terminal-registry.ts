@@ -39,7 +39,7 @@ const CAMPBELL_THEME: ITheme = {
 /** Per-terminal options that persist across re-attaches (size is read live). */
 export interface AttachConfig {
   cwd?: string
-  shell?: string
+  shellId?: import('@/lib/terminal-pref').ShellId
   initialCommand?: string
 }
 
@@ -109,7 +109,13 @@ function getOrCreate(id: string): Entry {
  */
 export function attachTerminal(id: string, container: HTMLElement, config: AttachConfig): void {
   const entry = getOrCreate(id)
-  entry.config = config
+  entry.config = {
+    ...config,
+    // shellId is locked at first attach: subsequent remounts (e.g. when a sibling
+    // pane closes and the split tree collapses) must NOT swap the retry shell
+    // out from under the user.
+    shellId: entry.config.shellId ?? config.shellId
+  }
   container.appendChild(entry.host)
 
   if (!entry.opened) {
@@ -124,7 +130,7 @@ export function attachTerminal(id: string, container: HTMLElement, config: Attac
   })
   entry.observer.observe(container)
 
-  entry.session.start({ ...config, cols: entry.term.cols, rows: entry.term.rows })
+  entry.session.start({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
 
 /** Detach the terminal from the DOM without killing the pty (e.g. on remount). */

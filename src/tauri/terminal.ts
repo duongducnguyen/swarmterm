@@ -1,4 +1,5 @@
 import { invoke, Channel } from '@tauri-apps/api/core'
+import type { ShellId } from '@/lib/terminal-pref'
 
 /** Output streamed from a pty: decoded text, then a final exit. */
 export type PtyOut =
@@ -7,7 +8,7 @@ export type PtyOut =
 
 export interface CreateTerminalOptions {
   cwd?: string
-  shell?: string
+  shellId?: ShellId
   initialCommand?: string
   cols: number
   rows: number
