@@ -3,15 +3,19 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AppearancePanel } from './AppearancePanel'
+import { TerminalPanel } from './TerminalPanel'
 
-type CategoryId = 'appearance'
+type CategoryId = 'appearance' | 'terminal'
 
 interface Category {
   id: CategoryId
   label: string
 }
 
-const CATEGORIES: Category[] = [{ id: 'appearance', label: 'appearance' }]
+const CATEGORIES: Category[] = [
+  { id: 'appearance', label: 'appearance' },
+  { id: 'terminal', label: 'terminal' }
+]
 
 interface SettingsViewProps {
   onClose: () => void
@@ -94,6 +98,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-5xl px-10 py-10">
             {activeCategory === 'appearance' && <AppearancePanel />}
+            {activeCategory === 'terminal' && <TerminalPanel />}
           </div>
         </div>
       </div>
