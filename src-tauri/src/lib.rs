@@ -1,5 +1,6 @@
 mod commands;
 mod pty;
+mod shell;
 mod tray;
 
 use pty::AppState;
