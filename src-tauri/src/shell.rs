@@ -55,6 +55,204 @@ pub fn parse_wsl_distros(decoded: &str) -> Vec<String> {
         .collect()
 }
 
+/// Return the cached shell catalog, probing the first time it is called.
+pub fn list_shells() -> &'static [ShellEntry] {
+    CACHE.get_or_init(probe).as_slice()
+}
+
+/// Resolve a shell id to `(executable, args)`. Returns `None` for `default`,
+/// unknown ids, or shells whose probe came back `available == false`. The
+/// caller (`pty::spawn_terminal`) falls back to the platform default in that
+/// case.
+pub fn resolve_shell(id: &str) -> Option<(String, Vec<String>)> {
+    if id == "default" {
+        return None;
+    }
+    let entry = list_shells().iter().find(|s| s.id == id)?;
+    if !entry.available {
+        return None;
+    }
+    let path = entry.detected_path.clone()?;
+    Some((path, entry.args.clone()))
+}
+
+#[cfg(windows)]
+fn probe() -> Vec<ShellEntry> {
+    let path_var = std::env::var("PATH").unwrap_or_default();
+    vec![
+        ShellEntry {
+            id: "default".into(),
+            available: true,
+            detected_path: None,
+            args: vec![],
+        },
+        ShellEntry {
+            id: "powershell".into(),
+            available: true,
+            detected_path: Some("powershell.exe".into()),
+            args: vec!["-NoLogo".into()],
+        },
+        ShellEntry {
+            id: "cmd".into(),
+            available: true,
+            detected_path: Some("cmd.exe".into()),
+            args: vec![],
+        },
+        probe_pwsh(&path_var),
+        probe_git_bash(&path_var),
+        probe_wsl(),
+    ]
+}
+
+#[cfg(not(windows))]
+fn probe() -> Vec<ShellEntry> {
+    // v1 placeholder: every non-Windows build advertises only the platform
+    // default. macOS / Linux catalog work lands in a later iteration.
+    let path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
+    vec![ShellEntry {
+        id: "default".into(),
+        available: true,
+        detected_path: Some(path),
+        args: vec![],
+    }]
+}
+
+#[cfg(windows)]
+fn probe_pwsh(path_var: &str) -> ShellEntry {
+    let path = find_in_path(path_var, "pwsh.exe");
+    ShellEntry {
+        id: "pwsh".into(),
+        available: path.is_some(),
+        detected_path: path.map(|p| p.to_string_lossy().into_owned()),
+        args: vec!["-NoLogo".into()],
+    }
+}
+
+#[cfg(windows)]
+fn probe_git_bash(path_var: &str) -> ShellEntry {
+    // Preferred: GitForWindows registry InstallPath. Fallback: sibling of git.exe.
+    let from_reg = git_install_from_registry().map(|p| p.join("bin").join("bash.exe"));
+    let path = from_reg
+        .filter(|p| p.is_file())
+        .or_else(|| {
+            find_in_path(path_var, "git.exe")
+                .and_then(|git| git_bash_from_git_exe(&git))
+                .filter(|p| p.is_file())
+        });
+
+    ShellEntry {
+        id: "git-bash".into(),
+        available: path.is_some(),
+        detected_path: path.map(|p| p.to_string_lossy().into_owned()),
+        args: vec!["--login".into(), "-i".into()],
+    }
+}
+
+#[cfg(windows)]
+fn probe_wsl() -> ShellEntry {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+    // CREATE_NO_WINDOW = 0x08000000 — keeps the probe from flashing a console.
+    let output = Command::new("wsl.exe")
+        .args(["-l", "-q"])
+        .creation_flags(0x0800_0000)
+        .output();
+
+    let available = match output {
+        Ok(out) if out.status.success() => {
+            // wsl.exe -l -q emits UTF-16 LE. Decode best-effort, then parse.
+            let decoded = decode_utf16_lossy(&out.stdout);
+            !parse_wsl_distros(&decoded).is_empty()
+        }
+        _ => false,
+    };
+
+    ShellEntry {
+        id: "wsl".into(),
+        available,
+        detected_path: if available { Some("wsl.exe".into()) } else { None },
+        args: vec![],
+    }
+}
+
+/// Decode a possibly-UTF-16-LE byte buffer (BOM-tolerant) into a `String`.
+/// Falls back to UTF-8 lossy when the buffer is not valid UTF-16.
+#[cfg(windows)]
+fn decode_utf16_lossy(bytes: &[u8]) -> String {
+    if bytes.len() >= 2 && bytes.len() % 2 == 0 {
+        let words: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        return String::from_utf16_lossy(&words);
+    }
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// Read `HKLM\SOFTWARE\GitForWindows\InstallPath` (then `HKCU\…`) and return
+/// the install directory, or `None` if neither key exists.
+#[cfg(windows)]
+fn git_install_from_registry() -> Option<PathBuf> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+        KEY_READ, REG_SZ,
+    };
+
+    fn read(root: HKEY) -> Option<PathBuf> {
+        unsafe {
+            let subkey: Vec<u16> = "SOFTWARE\\GitForWindows\\InstallPath\0"
+                .encode_utf16()
+                .collect();
+            let mut hkey: HKEY = std::ptr::null_mut();
+            if RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != ERROR_SUCCESS
+            {
+                return None;
+            }
+            // Two-step query: ask for the byte length, then read into a buffer.
+            let mut kind: u32 = 0;
+            let mut len: u32 = 0;
+            let rc = RegQueryValueExW(
+                hkey,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                &mut kind,
+                std::ptr::null_mut(),
+                &mut len,
+            );
+            if rc != ERROR_SUCCESS || kind != REG_SZ || len == 0 {
+                RegCloseKey(hkey);
+                return None;
+            }
+            let mut buf = vec![0u8; len as usize];
+            let rc = RegQueryValueExW(
+                hkey,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                &mut kind,
+                buf.as_mut_ptr(),
+                &mut len,
+            );
+            RegCloseKey(hkey);
+            if rc != ERROR_SUCCESS {
+                return None;
+            }
+            // The buffer is UTF-16 LE; convert pair-wise, dropping the trailing NUL.
+            let pairs = (len as usize) / 2;
+            let words: Vec<u16> = (0..pairs)
+                .map(|i| u16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]))
+                .collect();
+            let trimmed: &[u16] = match words.iter().position(|&w| w == 0) {
+                Some(i) => &words[..i],
+                None => &words[..],
+            };
+            Some(PathBuf::from(String::from_utf16_lossy(trimmed)))
+        }
+    }
+
+    read(HKEY_LOCAL_MACHINE).or_else(|| read(HKEY_CURRENT_USER))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
