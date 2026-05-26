@@ -8,7 +8,6 @@ import {
 export interface NavbarVisibilityStore {
   visible: boolean
   toggle: () => void
-  setVisible: (visible: boolean) => void
 }
 
 /**
@@ -28,10 +27,6 @@ export const useNavbarVisibilityStore = create<NavbarVisibilityStore>((set) => {
         const visible = !s.visible
         storeNavbarVisible(window.localStorage, visible)
         return { visible }
-      }),
-    setVisible: (visible) => {
-      storeNavbarVisible(window.localStorage, visible)
-      set({ visible })
-    }
+      })
   }
 })
