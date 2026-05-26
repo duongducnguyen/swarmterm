@@ -22,10 +22,16 @@ export function TerminalPanel(): ReactElement {
         if (!match || !match.available) {
           setStaleId(shellId)
           setShellId('default')
+        } else {
+          // The persisted shell is valid — drop the banner from any previous run
+          // in this session so it doesn't outlive its trigger condition.
+          setStaleId(null)
         }
       })
-      .catch(() => {
-        if (!cancelled) setAvailable([])
+      .catch((err) => {
+        if (cancelled) return
+        console.error('[TerminalPanel] listAvailableShells failed', err)
+        setAvailable([])
       })
     return () => {
       cancelled = true
