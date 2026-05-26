@@ -36,6 +36,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
   return (
     <nav
       aria-hidden={!visible}
+      inert={!visible}
       style={{ width: visible ? 224 : 0 }}
       className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
     >
