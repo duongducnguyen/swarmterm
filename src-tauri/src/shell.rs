@@ -210,6 +210,9 @@ fn git_install_from_registry() -> Option<PathBuf> {
                 return None;
             }
             // Two-step query: ask for the byte length, then read into a buffer.
+            // Passing NULL for the value name reads the *default* (unnamed) value
+            // of the InstallPath subkey — that is where the Git for Windows
+            // installer writes the install root, not as a named value.
             let mut kind: u32 = 0;
             let mut len: u32 = 0;
             let rc = RegQueryValueExW(
@@ -238,7 +241,10 @@ fn git_install_from_registry() -> Option<PathBuf> {
                 return None;
             }
             // The buffer is UTF-16 LE; convert pair-wise, dropping the trailing NUL.
-            let pairs = (len as usize) / 2;
+            // Clamp `len` to the allocated buffer in case the second call reports
+            // more bytes than were probed for — defense-in-depth, not expected in
+            // practice but cheap to enforce.
+            let pairs = (len as usize).min(buf.len()) / 2;
             let words: Vec<u16> = (0..pairs)
                 .map(|i| u16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]))
                 .collect();
