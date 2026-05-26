@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Moon, MoreVertical, Pencil, Plus, Settings, Sun, X } from 'lucide-react'
+import { MoreVertical, Pencil, Plus, Settings, X } from 'lucide-react'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type Workspace } from '@/store/app-store'
-import { useThemeStore } from '@/store/theme-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -62,7 +61,6 @@ export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
       </div>
 
       <div className="shrink-0 space-y-0.5 border-t border-border p-2">
-        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"
@@ -75,26 +73,6 @@ export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
         </Button>
       </div>
     </nav>
-  )
-}
-
-/** Footer control that flips the app between light and dark themes. */
-function ThemeToggle(): ReactElement {
-  const theme = useThemeStore((s) => s.theme)
-  const toggleTheme = useThemeStore((s) => s.toggleTheme)
-  const isDark = theme === 'dark'
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="w-full justify-start text-muted-foreground"
-      onClick={toggleTheme}
-      title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-    >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-      {isDark ? 'Light theme' : 'Dark theme'}
-    </Button>
   )
 }
 
