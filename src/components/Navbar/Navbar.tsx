@@ -14,10 +14,14 @@ import { cn } from '@/lib/utils'
 interface NavbarProps {
   /** Open the setup wizard to create a new workspace. */
   onNewWorkspace: () => void
+  /** Whether the Settings page is currently open. */
+  settingsOpen: boolean
+  /** Toggle the Settings page open/closed. */
+  onToggleSettings: () => void
 }
 
 /** Left navigation rail: the workspace list — add / switch / rename / close. */
-export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
+export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: NavbarProps): ReactElement {
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
@@ -64,9 +68,14 @@ export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-muted-foreground"
-          disabled
-          title="Settings — coming in a later iteration"
+          onClick={onToggleSettings}
+          className={cn(
+            'w-full justify-start',
+            settingsOpen
+              ? 'bg-accent text-accent-foreground hover:bg-accent'
+              : 'text-muted-foreground'
+          )}
+          title="Settings"
         >
           <Settings className="h-4 w-4" />
           Settings

@@ -3,6 +3,7 @@ import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store
 import { collectLeaves } from '@/lib/layout-tree'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
 import { Navbar } from '@/components/Navbar/Navbar'
+import { SettingsView } from '@/components/Settings/SettingsView'
 import { TitleBar } from '@/components/TitleBar/TitleBar'
 import { Workspace } from '@/components/Workspace/Workspace'
 import { WorkspaceSetup } from '@/components/WorkspaceSetup/WorkspaceSetup'
@@ -23,6 +24,7 @@ export default function App(): ReactElement {
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
   const createWorkspace = useAppStore((s) => s.createWorkspace)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const noWorkspaces = workspaces.length === 0
   // The setup wizard is forced open (and uncancellable) whenever none exist.
@@ -47,34 +49,49 @@ export default function App(): ReactElement {
       <TitleBar />
 
       <div className="flex min-h-0 flex-1">
-        <Navbar onNewWorkspace={() => setWizardOpen(true)} />
+        <Navbar
+          onNewWorkspace={() => setWizardOpen(true)}
+          settingsOpen={settingsOpen}
+          onToggleSettings={() => setSettingsOpen((open) => !open)}
+        />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
-          <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
+          {/* Workspaces stay mounted whether Settings is open or not, so their
+              terminals (and PTYs) survive a Settings detour. */}
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            style={{ display: settingsOpen ? 'none' : 'flex' }}
+          >
+            <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
 
-          {/* Every workspace stays mounted so its terminals survive switching;
-              only the active one is visible. */}
-          <div className="relative min-h-0 flex-1">
-            {workspaces.map((ws) => (
-              <div
-                key={ws.id}
-                className="absolute inset-0"
-                style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
-              >
-                <Workspace workspace={ws} />
-              </div>
-            ))}
+            <div className="relative min-h-0 flex-1">
+              {workspaces.map((ws) => (
+                <div
+                  key={ws.id}
+                  className="absolute inset-0"
+                  style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
+                >
+                  <Workspace workspace={ws} />
+                </div>
+              ))}
+            </div>
+
+            <WorkspaceSetup
+              open={setupOpen}
+              required={noWorkspaces}
+              onCreate={(config) => {
+                createWorkspace(config)
+                setWizardOpen(false)
+              }}
+              onCancel={() => setWizardOpen(false)}
+            />
           </div>
 
-          <WorkspaceSetup
-            open={setupOpen}
-            required={noWorkspaces}
-            onCreate={(config) => {
-              createWorkspace(config)
-              setWizardOpen(false)
-            }}
-            onCancel={() => setWizardOpen(false)}
-          />
+          {settingsOpen && (
+            <div className="absolute inset-0">
+              <SettingsView onClose={() => setSettingsOpen(false)} />
+            </div>
+          )}
         </main>
       </div>
     </div>
