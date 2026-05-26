@@ -228,11 +228,11 @@ pub fn spawn_terminal(
         return CreateTerminalResult::err(format!("Terminal \"{id}\" already exists"));
     }
 
-    let (shell, args) = options
+    let resolved = options
         .shell_id
         .as_deref()
-        .and_then(crate::shell::resolve_shell)
-        .unwrap_or_else(default_shell);
+        .and_then(crate::shell::resolve_shell);
+    let (shell, args) = resolved.clone().unwrap_or_else(default_shell);
 
     let pty_system = native_pty_system();
     let pair = match pty_system.openpty(PtySize {
@@ -295,7 +295,7 @@ pub fn spawn_terminal(
     // Run the template's first command (clearing the screen first for the
     // platform default shell so the prompt/echo don't linger above the program).
     if let Some(ic) = &options.initial_command {
-        let line = if options.shell_id.as_deref().is_some_and(|id| id != "default") {
+        let line = if resolved.is_some() {
             format!("{ic}\r")
         } else {
             let clear = if cfg!(windows) { "Clear-Host" } else { "clear" };
