@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Moon, MoreVertical, Pencil, Plus, Settings, Sun, X } from 'lucide-react'
+import { MoreVertical, Pencil, Plus, Settings, X } from 'lucide-react'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type Workspace } from '@/store/app-store'
-import { useThemeStore } from '@/store/theme-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,10 +14,14 @@ import { cn } from '@/lib/utils'
 interface NavbarProps {
   /** Open the setup wizard to create a new workspace. */
   onNewWorkspace: () => void
+  /** Whether the Settings page is currently open. */
+  settingsOpen: boolean
+  /** Toggle the Settings page open/closed. */
+  onToggleSettings: () => void
 }
 
 /** Left navigation rail: the workspace list — add / switch / rename / close. */
-export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
+export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: NavbarProps): ReactElement {
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
@@ -62,39 +65,23 @@ export function Navbar({ onNewWorkspace }: NavbarProps): ReactElement {
       </div>
 
       <div className="shrink-0 space-y-0.5 border-t border-border p-2">
-        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-muted-foreground"
-          disabled
-          title="Settings — coming in a later iteration"
+          onClick={onToggleSettings}
+          className={cn(
+            'w-full justify-start',
+            settingsOpen
+              ? 'bg-accent text-accent-foreground hover:bg-accent'
+              : 'text-muted-foreground'
+          )}
+          title="Settings"
         >
           <Settings className="h-4 w-4" />
           Settings
         </Button>
       </div>
     </nav>
-  )
-}
-
-/** Footer control that flips the app between light and dark themes. */
-function ThemeToggle(): ReactElement {
-  const theme = useThemeStore((s) => s.theme)
-  const toggleTheme = useThemeStore((s) => s.toggleTheme)
-  const isDark = theme === 'dark'
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="w-full justify-start text-muted-foreground"
-      onClick={toggleTheme}
-      title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-    >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-      {isDark ? 'Light theme' : 'Dark theme'}
-    </Button>
   )
 }
 
