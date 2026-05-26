@@ -38,7 +38,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
       aria-hidden={!visible}
       inert={!visible}
       style={{ width: visible ? 224 : 0 }}
-      className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
+      className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-in-out motion-reduce:transition-none"
     >
       <div className="flex h-full w-56 flex-col">
         <div className="flex-1 overflow-y-auto p-2">
