@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { Palette, Settings, X, type LucideIcon } from 'lucide-react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AppearancePanel } from './AppearancePanel'
@@ -9,12 +9,9 @@ type CategoryId = 'appearance'
 interface Category {
   id: CategoryId
   label: string
-  icon: LucideIcon
 }
 
-const CATEGORIES: Category[] = [
-  { id: 'appearance', label: 'Appearance', icon: Palette }
-]
+const CATEGORIES: Category[] = [{ id: 'appearance', label: 'appearance' }]
 
 interface SettingsViewProps {
   onClose: () => void
@@ -37,43 +34,48 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
 
   return (
     <div className="relative flex h-full bg-background">
-      <nav className="flex w-60 shrink-0 flex-col border-r border-border">
-        <div className="flex items-center gap-3 border-b border-border px-4 py-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <Settings className="h-5 w-5 text-foreground" />
+      <nav className="flex w-56 shrink-0 flex-col border-r border-border">
+        <div className="border-b border-border px-4 py-5">
+          <div className="font-mono text-xs text-foreground">
+            <span className="text-muted-foreground/70">~/</span>settings
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-foreground">Settings</div>
-            <div className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Command Center
-            </div>
+          <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
+            command center
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+        <div className="flex flex-1 flex-col gap-px overflow-y-auto p-2">
           {CATEGORIES.map((cat) => {
             const active = cat.id === activeCategory
-            const Icon = cat.icon
             return (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
-                  'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+                  'group flex items-center gap-2 rounded px-2 py-1.5 font-mono text-sm transition-colors',
                   active
-                    ? 'bg-accent font-medium text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    ? 'bg-muted/60 text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                 )}
               >
-                {active && (
-                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
-                )}
-                <Icon className="h-4 w-4" />
-                <span className="flex-1 text-left">{cat.label}</span>
+                <span
+                  className={cn(
+                    'w-3 text-primary transition-opacity',
+                    active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'
+                  )}
+                  aria-hidden
+                >
+                  ▸
+                </span>
+                <span>{cat.label}</span>
               </button>
             )
           })}
+        </div>
+
+        <div className="border-t border-border px-4 py-3 font-mono text-[10px] text-muted-foreground/60">
+          <span className="text-muted-foreground/40">›</span> esc to close
         </div>
       </nav>
 

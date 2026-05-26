@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react'
-import { Check, Palette } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useAppearanceStore } from '@/store/appearance-store'
 import type { Style } from '@/lib/appearance'
 import { cn } from '@/lib/utils'
@@ -7,61 +7,50 @@ import { cn } from '@/lib/utils'
 interface StyleOption {
   id: Style
   label: string
-  tag: string
+  variant: 'dark' | 'light'
+  surface: string
 }
 
 const STYLE_OPTIONS: StyleOption[] = [
-  { id: 'default', label: 'Default', tag: 'solid backdrop' }
+  { id: 'default', label: 'default', variant: 'dark', surface: 'solid backdrop' }
 ]
 
 /** The "Appearance" settings category — currently a single Style picker. */
 export function AppearancePanel(): ReactElement {
   const style = useAppearanceStore((s) => s.style)
   const setStyle = useAppearanceStore((s) => s.setStyle)
-  const activeOption = STYLE_OPTIONS.find((o) => o.id === style) ?? STYLE_OPTIONS[0]
 
   return (
-    <div className="space-y-10">
-      <section className="grid items-start gap-8 md:grid-cols-[1fr_auto]">
-        <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            <Palette className="h-3 w-3" />
-            Appearance
-          </div>
-          <h1 className="mt-4 text-4xl font-bold tracking-tight text-foreground">
-            Make it yours.
-          </h1>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Chọn phong cách giao diện áp dụng cho toàn bộ ứng dụng — sidebar, terminal và
-            workspace.
-          </p>
+    <div className="space-y-12">
+      <section>
+        <div className="font-mono text-xs text-muted-foreground">
+          <span>swarmterm</span>
+          <span className="mx-1.5 text-muted-foreground/40">›</span>
+          <span>config</span>
+          <span className="mx-1.5 text-muted-foreground/40">›</span>
+          <span className="text-foreground">appearance</span>
         </div>
-
-        <div className="relative w-full overflow-hidden rounded-2xl border border-border bg-muted/30 p-5 md:w-80">
-          <span className="absolute right-4 top-4 rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground">
-            Active
-          </span>
-          <WindowMockup variant="hero" />
-          <div className="mt-4 text-right">
-            <div className="text-sm font-semibold text-foreground">{activeOption.label}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">Dark · {activeOption.id}</div>
-          </div>
-        </div>
+        <h1 className="mt-4 font-mono text-5xl font-bold tracking-tight text-foreground">
+          appearance<span className="text-muted-foreground/40">/</span>
+        </h1>
+        <p className="mt-4 max-w-2xl font-mono text-sm leading-relaxed text-muted-foreground">
+          <span className="text-muted-foreground/50">#</span> tùy chỉnh cách Command
+          Center hiển thị — áp dụng cho sidebar, workspace tabs, và toàn bộ terminal panes.
+        </p>
       </section>
 
-      <div className="border-t border-border" />
-
       <section>
-        <div className="mb-4 flex items-center gap-2">
-          <Palette className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Theme
+        <div className="mb-5 flex items-center gap-3">
+          <span className="font-mono text-xs text-muted-foreground">themes</span>
+          <div className="h-px flex-1 bg-border" />
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
+            {STYLE_OPTIONS.length} available
           </span>
         </div>
 
-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
           {STYLE_OPTIONS.map((opt) => (
-            <StyleCard
+            <ThemeCard
               key={opt.id}
               option={opt}
               active={opt.id === style}
@@ -74,63 +63,74 @@ export function AppearancePanel(): ReactElement {
   )
 }
 
-interface StyleCardProps {
+interface ThemeCardProps {
   option: StyleOption
   active: boolean
   onSelect: () => void
 }
 
-function StyleCard({ option, active, onSelect }: StyleCardProps): ReactElement {
+function ThemeCard({ option, active, onSelect }: ThemeCardProps): ReactElement {
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        'group relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-muted/30 p-4 text-left transition-all',
+        'group flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
         active
-          ? 'border-primary/50 ring-2 ring-primary/20'
-          : 'border-border hover:border-border/80 hover:bg-muted/50'
+          ? 'border-primary/50 bg-muted/20 ring-2 ring-primary/15'
+          : 'border-border hover:border-border/80 hover:bg-muted/20'
       )}
     >
-      {active && (
-        <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-          <Check className="h-3 w-3" />
+      <TerminalPreview active={active} />
+      <div className="flex items-end justify-between gap-2 px-0.5">
+        <div>
+          <div className="font-mono text-sm font-medium text-foreground">{option.label}</div>
+          <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+            {option.variant} · {option.surface}
+          </div>
         </div>
-      )}
-      <WindowMockup variant="card" />
-      <div>
-        <div className="text-sm font-semibold text-foreground">{option.label}</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{option.tag}</div>
+        {active && (
+          <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-foreground">
+            <Check className="h-2.5 w-2.5" />
+            active
+          </span>
+        )}
       </div>
     </button>
   )
 }
 
-interface WindowMockupProps {
-  variant: 'hero' | 'card'
-}
-
-/** A tiny window mockup — traffic lights, content bars, and an accent button. */
-function WindowMockup({ variant }: WindowMockupProps): ReactElement {
+/** A miniature terminal pane showing what swarmterm looks like in this style. */
+function TerminalPreview({ active }: { active: boolean }): ReactElement {
   return (
-    <div
-      className={cn(
-        'overflow-hidden rounded-lg border border-border bg-background',
-        variant === 'hero' ? 'h-32' : 'h-24'
-      )}
-    >
-      <div className="flex items-center gap-1 border-b border-border bg-muted/60 px-2.5 py-2">
+    <div className="overflow-hidden rounded-md border border-border bg-background">
+      <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-2.5 py-1.5">
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+        <span className="ml-1.5 font-mono text-[10px] text-muted-foreground/70">workspace 1</span>
       </div>
-      <div className="flex flex-col gap-1.5 p-3">
-        <div className="h-1.5 w-3/4 rounded-full bg-muted-foreground/30" />
-        <div className="h-1.5 w-1/2 rounded-full bg-muted-foreground/20" />
-        <div className="mt-1 flex items-center justify-between">
-          <div className="h-1.5 w-1/3 rounded-full bg-muted-foreground/30" />
-          <div className="h-4 w-12 rounded-md bg-primary/80" />
+      <div className="flex flex-col gap-1 px-3 py-3 font-mono text-[10px] leading-tight">
+        <div>
+          <span className="text-muted-foreground/60">$</span>
+          <span className="ml-1.5 text-foreground/85">swarmterm</span>
+        </div>
+        <div className="text-muted-foreground">
+          <span className="text-foreground/70">●</span> session ready
+        </div>
+        <div className="text-muted-foreground">
+          <span className="text-muted-foreground/70">→</span> 3 panes active
+        </div>
+        <div className="flex items-center pt-0.5">
+          <span className="text-muted-foreground/60">$</span>
+          <span
+            className={cn(
+              'ml-1.5 inline-block h-2.5 w-1.5 bg-foreground/80',
+              active && 'animate-pulse'
+            )}
+            aria-hidden
+          />
         </div>
       </div>
     </div>
