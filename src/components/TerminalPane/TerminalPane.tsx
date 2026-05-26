@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Columns2, Rows2, X, RotateCw, AlertTriangle, Terminal as TerminalIcon } from 'lucide-react'
 import type { LeafNode } from '@/lib/layout-tree'
 import { useAppStore } from '@/store/app-store'
+import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -34,6 +35,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
   const splitPane = useAppStore((s) => s.splitPane)
   const closePane = useAppStore((s) => s.closePane)
   const setFocusedLeaf = useAppStore((s) => s.setFocusedLeaf)
+  const shellId = useTerminalPrefStore((s) => s.shellId)
 
   const { id: leafId, terminalId, initialCommand } = leaf
   const [status, setStatus] = useState<TerminalStatus>(() => getTerminalStatus(terminalId))
@@ -44,7 +46,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
     const container = containerRef.current
     if (!container) return
 
-    attachTerminal(terminalId, container, { cwd, initialCommand })
+    attachTerminal(terminalId, container, { cwd, shellId, initialCommand })
     setStatus(getTerminalStatus(terminalId))
     const unsubscribe = subscribeTerminalStatus(terminalId, () =>
       setStatus(getTerminalStatus(terminalId))
@@ -54,7 +56,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
       unsubscribe()
       detachTerminal(terminalId)
     }
-  }, [terminalId, cwd, initialCommand])
+  }, [terminalId, cwd, shellId, initialCommand])
 
   // Pull keyboard focus into xterm when this pane becomes the focused one.
   useEffect(() => {
