@@ -19,8 +19,8 @@ function fakeStorage(initial: Record<string, string> = {}): AppearanceStorage {
 }
 
 describe('DEFAULT_STYLE', () => {
-  it('is "default"', () => {
-    expect(DEFAULT_STYLE).toBe('default')
+  it('is "vscode-dark"', () => {
+    expect(DEFAULT_STYLE).toBe('vscode-dark')
   })
 })
 
@@ -33,15 +33,21 @@ describe('readStoredStyle', () => {
     expect(readStoredStyle(fakeStorage({ [APPEARANCE_STORAGE_KEY]: 'banana' }))).toBe(DEFAULT_STYLE)
   })
 
-  it('returns the stored default style', () => {
-    expect(readStoredStyle(fakeStorage({ [APPEARANCE_STORAGE_KEY]: 'default' }))).toBe('default')
+  it('falls back to DEFAULT_STYLE for the legacy "default" value (migration)', () => {
+    expect(readStoredStyle(fakeStorage({ [APPEARANCE_STORAGE_KEY]: 'default' }))).toBe(DEFAULT_STYLE)
+  })
+
+  it('returns the stored vscode-dark style', () => {
+    expect(readStoredStyle(fakeStorage({ [APPEARANCE_STORAGE_KEY]: 'vscode-dark' }))).toBe(
+      'vscode-dark'
+    )
   })
 })
 
 describe('storeStyle', () => {
   it('persists the style under the storage key', () => {
     const storage = fakeStorage()
-    storeStyle(storage, 'default')
-    expect(storage.getItem(APPEARANCE_STORAGE_KEY)).toBe('default')
+    storeStyle(storage, 'vscode-dark')
+    expect(storage.getItem(APPEARANCE_STORAGE_KEY)).toBe('vscode-dark')
   })
 })

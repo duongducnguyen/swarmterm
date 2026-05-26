@@ -8,32 +8,34 @@ import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
 export type { TerminalStatus }
 
 /**
- * Windows Terminal's default "Campbell" scheme — the full 16-color ANSI palette
- * plus native background/foreground. Used verbatim (regardless of the app's
- * light/dark theme) so the terminal shows the same colors as a real shell.
+ * VSCode "Default Dark Modern" terminal palette. Used verbatim regardless of
+ * the user's actual shell defaults so the terminal interior matches the rest
+ * of the app's dark chrome. ANSI values mirror VSCode's built-in
+ * workbench.colorCustomizations terminal.ansi* defaults for the Dark Modern
+ * theme.
  */
-const CAMPBELL_THEME: ITheme = {
-  background: '#0C0C0C',
+const VSCODE_DARK_THEME: ITheme = {
+  background: '#1F1F1F',
   foreground: '#CCCCCC',
-  cursor: '#FFFFFF',
-  cursorAccent: '#0C0C0C',
-  selectionBackground: 'rgba(255,255,255,0.3)',
-  black: '#0C0C0C',
-  brightBlack: '#767676',
-  red: '#C50F1F',
-  brightRed: '#E74856',
-  green: '#13A10E',
-  brightGreen: '#16C60C',
-  yellow: '#C19C00',
-  brightYellow: '#F9F1A5',
-  blue: '#0037DA',
-  brightBlue: '#3B78FF',
-  magenta: '#881798',
-  brightMagenta: '#B4009E',
-  cyan: '#3A96DD',
-  brightCyan: '#61D6D6',
-  white: '#CCCCCC',
-  brightWhite: '#F2F2F2'
+  cursor: '#CCCCCC',
+  cursorAccent: '#1F1F1F',
+  selectionBackground: 'rgba(255, 255, 255, 0.25)',
+  black: '#000000',
+  brightBlack: '#666666',
+  red: '#CD3131',
+  brightRed: '#F14C4C',
+  green: '#0DBC79',
+  brightGreen: '#23D18B',
+  yellow: '#E5E510',
+  brightYellow: '#F5F543',
+  blue: '#2472C8',
+  brightBlue: '#3B8EEA',
+  magenta: '#BC3FBC',
+  brightMagenta: '#D670D6',
+  cyan: '#11A8CD',
+  brightCyan: '#29B8DB',
+  white: '#E5E5E5',
+  brightWhite: '#E5E5E5'
 }
 
 /** Per-terminal options that persist across re-attaches (size is read live). */
@@ -84,7 +86,7 @@ function getOrCreate(id: string): Entry {
     fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
     fontSize: 13,
     scrollback: 5000,
-    theme: CAMPBELL_THEME
+    theme: VSCODE_DARK_THEME
   })
   const fit = new FitAddon()
   term.loadAddon(fit)

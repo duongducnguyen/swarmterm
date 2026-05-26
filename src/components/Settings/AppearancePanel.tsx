@@ -12,7 +12,7 @@ interface StyleOption {
 }
 
 const STYLE_OPTIONS: StyleOption[] = [
-  { id: 'default', label: 'default', variant: 'dark', surface: 'solid backdrop' }
+  { id: 'vscode-dark', label: 'vscode dark', variant: 'dark', surface: 'dark modern' }
 ]
 
 /** The "Appearance" settings category — currently a single Style picker. */
