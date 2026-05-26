@@ -42,8 +42,8 @@ export default function App(): ReactElement {
         useNavbarVisibilityStore.getState().toggle()
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
 
   // Kill a terminal's pty only when its leaf is gone from every layout (an
