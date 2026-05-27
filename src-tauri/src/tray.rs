@@ -37,7 +37,8 @@ fn tray_image() -> Image<'static> {
         set(5 + k, 11 - k, 0x18, 0x18, 0x1b);
         set(6 + k, 11 - k, 0x18, 0x18, 0x1b);
     }
-    // Cursor bar bên phải chevron, mirror path "M11 13h4" của lucide SquareTerminal.
+    // Cursor bar bên phải chevron — chỉnh sang cols 11-14 để tách rõ khỏi chevron
+    // (cols 5-9) ở 16x16, thay vì scale thẳng path "M11 13h4" của lucide.
     for x in 11..=14 {
         set(x, 8, 0x18, 0x18, 0x1b);
         set(x, 9, 0x18, 0x18, 0x1b);
