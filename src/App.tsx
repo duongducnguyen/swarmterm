@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
+import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { collectLeaves } from '@/lib/layout-tree'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
 import { Navbar } from '@/components/Navbar/Navbar'
@@ -32,6 +33,17 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     void showWindow()
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        useNavbarVisibilityStore.getState().toggle()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
 
   // Kill a terminal's pty only when its leaf is gone from every layout (an

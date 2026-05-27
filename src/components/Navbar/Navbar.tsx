@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { MoreVertical, Pencil, Plus, Settings, X } from 'lucide-react'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type Workspace } from '@/store/app-store'
+import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -20,8 +21,11 @@ interface NavbarProps {
   onToggleSettings: () => void
 }
 
-/** Left navigation rail: the workspace list — add / switch / rename / close. */
+/** Left navigation rail: the workspace list — add / switch / rename / close.
+ * Collapses to 0 width when the title bar's toggle button is off.
+ */
 export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: NavbarProps): ReactElement {
+  const visible = useNavbarVisibilityStore((s) => s.visible)
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
@@ -30,56 +34,63 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
   return (
-    <nav className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex-1 overflow-y-auto p-2">
-        <p className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Workspaces
-        </p>
-        <ul className="space-y-0.5">
-          {workspaces.map((ws) => (
-            <WorkspaceItem
-              key={ws.id}
-              workspace={ws}
-              active={ws.id === activeWorkspaceId}
-              renaming={renamingId === ws.id}
-              onSelect={() => setActiveWorkspace(ws.id)}
-              onStartRename={() => setRenamingId(ws.id)}
-              onCommitRename={(name) => {
-                renameWorkspace(ws.id, name)
-                setRenamingId(null)
-              }}
-              onCancelRename={() => setRenamingId(null)}
-              onClose={() => closeWorkspace(ws.id)}
-            />
-          ))}
-        </ul>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mt-1 w-full justify-start text-muted-foreground"
-          onClick={onNewWorkspace}
-        >
-          <Plus className="h-4 w-4" />
-          New workspace
-        </Button>
-      </div>
+    <nav
+      aria-hidden={!visible}
+      inert={!visible}
+      style={{ width: visible ? 224 : 0 }}
+      className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-in-out motion-reduce:transition-none"
+    >
+      <div className="flex h-full w-56 flex-col">
+        <div className="flex-1 overflow-y-auto p-2">
+          <p className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Workspaces
+          </p>
+          <ul className="space-y-0.5">
+            {workspaces.map((ws) => (
+              <WorkspaceItem
+                key={ws.id}
+                workspace={ws}
+                active={ws.id === activeWorkspaceId}
+                renaming={renamingId === ws.id}
+                onSelect={() => setActiveWorkspace(ws.id)}
+                onStartRename={() => setRenamingId(ws.id)}
+                onCommitRename={(name) => {
+                  renameWorkspace(ws.id, name)
+                  setRenamingId(null)
+                }}
+                onCancelRename={() => setRenamingId(null)}
+                onClose={() => closeWorkspace(ws.id)}
+              />
+            ))}
+          </ul>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1 w-full justify-start text-muted-foreground"
+            onClick={onNewWorkspace}
+          >
+            <Plus className="h-4 w-4" />
+            New workspace
+          </Button>
+        </div>
 
-      <div className="shrink-0 space-y-0.5 border-t border-border p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggleSettings}
-          className={cn(
-            'w-full justify-start',
-            settingsOpen
-              ? 'bg-accent text-accent-foreground hover:bg-accent'
-              : 'text-muted-foreground'
-          )}
-          title="Settings"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </Button>
+        <div className="shrink-0 space-y-0.5 border-t border-border p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleSettings}
+            className={cn(
+              'w-full justify-start',
+              settingsOpen
+                ? 'bg-accent text-accent-foreground hover:bg-accent'
+                : 'text-muted-foreground'
+            )}
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </Button>
+        </div>
       </div>
     </nav>
   )
