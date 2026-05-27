@@ -37,6 +37,11 @@ fn tray_image() -> Image<'static> {
         set(5 + k, 11 - k, 0x18, 0x18, 0x1b);
         set(6 + k, 11 - k, 0x18, 0x18, 0x1b);
     }
+    // Cursor bar bên phải chevron, mirror path "M11 13h4" của lucide SquareTerminal.
+    for x in 11..=14 {
+        set(x, 8, 0x18, 0x18, 0x1b);
+        set(x, 9, 0x18, 0x18, 0x1b);
+    }
     Image::new_owned(buf, SIZE as u32, SIZE as u32)
 }
 
