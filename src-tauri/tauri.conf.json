@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Command Center",
+  "productName": "Swarmterm",
   "version": "0.1.0",
   "identifier": "com.swarmterm.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Command Center",
+        "title": "Swarmterm",
         "width": 1280,
         "height": 820,
         "minWidth": 860,
@@ -32,6 +32,7 @@
     "targets": "all",
     "icon": [
       "icons/32x32.png",
+      "icons/64x64.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",

@@ -37,6 +37,12 @@ fn tray_image() -> Image<'static> {
         set(5 + k, 11 - k, 0x18, 0x18, 0x1b);
         set(6 + k, 11 - k, 0x18, 0x18, 0x1b);
     }
+    // Cursor bar bên phải chevron — chỉnh sang cols 11-14 để tách rõ khỏi chevron
+    // (cols 5-9) ở 16x16, thay vì scale thẳng path "M11 13h4" của lucide.
+    for x in 11..=14 {
+        set(x, 8, 0x18, 0x18, 0x1b);
+        set(x, 9, 0x18, 0x18, 0x1b);
+    }
     Image::new_owned(buf, SIZE as u32, SIZE as u32)
 }
 
@@ -63,13 +69,13 @@ fn quit(app: &tauri::AppHandle) {
 }
 
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
-    let show = MenuItemBuilder::with_id("show", "Show Command Center").build(app)?;
+    let show = MenuItemBuilder::with_id("show", "Show Swarmterm").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app).items(&[&show, &quit_item]).build()?;
 
     TrayIconBuilder::with_id("main")
         .icon(tray_image())
-        .tooltip("Command Center")
+        .tooltip("Swarmterm")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {

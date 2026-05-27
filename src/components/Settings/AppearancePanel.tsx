@@ -34,7 +34,7 @@ export function AppearancePanel(): ReactElement {
           appearance<span className="text-muted-foreground/40">/</span>
         </h1>
         <p className="mt-4 max-w-2xl font-mono text-sm leading-relaxed text-muted-foreground">
-          <span className="text-muted-foreground/50">#</span> customize how Command Center
+          <span className="text-muted-foreground/50">#</span> customize how Swarmterm
           looks — applied across the sidebar, workspace tabs, and every terminal pane.
         </p>
       </section>

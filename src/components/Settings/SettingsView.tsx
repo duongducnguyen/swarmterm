@@ -44,7 +44,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
             <span className="text-muted-foreground/70">~/</span>settings
           </div>
           <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
-            command center
+            swarmterm
           </div>
         </div>
 

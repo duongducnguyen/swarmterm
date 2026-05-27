@@ -1,6 +1,6 @@
-# Command Center — Tauri 2 + Rust
+# Swarmterm — Tauri 2 + Rust
 
-App desktop kiểu "command center" — bộ khung điều hướng + multi-terminal.
+App desktop kiểu "swarmterm" — bộ khung điều hướng + multi-terminal.
 Port lại từ bản Electron gốc (`workspace/`) sang **Tauri 2 + Rust**, toàn bộ
 tính năng iteration 1 được giữ nguyên.
 
@@ -133,7 +133,7 @@ renderer. Output được gửi theo từng read (không coalesce chủ ý — Y
 - **Single-instance:** `tauri-plugin-single-instance` — callback focus +
   unminimize + show cửa sổ chính.
 - **Tray:** `TrayIconBuilder` với icon 16×16 RGBA dựng runtime (không cần file
-  asset). Menu "Show Command Center" / "Quit" + left-click shows window.
+  asset). Menu "Show Swarmterm" / "Quit" + left-click shows window.
 - **Close-to-tray:** `on_window_event` chặn `CloseRequested`, gọi
   `api.prevent_close()` + `window.hide()` — trừ khi `AppState.quitting` đã
   được set (do tray → Quit).
