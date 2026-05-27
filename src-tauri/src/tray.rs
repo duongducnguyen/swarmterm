@@ -69,13 +69,13 @@ fn quit(app: &tauri::AppHandle) {
 }
 
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
-    let show = MenuItemBuilder::with_id("show", "Show Command Center").build(app)?;
+    let show = MenuItemBuilder::with_id("show", "Show Swarmterm").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app).items(&[&show, &quit_item]).build()?;
 
     TrayIconBuilder::with_id("main")
         .icon(tray_image())
-        .tooltip("Command Center")
+        .tooltip("Swarmterm")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
