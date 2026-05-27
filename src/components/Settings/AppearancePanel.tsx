@@ -7,12 +7,12 @@ import { cn } from '@/lib/utils'
 interface StyleOption {
   id: Style
   label: string
-  variant: 'dark' | 'light'
+  variant: 'Dark' | 'Light'
   surface: string
 }
 
 const STYLE_OPTIONS: StyleOption[] = [
-  { id: 'vscode-dark', label: 'vscode dark', variant: 'dark', surface: 'dark modern' }
+  { id: 'vscode-dark', label: 'VS Code Dark', variant: 'Dark', surface: 'Modern' }
 ]
 
 /** The "Appearance" settings category — currently a single Style picker. */
@@ -21,32 +21,19 @@ export function AppearancePanel(): ReactElement {
   const setStyle = useAppearanceStore((s) => s.setStyle)
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       <section>
-        <div className="font-mono text-xs text-muted-foreground">
-          <span>swarmterm</span>
-          <span className="mx-1.5 text-muted-foreground/40">›</span>
-          <span>config</span>
-          <span className="mx-1.5 text-muted-foreground/40">›</span>
-          <span className="text-foreground">appearance</span>
-        </div>
-        <h1 className="mt-4 font-mono text-5xl font-bold tracking-tight text-foreground">
-          appearance<span className="text-muted-foreground/40">/</span>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Appearance
         </h1>
-        <p className="mt-4 max-w-2xl font-mono text-sm leading-relaxed text-muted-foreground">
-          <span className="text-muted-foreground/50">#</span> customize how Swarmterm
-          looks — applied across the sidebar, workspace tabs, and every terminal pane.
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
+          Customise how Swarmterm looks — applied across the sidebar, workspace tabs,
+          and every terminal pane.
         </p>
       </section>
 
       <section>
-        <div className="mb-5 flex items-center gap-3">
-          <span className="font-mono text-xs text-muted-foreground">themes</span>
-          <div className="h-px flex-1 bg-border" />
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            {STYLE_OPTIONS.length} available
-          </span>
-        </div>
+        <h2 className="mb-4 text-sm font-semibold text-foreground">Theme</h2>
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
           {STYLE_OPTIONS.map((opt) => (
@@ -76,26 +63,28 @@ function ThemeCard({ option, active, onSelect }: ThemeCardProps): ReactElement {
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        'group flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
+        'flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
         active
           ? 'border-primary/50 bg-muted/20 ring-2 ring-primary/15'
           : 'border-border hover:border-border/80 hover:bg-muted/20'
       )}
     >
-      <TerminalPreview active={active} />
-      <div className="flex items-end justify-between gap-2 px-0.5">
-        <div>
-          <div className="font-mono text-sm font-medium text-foreground">{option.label}</div>
-          <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-            {option.variant} · {option.surface}
-          </div>
-        </div>
+      <div className="relative">
+        <TerminalPreview active={active} />
         {active && (
-          <span className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-foreground">
-            <Check className="h-2.5 w-2.5" />
-            active
+          <span
+            aria-hidden
+            className="absolute right-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+          >
+            <Check className="h-3 w-3" strokeWidth={3} />
           </span>
         )}
+      </div>
+      <div className="px-0.5">
+        <div className="text-sm font-medium text-foreground">{option.label}</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">
+          {option.variant} · {option.surface}
+        </div>
       </div>
     </button>
   )

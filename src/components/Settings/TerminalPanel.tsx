@@ -39,40 +39,26 @@ export function TerminalPanel(): ReactElement {
   }, [shellId, setShellId])
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       <section>
-        <div className="font-mono text-xs text-muted-foreground">
-          <span>swarmterm</span>
-          <span className="mx-1.5 text-muted-foreground/40">›</span>
-          <span>config</span>
-          <span className="mx-1.5 text-muted-foreground/40">›</span>
-          <span className="text-foreground">terminal</span>
-        </div>
-        <h1 className="mt-4 font-mono text-5xl font-bold tracking-tight text-foreground">
-          terminal<span className="text-muted-foreground/40">/</span>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Terminal
         </h1>
-        <p className="mt-4 max-w-2xl font-mono text-sm leading-relaxed text-muted-foreground">
-          <span className="text-muted-foreground/50">#</span> choose which shell each
-          new terminal pane starts with. only affects new panes — already-running
-          terminals keep their current shell.
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
+          Choose which shell each new terminal pane starts with. Only affects new
+          panes — already-running terminals keep their current shell.
         </p>
       </section>
 
       {staleId && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 font-mono text-xs text-amber-200">
-          selected shell <span className="font-semibold">'{staleId}'</span> is no
-          longer detected — falling back to <span className="font-semibold">default</span>.
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          The shell <span className="font-mono font-semibold">{staleId}</span> isn't
+          available anymore. Switched to <span className="font-semibold">Default</span>.
         </div>
       )}
 
       <section>
-        <div className="mb-5 flex items-center gap-3">
-          <span className="font-mono text-xs text-muted-foreground">shells</span>
-          <div className="h-px flex-1 bg-border" />
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            {KNOWN_SHELLS.length} known
-          </span>
-        </div>
+        <h2 className="mb-4 text-sm font-semibold text-foreground">Shell</h2>
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
           {KNOWN_SHELLS.map((meta) => {
@@ -118,30 +104,37 @@ function ShellCard({
       aria-pressed={active}
       aria-disabled={!detected}
       className={cn(
-        'group flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
+        'flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
         !detected && 'cursor-not-allowed opacity-50',
         detected && active && 'border-primary/50 bg-muted/20 ring-2 ring-primary/15',
         detected && !active && 'border-border hover:border-border/80 hover:bg-muted/20',
         !detected && 'border-border'
       )}
     >
-      <ShellPreview promptSample={meta.promptSample} active={active} />
-      <div className="flex items-end justify-between gap-2 px-0.5">
-        <div className="min-w-0">
-          <div className="font-mono text-sm font-medium text-foreground">{meta.label}</div>
-          <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-            {detected
-              ? detectedPath
-                ? `${meta.family} · ${detectedPath}`
-                : meta.family
-              : 'not detected'}
-          </div>
-        </div>
+      <div className="relative">
+        <ShellPreview promptSample={meta.promptSample} active={active} />
         {active && detected && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-foreground">
-            <Check className="h-2.5 w-2.5" />
-            active
+          <span
+            aria-hidden
+            className="absolute right-2 top-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+          >
+            <Check className="h-3 w-3" strokeWidth={3} />
           </span>
+        )}
+      </div>
+      <div className="min-w-0 px-0.5">
+        <div className="text-sm font-medium text-foreground">{meta.label}</div>
+        {detected ? (
+          <>
+            <div className="mt-0.5 text-xs text-muted-foreground">{meta.family}</div>
+            {detectedPath && (
+              <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/80">
+                {detectedPath}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="mt-0.5 text-xs text-muted-foreground/70">Not installed</div>
         )}
       </div>
     </button>

@@ -17,12 +17,12 @@ export interface ShellMeta {
 
 /** Catalog of every shell the UI knows how to render. Order = display order. */
 export const KNOWN_SHELLS: readonly ShellMeta[] = [
-  { id: 'default', label: 'default', family: 'platform', promptSample: '$ swarmterm' },
-  { id: 'powershell', label: 'powershell', family: 'windows · 1', promptSample: 'PS C:\\>' },
-  { id: 'cmd', label: 'cmd', family: 'command prompt', promptSample: 'C:\\Users\\>' },
-  { id: 'pwsh', label: 'pwsh', family: 'powershell · 7', promptSample: 'PS >' },
-  { id: 'git-bash', label: 'git bash', family: 'msys2', promptSample: 'MINGW64 ~$' },
-  { id: 'wsl', label: 'wsl', family: 'linux', promptSample: 'user@distro:~$' }
+  { id: 'default', label: 'Default', family: 'Platform', promptSample: '$ swarmterm' },
+  { id: 'powershell', label: 'PowerShell', family: 'Windows', promptSample: 'PS C:\\>' },
+  { id: 'cmd', label: 'Command Prompt', family: 'Windows', promptSample: 'C:\\Users\\>' },
+  { id: 'pwsh', label: 'PowerShell 7', family: 'Cross-platform', promptSample: 'PS >' },
+  { id: 'git-bash', label: 'Git Bash', family: 'MSYS2', promptSample: 'MINGW64 ~$' },
+  { id: 'wsl', label: 'WSL', family: 'Linux', promptSample: 'user@distro:~$' }
 ] as const
 
 /** The shell id used when nothing is persisted yet. */

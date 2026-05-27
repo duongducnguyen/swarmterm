@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { X } from 'lucide-react'
+import { Palette, Terminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AppearancePanel } from './AppearancePanel'
@@ -10,11 +10,12 @@ type CategoryId = 'appearance' | 'terminal'
 interface Category {
   id: CategoryId
   label: string
+  Icon: typeof Palette
 }
 
 const CATEGORIES: Category[] = [
-  { id: 'appearance', label: 'appearance' },
-  { id: 'terminal', label: 'terminal' }
+  { id: 'appearance', label: 'Appearance', Icon: Palette },
+  { id: 'terminal', label: 'Terminal', Icon: Terminal }
 ]
 
 interface SettingsViewProps {
@@ -39,47 +40,32 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
   return (
     <div className="relative flex h-full bg-background">
       <nav className="flex w-56 shrink-0 flex-col border-r border-border">
-        <div className="border-b border-border px-4 py-5">
-          <div className="font-mono text-xs text-foreground">
-            <span className="text-muted-foreground/70">~/</span>settings
-          </div>
-          <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
-            swarmterm
-          </div>
+        <div className="border-b border-border px-3 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Settings</h2>
         </div>
 
-        <div className="flex flex-1 flex-col gap-px overflow-y-auto p-2">
+        <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {CATEGORIES.map((cat) => {
             const active = cat.id === activeCategory
+            const Icon = cat.Icon
             return (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setActiveCategory(cat.id)}
+                aria-pressed={active}
                 className={cn(
-                  'group flex items-center gap-2 rounded px-2 py-1.5 font-mono text-sm transition-colors',
+                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                   active
-                    ? 'bg-muted/60 text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                 )}
               >
-                <span
-                  className={cn(
-                    'w-3 text-primary transition-opacity',
-                    active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'
-                  )}
-                  aria-hidden
-                >
-                  ▸
-                </span>
+                <Icon className="h-4 w-4" />
                 <span>{cat.label}</span>
               </button>
             )
           })}
-        </div>
-
-        <div className="border-t border-border px-4 py-3 font-mono text-[10px] text-muted-foreground/60">
-          <span className="text-muted-foreground/40">›</span> esc to close
         </div>
       </nav>
 
@@ -96,7 +82,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
         </Button>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-10 py-10">
+          <div className="mx-auto max-w-3xl px-8 py-8">
             {activeCategory === 'appearance' && <AppearancePanel />}
             {activeCategory === 'terminal' && <TerminalPanel />}
           </div>
