@@ -50,7 +50,7 @@ export function TitleBar(): ReactElement {
           {visible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
         </button>
         <SquareTerminal className="h-4 w-4" />
-        <span className="text-xs font-semibold">Command Center</span>
+        <span className="text-xs font-semibold">Swarmterm</span>
       </div>
 
       <div
