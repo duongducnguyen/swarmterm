@@ -1,5 +1,9 @@
 // src-tauri/src/deeplink.rs
 
+use tauri::{AppHandle, Emitter, Manager};
+use crate::pty::AppState;
+use serde::Serialize;
+
 /// A validated request to open a web preview for a terminal session.
 #[derive(Debug, PartialEq)]
 pub struct PreviewOpen {
@@ -52,6 +56,32 @@ pub fn parse_preview(
     }
 
     Ok(PreviewOpen { terminal_id: session, url: target })
+}
+
+/// Payload emitted to the renderer when a valid preview link arrives.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewOpenEvent {
+    pub terminal_id: String,
+    pub url: String,
+}
+
+/// Validate every URL in `uris` and emit `preview:open` for the good ones.
+pub fn handle_uris(app: &AppHandle, uris: &[String]) {
+    let state = app.state::<AppState>();
+    for uri in uris {
+        match parse_preview(uri, |id| state.terminals.lock().unwrap().contains_key(id)) {
+            Ok(open) => {
+                let _ = app.emit(
+                    "preview:open",
+                    PreviewOpenEvent { terminal_id: open.terminal_id, url: open.url },
+                );
+            }
+            Err(reason) => {
+                eprintln!("ignored deep link {uri}: {reason:?}");
+            }
+        }
+    }
 }
 
 #[cfg(test)]
