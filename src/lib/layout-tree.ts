@@ -7,6 +7,8 @@
  * never mutate their input.
  */
 
+import type { ShellId } from '@/lib/terminal-pref'
+
 export type Direction = 'horizontal' | 'vertical'
 
 export interface LeafNode {
@@ -14,11 +16,15 @@ export interface LeafNode {
   id: string
   terminalId: string
   /**
-   * Command run once when this terminal first spawns. Set on leaves the setup
-   * wizard creates from the chosen template; absent on leaves created by
-   * splitting a pane, which start as a plain shell.
+   * Agent this pane runs — a template id from the agent catalog. Absent means
+   * the default 'terminal' agent (a plain shell). The pane's startup command is
+   * derived from this at spawn time.
    */
-  initialCommand?: string
+  agentId?: string
+  /** Per-pane working-directory override. Absent means use the workspace cwd. */
+  cwd?: string
+  /** Per-pane shell override. Absent means use the global default shell. */
+  shellId?: ShellId
 }
 
 export interface SplitNode {
@@ -37,6 +43,28 @@ export function findLeaf(tree: LayoutNode, leafId: string): LeafNode | null {
     return tree.id === leafId ? tree : null
   }
   return findLeaf(tree.children[0], leafId) ?? findLeaf(tree.children[1], leafId)
+}
+
+/**
+ * Return a new tree with `patch` merged into the leaf `leafId`. Patching a field
+ * to `undefined` clears that per-pane override. Returns the tree unchanged when
+ * `leafId` is not found; never mutates its input.
+ */
+export function updateLeaf(
+  tree: LayoutNode,
+  leafId: string,
+  patch: Partial<Pick<LeafNode, 'agentId' | 'cwd' | 'shellId'>>
+): LayoutNode {
+  if (tree.type === 'leaf') {
+    return tree.id === leafId ? { ...tree, ...patch } : tree
+  }
+  return {
+    ...tree,
+    children: [
+      updateLeaf(tree.children[0], leafId, patch),
+      updateLeaf(tree.children[1], leafId, patch)
+    ]
+  }
 }
 
 /** All leaves of the tree, in left-to-right depth-first order. */

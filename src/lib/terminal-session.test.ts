@@ -110,4 +110,36 @@ describe('TerminalSession', () => {
     staleChannel({ type: 'data', payload: 'ghost' })
     expect(write).not.toHaveBeenCalledWith('ghost')
   })
+
+  it('kills a running pty and re-spawns only after its exit is observed', () => {
+    const deps = makeDeps()
+    const session = new TerminalSession('t1', { write: vi.fn() }, deps)
+
+    session.start(OPTS)
+    expect(deps.createTerminal).toHaveBeenCalledTimes(1)
+
+    // Switch on a LIVE pty: must kill, but must NOT spawn yet (backend id still live).
+    session.respawn({ ...OPTS, cwd: '/other' })
+    expect(deps.killTerminal).toHaveBeenCalledTimes(1)
+    expect(deps.createTerminal).toHaveBeenCalledTimes(1)
+    expect(session.getStatus()).toEqual({ kind: 'connecting' })
+
+    // The dying pty reports exit (backend has now freed the id) -> fresh spawn.
+    deps.emit({ type: 'exit', payload: { exitCode: 0 } })
+    expect(deps.createTerminal).toHaveBeenCalledTimes(2)
+    expect(session.getStatus()).toEqual({ kind: 'connecting' })
+  })
+
+  it('respawns immediately, without a kill, when the pty already exited', () => {
+    const deps = makeDeps()
+    const session = new TerminalSession('t1', { write: vi.fn() }, deps)
+
+    session.start(OPTS)
+    deps.emit({ type: 'exit', payload: { exitCode: 0 } })
+    expect(session.getStatus()).toEqual({ kind: 'exited', exitCode: 0 })
+
+    session.respawn(OPTS)
+    expect(deps.killTerminal).not.toHaveBeenCalled()
+    expect(deps.createTerminal).toHaveBeenCalledTimes(2)
+  })
 })

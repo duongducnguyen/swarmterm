@@ -175,6 +175,20 @@ export function retryTerminal(id: string): void {
   entry.session.retry({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
 
+/**
+ * Re-spawn the pty with a new config (agent command / cwd / shell). Unlike
+ * `attachTerminal`, this is a deliberate user action, so it DOES override the
+ * shellId that attach locks in. Clears the screen, then restarts the pty.
+ */
+export function respawnTerminal(id: string, config: AttachConfig): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  entry.config = { ...entry.config, ...config }
+  entry.term.reset()
+  safeFit(entry)
+  entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
+}
+
 export function getTerminalStatus(id: string): TerminalStatus {
   return entries.get(id)?.session.getStatus() ?? NO_STATUS
 }

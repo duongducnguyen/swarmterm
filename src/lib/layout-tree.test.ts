@@ -8,6 +8,7 @@ import {
   splitLeaf,
   closeLeaf,
   resizeSplit,
+  updateLeaf,
   gridFor,
   buildBalancedTree,
   buildGridLayout
@@ -271,5 +272,43 @@ describe('buildGridLayout', () => {
     const { makeLeaf, makeSplitId } = gridGenerators()
     const ids = collectLeaves(buildGridLayout(8, makeLeaf, makeSplitId)).map((l) => l.terminalId)
     expect(new Set(ids).size).toBe(8)
+  })
+})
+
+// --- updateLeaf ------------------------------------------------------------
+
+describe('updateLeaf', () => {
+  it('patches the matching leaf with the given fields', () => {
+    const result = updateLeaf(nestedTree(), 'B', { agentId: 'codex' }) as SplitNode
+    const s2 = result.children[1] as SplitNode
+    expect((s2.children[0] as LeafNode).agentId).toBe('codex')
+  })
+
+  it('sets a per-pane cwd override', () => {
+    const result = updateLeaf(leaf('A'), 'A', { cwd: 'D:/x' }) as LeafNode
+    expect(result.cwd).toBe('D:/x')
+  })
+
+  it('clears a cwd override when patched with undefined', () => {
+    const withCwd = updateLeaf(leaf('A'), 'A', { cwd: 'D:/x' }) as LeafNode
+    const cleared = updateLeaf(withCwd, 'A', { cwd: undefined }) as LeafNode
+    expect(cleared.cwd).toBeUndefined()
+  })
+
+  it('leaves other leaves untouched', () => {
+    const result = updateLeaf(nestedTree(), 'B', { shellId: 'wsl' }) as SplitNode
+    expect((result.children[0] as LeafNode).shellId).toBeUndefined()
+  })
+
+  it('returns the tree unchanged when the leaf id is absent', () => {
+    const tree = nestedTree()
+    expect(updateLeaf(tree, 'Z', { agentId: 'codex' })).toEqual(tree)
+  })
+
+  it('does not mutate the input tree', () => {
+    const tree = nestedTree()
+    updateLeaf(tree, 'B', { agentId: 'codex' })
+    const s2 = tree.children[1] as SplitNode
+    expect((s2.children[0] as LeafNode).agentId).toBeUndefined()
   })
 })

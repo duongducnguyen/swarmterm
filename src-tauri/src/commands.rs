@@ -33,10 +33,25 @@ pub fn resize_terminal(state: State<'_, AppState>, id: String, cols: u16, rows: 
 
 #[tauri::command]
 pub fn kill_terminal(state: State<'_, AppState>, id: String) {
-    if let Some(t) = state.terminals.lock().unwrap().get_mut(&id) {
+    // Take the terminal OUT of the map so its master PTY handle is dropped here,
+    // rather than lingering until the reader thread cleans up. This makes the
+    // reader observe EOF promptly on every platform:
+    //   - Windows (ConPTY): killing the child does NOT close the output pipe while
+    //     the master handle lives, so the reader would park on read() forever.
+    //     Dropping the master runs ClosePseudoConsole, which closes the pipe.
+    //   - Unix (macOS/Linux): the child's death already closes the slave, so the
+    //     reader's own dup'd fd sees EOF regardless; dropping this master fd early
+    //     is harmless.
+    // Either way the reader then breaks, read_loop emits Exit and frees the id —
+    // which a same-id respawn (agent/cwd/shell switch) waits for before spawning.
+    //
+    // The `let` binding releases the map lock BEFORE the kill/drop, so the reader
+    // thread can re-lock the map to clear the id without deadlocking.
+    let removed = state.terminals.lock().unwrap().remove(&id);
+    if let Some(mut t) = removed {
         t.kill();
+        // Dropping `t` (and its master PTY) at end of scope forces the reader's EOF.
     }
-    // The reader thread observes EOF, sends Exit, and removes the entry.
 }
 
 #[tauri::command]
