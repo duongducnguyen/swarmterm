@@ -6,6 +6,7 @@ import { previewSetBounds, previewShow, previewSetVisible } from '@/tauri/previe
 
 interface BrowserColumnProps {
   terminalIndexOf: (terminalId: string) => number
+  enabled: boolean
 }
 
 /**
@@ -13,7 +14,7 @@ interface BrowserColumnProps {
  * a native webview the backend positions over `contentRef`'s rect. We push the
  * rect on every layout change and the active tab's url whenever it changes.
  */
-export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactElement {
+export function BrowserColumn({ terminalIndexOf, enabled }: BrowserColumnProps): ReactElement {
   const tabs = useBrowserStore((s) => s.tabs)
   const activeTabId = useBrowserStore((s) => s.activeTabId)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -31,14 +32,14 @@ export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactEle
   // Drive the webview to the active tab's url; create/position on first show.
   useEffect(() => {
     const el = contentRef.current
-    if (!el || !active) {
+    if (!el || !active || !enabled) {
       void previewSetVisible(false)
       return
     }
     const r = el.getBoundingClientRect()
     void previewShow(active.url, { x: r.left, y: r.top, width: r.width, height: r.height })
     void previewSetVisible(true)
-  }, [active?.id, active?.url])
+  }, [active?.id, active?.url, enabled])
 
   // Keep the webview glued to the content rect as the column resizes / window resizes.
   useEffect(() => {
