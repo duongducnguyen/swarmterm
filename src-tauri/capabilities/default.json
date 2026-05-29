@@ -20,10 +20,6 @@
     "deep-link:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "core:webview:allow-create-webview",
-    "core:webview:allow-set-webview-position",
-    "core:webview:allow-set-webview-size",
-    "core:webview:allow-set-webview-focus",
-    "core:webview:allow-webview-close"
+    "core:webview:allow-create-webview-window"
   ]
 }
