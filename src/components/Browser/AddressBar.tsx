@@ -1,13 +1,19 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { ArrowLeft, ArrowRight, RotateCw, Maximize2, Minimize2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Maximize2, Minimize2, RotateCw } from 'lucide-react'
 import { useBrowserStore } from '@/store/browser-store'
 import { normalizeUrl } from '@/lib/web-url'
-import { previewBack, previewForward, previewReload } from '@/tauri/preview'
+import { openExternalWindow } from '@/tauri/popout'
 
-export function AddressBar(): ReactElement {
+interface AddressBarProps {
+  onReload: () => void
+}
+
+export function AddressBar({ onReload }: AddressBarProps): ReactElement {
   const tabs = useBrowserStore((s) => s.tabs)
   const activeTabId = useBrowserStore((s) => s.activeTabId)
   const navigate = useBrowserStore((s) => s.navigate)
+  const goBack = useBrowserStore((s) => s.goBack)
+  const goForward = useBrowserStore((s) => s.goForward)
   const fullscreen = useBrowserStore((s) => s.fullscreen)
   const setFullscreen = useBrowserStore((s) => s.setFullscreen)
 
@@ -28,13 +34,28 @@ export function AddressBar(): ReactElement {
 
   return (
     <div className="flex items-center gap-1 border-b border-border bg-background px-2 py-1">
-      <button type="button" aria-label="Lùi" onClick={() => void previewBack()} className="rounded p-1 hover:bg-muted">
+      <button
+        type="button"
+        aria-label="Lùi"
+        onClick={() => { if (active) goBack(active.id) }}
+        className="rounded p-1 hover:bg-muted"
+      >
         <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
       </button>
-      <button type="button" aria-label="Tới" onClick={() => void previewForward()} className="rounded p-1 hover:bg-muted">
+      <button
+        type="button"
+        aria-label="Tới"
+        onClick={() => { if (active) goForward(active.id) }}
+        className="rounded p-1 hover:bg-muted"
+      >
         <ArrowRight aria-hidden className="h-3.5 w-3.5" />
       </button>
-      <button type="button" aria-label="Tải lại" onClick={() => void previewReload()} className="rounded p-1 hover:bg-muted">
+      <button
+        type="button"
+        aria-label="Tải lại"
+        onClick={onReload}
+        className="rounded p-1 hover:bg-muted"
+      >
         <RotateCw aria-hidden className="h-3.5 w-3.5" />
       </button>
       <form onSubmit={submit} className="flex-1">
@@ -46,6 +67,16 @@ export function AddressBar(): ReactElement {
           className="w-full rounded-full bg-muted px-3 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
         />
       </form>
+      {active && (
+        <button
+          type="button"
+          aria-label="Mở ra cửa sổ riêng"
+          onClick={() => openExternalWindow(active.url)}
+          className="rounded p-1 hover:bg-muted"
+        >
+          <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+        </button>
+      )}
       <button
         type="button"
         aria-label={fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}

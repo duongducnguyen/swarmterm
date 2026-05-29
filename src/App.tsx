@@ -116,7 +116,7 @@ export default function App(): ReactElement {
               {browserFullscreen ? (
                 /* Fullscreen: BrowserColumn fills the entire content area. */
                 <div className="absolute inset-0">
-                  <BrowserColumn terminalIndexOf={terminalIndexOf} enabled={!settingsOpen} />
+                  <BrowserColumn terminalIndexOf={terminalIndexOf} />
                 </div>
               ) : (
                 /* Normal split: workspace(s) left, browser column right (when visible). */
@@ -144,7 +144,7 @@ export default function App(): ReactElement {
                         className="w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-ring data-[separator]:bg-border"
                       />
                       <Panel id="app-browser" minSize="20%" className="h-full w-full overflow-hidden">
-                        <BrowserColumn terminalIndexOf={terminalIndexOf} enabled={!settingsOpen} />
+                        <BrowserColumn terminalIndexOf={terminalIndexOf} />
                       </Panel>
                     </>
                   )}

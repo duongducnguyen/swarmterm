@@ -58,4 +58,94 @@ describe('browser-store', () => {
     useBrowserStore.getState().setFullscreen(true)
     expect(useBrowserStore.getState().fullscreen).toBe(true)
   })
+
+  // --- per-tab history tests ---
+
+  it('openTab initializes history=[url] and historyIndex=0', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://start' })
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.history).toEqual(['http://start'])
+    expect(tab.historyIndex).toBe(0)
+  })
+
+  it('navigate pushes a new entry and advances historyIndex', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().navigate(id, 'http://b')
+    useBrowserStore.getState().navigate(id, 'http://c')
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.history).toEqual(['http://a', 'http://b', 'http://c'])
+    expect(tab.historyIndex).toBe(2)
+    expect(tab.url).toBe('http://c')
+  })
+
+  it('navigate to the same url as current entry is a no-op', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().navigate(id, 'http://a')
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.history).toEqual(['http://a'])
+    expect(tab.historyIndex).toBe(0)
+  })
+
+  it('navigate after goBack truncates forward history', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().navigate(id, 'http://b')
+    useBrowserStore.getState().navigate(id, 'http://c')
+    useBrowserStore.getState().goBack(id)
+    // now at index 1 (http://b), forward has http://c
+    useBrowserStore.getState().navigate(id, 'http://d')
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.history).toEqual(['http://a', 'http://b', 'http://d'])
+    expect(tab.historyIndex).toBe(2)
+    expect(tab.url).toBe('http://d')
+  })
+
+  it('goBack moves through history and updates tab.url', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().navigate(id, 'http://b')
+    useBrowserStore.getState().navigate(id, 'http://c')
+    useBrowserStore.getState().goBack(id)
+    expect(useBrowserStore.getState().tabs[0].url).toBe('http://b')
+    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(1)
+    useBrowserStore.getState().goBack(id)
+    expect(useBrowserStore.getState().tabs[0].url).toBe('http://a')
+    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(0)
+  })
+
+  it('goBack at start is a no-op', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().goBack(id)
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.historyIndex).toBe(0)
+    expect(tab.url).toBe('http://a')
+  })
+
+  it('goForward moves through history and updates tab.url', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().navigate(id, 'http://b')
+    useBrowserStore.getState().navigate(id, 'http://c')
+    useBrowserStore.getState().goBack(id)
+    useBrowserStore.getState().goBack(id)
+    expect(useBrowserStore.getState().tabs[0].url).toBe('http://a')
+    useBrowserStore.getState().goForward(id)
+    expect(useBrowserStore.getState().tabs[0].url).toBe('http://b')
+    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(1)
+    useBrowserStore.getState().goForward(id)
+    expect(useBrowserStore.getState().tabs[0].url).toBe('http://c')
+    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(2)
+  })
+
+  it('goForward at end is a no-op', () => {
+    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
+    const id = useBrowserStore.getState().tabs[0].id
+    useBrowserStore.getState().goForward(id)
+    const tab = useBrowserStore.getState().tabs[0]
+    expect(tab.historyIndex).toBe(0)
+    expect(tab.url).toBe('http://a')
+  })
 })

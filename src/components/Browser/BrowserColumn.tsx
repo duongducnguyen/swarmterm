@@ -1,65 +1,43 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useBrowserStore } from '@/store/browser-store'
 import { TabStrip } from './TabStrip'
 import { AddressBar } from './AddressBar'
-import { previewSetBounds, previewShow, previewSetVisible } from '@/tauri/preview'
 
 interface BrowserColumnProps {
   terminalIndexOf: (terminalId: string) => number
-  enabled: boolean
 }
 
 /**
- * The 3rd column. Toolbar (tabs + address bar) is DOM; the actual web renders in
- * a native webview the backend positions over `contentRef`'s rect. We push the
- * rect on every layout change and the active tab's url whenever it changes.
+ * The 3rd column. Toolbar (tabs + address bar) is DOM; the actual web renders
+ * in an iframe (in-DOM — no focus steal, no z-order/paint bugs). A pop-out
+ * button in AddressBar opens a real WebviewWindow for sites that block framing.
  */
-export function BrowserColumn({ terminalIndexOf, enabled }: BrowserColumnProps): ReactElement {
+export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactElement {
   const tabs = useBrowserStore((s) => s.tabs)
   const activeTabId = useBrowserStore((s) => s.activeTabId)
-  const contentRef = useRef<HTMLDivElement>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   const active = tabs.find((t) => t.id === activeTabId) ?? null
-
-  // Report the content rect (logical px relative to the window) to the backend.
-  const pushBounds = (): void => {
-    const el = contentRef.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    void previewSetBounds({ x: r.left, y: r.top, width: r.width, height: r.height })
-  }
-
-  // Drive the webview to the active tab's url; create/position on first show.
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el || !active || !enabled) {
-      void previewSetVisible(false)
-      return
-    }
-    const r = el.getBoundingClientRect()
-    void previewShow(active.url, { x: r.left, y: r.top, width: r.width, height: r.height })
-    void previewSetVisible(true)
-  }, [active?.id, active?.url, enabled])
-
-  // Keep the webview glued to the content rect as the column resizes / window resizes.
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => pushBounds())
-    ro.observe(el)
-    window.addEventListener('resize', pushBounds)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', pushBounds)
-    }
-  }, [])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
       <TabStrip terminalIndexOf={terminalIndexOf} />
-      <AddressBar />
-      {/* The native webview overlays this box; keep it empty. */}
-      <div ref={contentRef} className="min-h-0 flex-1" />
+      <AddressBar onReload={() => setReloadNonce((n) => n + 1)} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        {active ? (
+          <iframe
+            key={`${active.id}:${reloadNonce}`}
+            src={active.url}
+            title={active.title ?? active.url}
+            className="min-h-0 w-full flex-1 border-0 bg-white"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+            Không có tab nào đang mở
+          </div>
+        )}
+      </div>
     </div>
   )
 }

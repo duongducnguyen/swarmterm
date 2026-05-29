@@ -5,6 +5,8 @@ export interface WebTab {
   terminalId: string
   url: string
   title?: string
+  history: string[]
+  historyIndex: number
 }
 
 export interface BrowserStore {
@@ -20,6 +22,8 @@ export interface BrowserStore {
   setTitle: (tabId: string, title: string) => void
   toggleVisible: () => void
   setFullscreen: (fullscreen: boolean) => void
+  goBack: (tabId: string) => void
+  goForward: (tabId: string) => void
 }
 
 function uid(): string {
@@ -42,7 +46,7 @@ export const useBrowserStore = create<BrowserStore>((set) => ({
 
   openTab: ({ terminalId, url }) =>
     set((s) => {
-      const tab: WebTab = { id: uid(), terminalId, url }
+      const tab: WebTab = { id: uid(), terminalId, url, history: [url], historyIndex: 0 }
       return { tabs: [...s.tabs, tab], activeTabId: tab.id, visible: true }
     }),
 
@@ -63,10 +67,41 @@ export const useBrowserStore = create<BrowserStore>((set) => ({
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
   navigate: (tabId, url) =>
-    set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, url } : t)) })),
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t
+        // no-op if already on this url
+        if (t.history[t.historyIndex] === url) return t
+        // truncate forward entries then push
+        const newHistory = [...t.history.slice(0, t.historyIndex + 1), url]
+        return { ...t, url, history: newHistory, historyIndex: newHistory.length - 1 }
+      }),
+    })),
+
   setTitle: (tabId, title) =>
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)) })),
+
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
-  setFullscreen: (fullscreen) => set({ fullscreen })
+
+  setFullscreen: (fullscreen) => set({ fullscreen }),
+
+  goBack: (tabId) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || t.historyIndex <= 0) return t
+        const newIndex = t.historyIndex - 1
+        return { ...t, historyIndex: newIndex, url: t.history[newIndex] }
+      }),
+    })),
+
+  goForward: (tabId) =>
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || t.historyIndex >= t.history.length - 1) return t
+        const newIndex = t.historyIndex + 1
+        return { ...t, historyIndex: newIndex, url: t.history[newIndex] }
+      }),
+    })),
 }))
