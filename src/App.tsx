@@ -1,14 +1,18 @@
 import { useEffect, useState, type ReactElement } from 'react'
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { collectLeaves } from '@/lib/layout-tree'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
+import { BrowserColumn } from '@/components/Browser/BrowserColumn'
 import { Navbar } from '@/components/Navbar/Navbar'
 import { SettingsView } from '@/components/Settings/SettingsView'
 import { TitleBar } from '@/components/TitleBar/TitleBar'
 import { Workspace } from '@/components/Workspace/Workspace'
 import { WorkspaceSetup } from '@/components/WorkspaceSetup/WorkspaceSetup'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
+import { useBrowserStore } from '@/store/browser-store'
+import { onPreviewOpen } from '@/tauri/deeplink'
 import { showWindow } from '@/tauri/window'
 
 /** Terminal ids referenced by any workspace's layout — the ones to keep alive. */
@@ -27,6 +31,9 @@ export default function App(): ReactElement {
   const [wizardOpen, setWizardOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
+  const browserVisible = useBrowserStore((s) => s.visible)
+  const browserFullscreen = useBrowserStore((s) => s.fullscreen)
+
   const noWorkspaces = workspaces.length === 0
   // The setup wizard is forced open (and uncancellable) whenever none exist.
   const setupOpen = wizardOpen || noWorkspaces
@@ -37,6 +44,12 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Esc exits browser fullscreen first — before any other handler.
+      if (e.key === 'Escape' && useBrowserStore.getState().fullscreen) {
+        e.preventDefault()
+        useBrowserStore.getState().setFullscreen(false)
+        return
+      }
       if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
         e.preventDefault()
         useNavbarVisibilityStore.getState().toggle()
@@ -55,6 +68,35 @@ export default function App(): ReactElement {
       ),
     []
   )
+
+  // Close browser tabs whose terminal no longer exists in any workspace layout.
+  useEffect(
+    () =>
+      useAppStore.subscribe((state) => {
+        const live = liveTerminalIds(state.workspaces)
+        const close = useBrowserStore.getState().closeTabsForTerminal
+        for (const tab of useBrowserStore.getState().tabs) {
+          if (!live.has(tab.terminalId)) close(tab.terminalId)
+        }
+      }),
+    []
+  )
+
+  // Wire deep-link preview:open events to browser tabs.
+  useEffect(() => {
+    const open = useBrowserStore.getState().openTab
+    const unlisten = onPreviewOpen((e) => open({ terminalId: e.terminalId, url: e.url }))
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  /** Index of a terminal within the ordered set of live terminal ids (0 if not found). */
+  const terminalIndexOf = (terminalId: string): number => {
+    const ids = [...liveTerminalIds(workspaces)]
+    const i = ids.indexOf(terminalId)
+    return i < 0 ? 0 : i
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
@@ -77,15 +119,42 @@ export default function App(): ReactElement {
             <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
 
             <div className="relative min-h-0 flex-1">
-              {workspaces.map((ws) => (
-                <div
-                  key={ws.id}
-                  className="absolute inset-0"
-                  style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
-                >
-                  <Workspace workspace={ws} />
+              {browserFullscreen ? (
+                /* Fullscreen: BrowserColumn fills the entire content area. */
+                <div className="absolute inset-0">
+                  <BrowserColumn terminalIndexOf={terminalIndexOf} />
                 </div>
-              ))}
+              ) : (
+                /* Normal split: workspace(s) left, browser column right (when visible). */
+                <Group
+                  orientation="horizontal"
+                  className="h-full w-full"
+                  defaultLayout={browserVisible ? { 'app-workspace': 58, 'app-browser': 42 } : { 'app-workspace': 100 }}
+                >
+                  <Panel id="app-workspace" minSize="20%" className="h-full w-full overflow-hidden">
+                    {workspaces.map((ws) => (
+                      <div
+                        key={ws.id}
+                        className="absolute inset-0"
+                        style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
+                      >
+                        <Workspace workspace={ws} />
+                      </div>
+                    ))}
+                  </Panel>
+
+                  {browserVisible && (
+                    <>
+                      <Separator
+                        className="w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-ring data-[separator]:bg-border"
+                      />
+                      <Panel id="app-browser" minSize="20%" className="h-full w-full overflow-hidden">
+                        <BrowserColumn terminalIndexOf={terminalIndexOf} />
+                      </Panel>
+                    </>
+                  )}
+                </Group>
+              )}
             </div>
 
             <WorkspaceSetup
