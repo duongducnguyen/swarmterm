@@ -23,6 +23,12 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     name: 'Claude Code',
     description: 'Starts Claude Code with permission prompts skipped.',
     command: 'claude --dangerously-skip-permissions'
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    description: 'Starts the Codex CLI.',
+    command: 'codex'
   }
 ]
 
@@ -31,4 +37,9 @@ export const DEFAULT_TEMPLATE_ID = 'terminal'
 /** The template with `id`, or the default template when `id` is unknown. */
 export function templateById(id: string): WorkspaceTemplate {
   return TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0]
+}
+
+/** The startup command for an agent id, or `undefined` for a plain shell. */
+export function agentCommand(agentId: string | undefined): string | undefined {
+  return templateById(agentId ?? DEFAULT_TEMPLATE_ID).command ?? undefined
 }
