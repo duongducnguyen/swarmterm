@@ -40,14 +40,14 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         {/* Agent */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title={`Agent: ${agentLabel}`}>
+            <Button variant="ghost" size="icon-sm" title={`Agent: ${agentLabel}`} aria-label={`Agent: ${agentLabel}`}>
               <Bot className="h-3.5 w-3.5 text-ring" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {TEMPLATES.map((t) => (
               <DropdownMenuItem key={t.id} onSelect={() => props.onAgentChange(t.id)}>
-                <Check className={cn('h-3.5 w-3.5', t.id === agentId ? 'opacity-100' : 'opacity-0')} />
+                <Check aria-hidden="true" className={cn('h-3.5 w-3.5', t.id === agentId ? 'opacity-100' : 'opacity-0')} />
                 <span>{t.name}</span>
               </DropdownMenuItem>
             ))}
@@ -57,7 +57,7 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         {/* Path */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title={`Folder: ${resolvedCwd}`}>
+            <Button variant="ghost" size="icon-sm" title={`Folder: ${resolvedCwd}`} aria-label={`Folder: ${resolvedCwd}`}>
               <Folder className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -67,7 +67,7 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
               <span>Choose folder…</span>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onResetPath} disabled={!hasCwdOverride}>
-              <Check className="h-3.5 w-3.5 opacity-0" />
+              <Check aria-hidden="true" className="h-3.5 w-3.5 opacity-0" />
               <span>Use workspace folder</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -76,14 +76,14 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         {/* Shell */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title={`Shell: ${shellLabel}`}>
+            <Button variant="ghost" size="icon-sm" title={`Shell: ${shellLabel}`} aria-label={`Shell: ${shellLabel}`}>
               <ShellIcon className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {KNOWN_SHELLS.map((s) => (
               <DropdownMenuItem key={s.id} onSelect={() => props.onShellChange(s.id)}>
-                <Check className={cn('h-3.5 w-3.5', s.id === shellId ? 'opacity-100' : 'opacity-0')} />
+                <Check aria-hidden="true" className={cn('h-3.5 w-3.5', s.id === shellId ? 'opacity-100' : 'opacity-0')} />
                 <span>{s.label}</span>
               </DropdownMenuItem>
             ))}
@@ -92,13 +92,13 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
       </div>
 
       <div className="flex items-center gap-0.5">
-        <Button variant="ghost" size="icon-sm" title="Split right" onClick={props.onSplitRight}>
+        <Button variant="ghost" size="icon-sm" title="Split right" aria-label="Split right" onClick={props.onSplitRight}>
           <Columns2 className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" title="Split down" onClick={props.onSplitDown}>
+        <Button variant="ghost" size="icon-sm" title="Split down" aria-label="Split down" onClick={props.onSplitDown}>
           <Rows2 className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" title="Close pane" onClick={props.onClose}>
+        <Button variant="ghost" size="icon-sm" title="Close pane" aria-label="Close pane" onClick={props.onClose}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
