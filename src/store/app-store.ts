@@ -6,11 +6,12 @@ import {
   findLeaf,
   resizeSplit,
   splitLeaf,
+  updateLeaf,
   type Direction,
   type LayoutNode,
   type LeafNode
 } from '@/lib/layout-tree'
-import { templateById } from '@/lib/templates'
+import type { ShellId } from '@/lib/terminal-pref'
 
 /** A workspace: a named binary split-tree of terminal panes. */
 export interface Workspace {
@@ -45,6 +46,9 @@ export interface AppActions {
   splitPane: (leafId: string, direction: Direction) => void
   closePane: (leafId: string) => void
   resizeSplitNode: (splitId: string, sizes: [number, number]) => void
+  setPaneAgent: (leafId: string, agentId: string) => void
+  setPaneCwd: (leafId: string, cwd: string | undefined) => void
+  setPaneShell: (leafId: string, shellId: ShellId) => void
 }
 
 export type AppStore = AppState & AppActions
@@ -81,13 +85,12 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
   createWorkspace: (config) =>
     set((s) => {
-      const command = templateById(config.templateId).command
-      // Wizard-created leaves carry the template command; split-created ones don't.
+      // Every wizard-created leaf records the chosen agent; split-created ones don't.
       const makeWizardLeaf = (): LeafNode => ({
         type: 'leaf',
         id: uid(),
         terminalId: uid(),
-        ...(command !== null && { initialCommand: command })
+        agentId: config.templateId
       })
       const layout = buildGridLayout(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
@@ -171,7 +174,16 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   },
 
   resizeSplitNode: (splitId, sizes) =>
-    set((s) => mapActive(s, (w) => ({ ...w, layout: resizeSplit(w.layout, splitId, sizes) })))
+    set((s) => mapActive(s, (w) => ({ ...w, layout: resizeSplit(w.layout, splitId, sizes) }))),
+
+  setPaneAgent: (leafId, agentId) =>
+    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { agentId }) }))),
+
+  setPaneCwd: (leafId, cwd) =>
+    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { cwd }) }))),
+
+  setPaneShell: (leafId, shellId) =>
+    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) })))
 })
 
 export const useAppStore = create<AppStore>()(appStoreCreator)

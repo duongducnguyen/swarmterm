@@ -80,19 +80,17 @@ describe('createWorkspace', () => {
     expect(ws.focusedLeafId).toBe(collectLeaves(ws.layout)[0].id)
   })
 
-  it('puts the template command on every leaf for the Claude Code template', () => {
+  it('puts the chosen agent id on every leaf for the Claude Code template', () => {
     const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 4, templateId: 'claude-code' })
     const leaves = collectLeaves(activeWorkspace(store).layout)
     expect(leaves).toHaveLength(4)
-    expect(
-      leaves.every((l) => l.initialCommand === 'claude --dangerously-skip-permissions')
-    ).toBe(true)
+    expect(leaves.every((l) => l.agentId === 'claude-code')).toBe(true)
   })
 
-  it('leaves initialCommand unset for the Terminal template', () => {
+  it('sets the agent id to terminal for the Terminal template', () => {
     const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
     const leaves = collectLeaves(activeWorkspace(store).layout)
-    expect(leaves.every((l) => l.initialCommand === undefined)).toBe(true)
+    expect(leaves.every((l) => l.agentId === 'terminal')).toBe(true)
   })
 
   it('gives each pane a distinct terminalId', () => {
@@ -199,12 +197,12 @@ describe('splitPane', () => {
     expect(layout.direction).toBe('vertical')
   })
 
-  it('creates the split pane as a plain shell with no initial command', () => {
+  it('creates the split pane with no agent override (plain shell)', () => {
     const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 1, templateId: 'claude-code' })
     const original = activeWorkspace(store).focusedLeafId
     store.getState().splitPane(original, 'horizontal')
     const created = collectLeaves(activeWorkspace(store).layout).find((l) => l.id !== original)
-    expect(created?.initialCommand).toBeUndefined()
+    expect(created?.agentId).toBeUndefined()
   })
 })
 
@@ -254,5 +252,46 @@ describe('resizeSplitNode', () => {
     const layout = activeWorkspace(store).layout as SplitNode
     store.getState().resizeSplitNode(layout.id, [30, 70])
     expect((activeWorkspace(store).layout as SplitNode).sizes).toEqual([30, 70])
+  })
+})
+
+// --- pane overrides -------------------------------------------------------
+
+describe('setPaneAgent', () => {
+  it('sets the agent id on the targeted leaf', () => {
+    const store = storeWithWorkspace()
+    const leafId = activeWorkspace(store).focusedLeafId
+    store.getState().setPaneAgent(leafId, 'codex')
+    const leaf = collectLeaves(activeWorkspace(store).layout).find((l) => l.id === leafId)
+    expect(leaf?.agentId).toBe('codex')
+  })
+})
+
+describe('setPaneCwd', () => {
+  it('sets a per-pane cwd override', () => {
+    const store = storeWithWorkspace()
+    const leafId = activeWorkspace(store).focusedLeafId
+    store.getState().setPaneCwd(leafId, 'D:/elsewhere')
+    const leaf = collectLeaves(activeWorkspace(store).layout).find((l) => l.id === leafId)
+    expect(leaf?.cwd).toBe('D:/elsewhere')
+  })
+
+  it('clears the override when passed undefined', () => {
+    const store = storeWithWorkspace()
+    const leafId = activeWorkspace(store).focusedLeafId
+    store.getState().setPaneCwd(leafId, 'D:/elsewhere')
+    store.getState().setPaneCwd(leafId, undefined)
+    const leaf = collectLeaves(activeWorkspace(store).layout).find((l) => l.id === leafId)
+    expect(leaf?.cwd).toBeUndefined()
+  })
+})
+
+describe('setPaneShell', () => {
+  it('sets a per-pane shell override', () => {
+    const store = storeWithWorkspace()
+    const leafId = activeWorkspace(store).focusedLeafId
+    store.getState().setPaneShell(leafId, 'wsl')
+    const leaf = collectLeaves(activeWorkspace(store).layout).find((l) => l.id === leafId)
+    expect(leaf?.shellId).toBe('wsl')
   })
 })
