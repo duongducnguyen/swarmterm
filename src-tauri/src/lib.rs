@@ -1,5 +1,6 @@
 mod commands;
 mod deeplink;
+mod preview;
 mod pty;
 mod shell;
 mod tray;
@@ -60,6 +61,14 @@ pub fn run() {
             commands::resize_terminal,
             commands::kill_terminal,
             commands::list_available_shells,
+            preview::preview_show,
+            preview::preview_set_bounds,
+            preview::preview_navigate,
+            preview::preview_reload,
+            preview::preview_back,
+            preview::preview_forward,
+            preview::preview_set_visible,
+            preview::preview_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
