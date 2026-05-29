@@ -22,14 +22,20 @@ tính năng iteration 1 được giữ nguyên.
   minimize / maximize-restore / close-to-tray hoạt động qua Tauri window API.
 - **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
   theo.
+- **Web browser preview** — cột thứ 3 kiểu Chrome hiển thị web gắn theo từng
+  terminal; mở bằng deep link `swarmterm://preview?session=&url=` (helper đọc
+  env `SWARMTERM_SESSION`); webview native docked (Tauri multiwebview); tab
+  strip + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột;
+  fullscreen + Esc thoát.
 
 Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
 ## Tech stack
 
-Tauri 2 · Rust · `portable-pty` · `tauri-plugin-single-instance` ·
-`tauri-plugin-dialog` · React 19 + TypeScript · Vite · Tailwind CSS ·
-xterm.js · zustand · Vitest.
+Tauri 2 (tính năng `unstable` multiwebview) · Rust · `portable-pty` ·
+`tauri-plugin-single-instance` · `tauri-plugin-dialog` ·
+`tauri-plugin-deep-link` · `url` · React 19 + TypeScript · Vite ·
+Tailwind CSS · xterm.js · zustand · Vitest.
 
 ## Yêu cầu môi trường
 
@@ -71,6 +77,8 @@ src/                          # Frontend React/TS (renderer)
     terminal.ts               # Bridge: invoke create/write/resize/kill_terminal + Channel<PtyOut>
     window.ts                 # Bridge: minimize, toggleMaximize, close, show, onMaximizedChanged
     dialog.ts                 # Bridge: pickDirectory (native folder picker), getHomeDir
+    deeplink.ts               # Bridge nghe event preview:open từ backend deep link
+    preview.ts                # Bridge điều khiển webview preview docked
   components/
     TitleBar/                 # Frameless title bar; drag region, window controls
     Navbar/                   # Danh sách workspace (thêm/chuyển/đổi tên/đóng)
@@ -78,17 +86,20 @@ src/                          # Frontend React/TS (renderer)
     WorkspaceSetup/           # Setup wizard + template picker
     Workspace/                # Render cây layout (react-resizable-panels)
     TerminalPane/             # Bọc xterm.js; gắn vào bridge qua useTerminalSession
+    Browser/                  # BrowserColumn, TabStrip, AddressBar (web preview)
     ui/                       # Button, dropdown-menu (kiểu shadcn)
   hooks/
     useTerminalSession.ts     # Effect: spawn pty → stream PtyOut vào xterm, retry
   store/
     app-store.ts              # zustand store: workspaces + layout actions
     theme-store.ts            # zustand store: theme (light/dark) + localStorage
+    browser-store.ts          # zustand store: state tab browser (web preview)
   lib/
-    layout-tree.ts            # Hàm cây split thuần (TDD; 31 test)
+    layout-tree.ts            # Hàm cây split thuần (TDD; 37 test)
     theme.ts                  # Helpers theme (9 test)
     templates.ts              # Template lệnh khởi động workspace
     utils.ts                  # cn() helper (clsx + tailwind-merge)
+    web-url.ts                # Chuẩn hoá/validate URL address bar (6 test)
 
 src-tauri/                    # Backend Rust
   src/
@@ -97,9 +108,19 @@ src-tauri/                    # Backend Rust
     pty.rs                    # PtyOut enum, AppState, spawn_terminal, read_loop, UTF-8 helpers
     commands.rs               # #[tauri::command]: create/write/resize/kill_terminal
     tray.rs                   # TrayIconBuilder, menu Show/Quit, runtime-generated icon
-  Cargo.toml                  # portable-pty, tauri-plugin-single-instance, tauri-plugin-dialog, serde
+    deeplink.rs               # Parse/validate deep link swarmterm://, emit preview:open
+    preview.rs                # #[tauri::command]: điều khiển webview preview docked
+  Cargo.toml                  # portable-pty, tauri-plugin-single-instance, tauri-plugin-dialog,
+                              #   tauri-plugin-deep-link, url, serde
   tauri.conf.json             # App config: frameless window, productName, identifier
   capabilities/default.json  # ACL: core:default + window/event/dialog permissions
+
+scripts/
+  swarmterm-preview.sh        # Helper mở deep link swarmterm://preview (shell/macOS/Linux)
+  swarmterm-preview.ps1       # Helper mở deep link swarmterm://preview (PowerShell/Windows)
+
+docs/
+  swarmterm-preview-skill.md  # Sample skill cho agent dùng web browser preview
 ```
 
 ## Kiến trúc
@@ -151,8 +172,9 @@ chạy qua ba module trong `src/tauri/`:
 ### Unit test tự động
 
 ```bash
-npm test                     # 68 tests JS/TS (layout-tree × 31, theme × 9, app-store × 28)
-cd src-tauri && cargo test   # 5 tests Rust (default_shell, take_valid_utf8 × 4)
+npm test                     # 118 tests JS/TS (layout-tree × 37, theme × 9, app-store × 32,
+                             #   browser-store × 5, web-url × 6, + các test khác)
+cd src-tauri && cargo test   # 18 tests Rust (pty helpers, shell, deeplink)
 npx tsc --noEmit             # Kiểm tra kiểu toàn bộ frontend
 ```
 
@@ -183,3 +205,5 @@ Sau `npm run tauri dev`:
   đóng (xterm reconnect chưa được implement).
 - Code editor, file browser, kanban, AI agent, Settings là phạm vi của các
   iteration sau.
+- Web browser preview đã có (cột thứ 3); lưu/khôi phục tab giữa các lần mở
+  app chưa được implement.
