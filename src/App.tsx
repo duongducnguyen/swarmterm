@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
@@ -59,21 +59,12 @@ export default function App(): ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
 
-  // Kill a terminal's pty only when its leaf is gone from every layout (an
-  // actual close), not when a pane merely remounts as the split tree changes.
-  useEffect(
-    () =>
-      useAppStore.subscribe((state) =>
-        disposeOrphanTerminals(liveTerminalIds(state.workspaces))
-      ),
-    []
-  )
-
-  // Close browser tabs whose terminal no longer exists in any workspace layout.
+  // Kill orphaned PTYs and close browser tabs when terminals leave all layouts.
   useEffect(
     () =>
       useAppStore.subscribe((state) => {
         const live = liveTerminalIds(state.workspaces)
+        disposeOrphanTerminals(live)
         const close = useBrowserStore.getState().closeTabsForTerminal
         for (const tab of useBrowserStore.getState().tabs) {
           if (!live.has(tab.terminalId)) close(tab.terminalId)
@@ -92,11 +83,14 @@ export default function App(): ReactElement {
   }, [])
 
   /** Index of a terminal within the ordered set of live terminal ids (0 if not found). */
-  const terminalIndexOf = (terminalId: string): number => {
-    const ids = [...liveTerminalIds(workspaces)]
-    const i = ids.indexOf(terminalId)
-    return i < 0 ? 0 : i
-  }
+  const terminalIndexOf = useCallback(
+    (terminalId: string): number => {
+      const ids = [...liveTerminalIds(workspaces)]
+      const i = ids.indexOf(terminalId)
+      return i < 0 ? 0 : i
+    },
+    [workspaces]
+  )
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
@@ -127,11 +121,12 @@ export default function App(): ReactElement {
               ) : (
                 /* Normal split: workspace(s) left, browser column right (when visible). */
                 <Group
+                  key={browserVisible ? 'split' : 'solo'}
                   orientation="horizontal"
                   className="h-full w-full"
                   defaultLayout={browserVisible ? { 'app-workspace': 58, 'app-browser': 42 } : { 'app-workspace': 100 }}
                 >
-                  <Panel id="app-workspace" minSize="20%" className="h-full w-full overflow-hidden">
+                  <Panel id="app-workspace" minSize="20%" className="relative h-full w-full overflow-hidden">
                     {workspaces.map((ws) => (
                       <div
                         key={ws.id}
