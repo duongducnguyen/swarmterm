@@ -1,4 +1,5 @@
 mod commands;
+mod deeplink;
 mod pty;
 mod shell;
 mod tray;
