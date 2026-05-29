@@ -186,7 +186,7 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   entry.config = { ...entry.config, ...config }
   entry.term.reset()
   safeFit(entry)
-  entry.session.retry({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
+  entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
 
 export function getTerminalStatus(id: string): TerminalStatus {

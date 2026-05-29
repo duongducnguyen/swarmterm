@@ -38,6 +38,8 @@ export class TerminalSession {
   private disposed = false
   /** Bumped on retry/dispose to drop callbacks from a superseded pty channel. */
   private generation = 0
+  /** Options to spawn with once the current (being-killed) pty reports exit. */
+  private pendingRespawn: CreateTerminalOptions | null = null
 
   constructor(
     readonly id: string,
@@ -74,6 +76,26 @@ export class TerminalSession {
     this.spawn(options)
   }
 
+  /**
+   * Restart a running pty with new options (agent / cwd / shell switch). The
+   * backend frees a terminal id only once its process exits, and rejects a
+   * duplicate live id — so kill the current pty and defer the fresh spawn until
+   * its exit is observed (the backend frees the id just before sending it). If
+   * the pty isn't currently live, spawn immediately, like retry.
+   */
+  respawn(options: CreateTerminalOptions): void {
+    if (this.disposed) return
+    const live =
+      this.started && this.status.kind !== 'exited' && this.status.kind !== 'error'
+    if (!live) {
+      this.retry(options)
+      return
+    }
+    this.pendingRespawn = options
+    this.emit({ kind: 'connecting' })
+    void this.deps.killTerminal(this.id)
+  }
+
   /** Kill the pty and tear down. Idempotent. */
   dispose(): void {
     if (this.disposed) return
@@ -96,7 +118,13 @@ export class TerminalSession {
           this.sink.write(msg.payload)
         } else {
           exited = true
-          this.emit({ kind: 'exited', exitCode: msg.payload.exitCode })
+          if (this.pendingRespawn) {
+            const next = this.pendingRespawn
+            this.pendingRespawn = null
+            this.retry(next)
+          } else {
+            this.emit({ kind: 'exited', exitCode: msg.payload.exitCode })
+          }
         }
       })
       .then((result) => {
