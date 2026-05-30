@@ -256,6 +256,11 @@ pub fn spawn_terminal(
     }
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM", "xterm-256color");
+    // Identify this session to in-terminal processes so they can open a web
+    // preview via `swarmterm://preview?session=&url=`. `id` is the terminalId, a
+    // random UUID only this shell's env sees — it doubles as the unguessable
+    // secret authorising the deep link (no separate token needed).
+    cmd.env("SWARMTERM_SESSION", &id);
     let cwd = options.cwd.clone().unwrap_or_else(|| {
         app.path()
             .home_dir()

@@ -4,6 +4,8 @@ import {
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Square,
   SquareTerminal,
   X
@@ -11,6 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
+import { useBrowserStore } from '@/store/browser-store'
 import { minimize, toggleMaximize, closeWindow, onMaximizedChanged } from '@/tauri/window'
 
 /**
@@ -22,6 +25,9 @@ export function TitleBar(): ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
   const visible = useNavbarVisibilityStore((s) => s.visible)
   const toggleNavbar = useNavbarVisibilityStore((s) => s.toggle)
+  const browserTabs = useBrowserStore((s) => s.tabs)
+  const browserVisible = useBrowserStore((s) => s.visible)
+  const toggleBrowser = useBrowserStore((s) => s.toggleVisible)
   const activeWorkspaceName = useAppStore((s) => {
     const active = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
     return active?.name
@@ -64,7 +70,20 @@ export function TitleBar(): ReactElement {
         )}
       </div>
 
-      <div className="flex h-full">
+      <div className="flex h-full items-center">
+        {browserTabs.length > 0 && (
+          <button
+            type="button"
+            data-tauri-drag-region="false"
+            aria-label="Bật/tắt cột Browser"
+            aria-pressed={browserVisible}
+            title="Bật/tắt cột Browser"
+            onClick={toggleBrowser}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground mr-1"
+          >
+            {browserVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          </button>
+        )}
         <TitleBarButton label="Minimize" onClick={() => minimize()}>
           <Minus className="h-4 w-4" />
         </TitleBarButton>
