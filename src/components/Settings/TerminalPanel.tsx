@@ -198,6 +198,16 @@ function TextSettings(): ReactElement {
   const matched = MONO_FONTS.find((f) => f.stack === text.fontFamily)
   const [customMode, setCustomMode] = useState(!matched)
   const [customDraft, setCustomDraft] = useState(matched ? '' : primaryFamily(text.fontFamily))
+
+  // When the font becomes a catalogued stack from outside this control (e.g.
+  // Reset to default), leave custom mode so the dropdown reflects the change.
+  useEffect(() => {
+    if (MONO_FONTS.find((f) => f.stack === text.fontFamily)) {
+      setCustomMode(false)
+      setCustomDraft('')
+    }
+  }, [text.fontFamily])
+
   const isCustom = customMode || !matched
   const selectValue = isCustom ? 'custom' : matched!.id
 
@@ -287,7 +297,7 @@ function TextSettings(): ReactElement {
               aria-label="Toggle ligatures"
               onClick={() => setLigatures(!text.ligatures)}
               className={cn(
-                'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors',
+                'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                 text.ligatures ? 'bg-primary' : 'bg-muted'
               )}
             >
@@ -334,10 +344,11 @@ function Stepper({ label, value, onDec, onInc, atMin, atMax }: StepperProps): Re
   )
 }
 
+const PREVIEW_CODE = 'const ok = (a >= b) => a !== b;'
+const PREVIEW_GLYPHS = '// 0O 1lI -> |> == === !='
+
 /** Live sample of the chosen text settings, rendered via inline style. */
 function TextPreview({ text }: { text: TerminalTextPref }): ReactElement {
-  const sampleCode = 'const ok = (a >= b) => a !== b;'
-  const sampleGlyphs = '// 0O 1lI -> |> == === !='
   return (
     <div className="overflow-hidden rounded-md border border-border bg-canvas">
       <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-2.5 py-1.5">
@@ -355,8 +366,8 @@ function TextPreview({ text }: { text: TerminalTextPref }): ReactElement {
           fontFeatureSettings: text.ligatures ? '"liga" 1, "calt" 1' : 'normal'
         }}
       >
-        <span className="text-foreground/85">{sampleCode}</span>
-        <span className="text-muted-foreground">{sampleGlyphs}</span>
+        <span className="text-foreground/85">{PREVIEW_CODE}</span>
+        <span className="text-muted-foreground">{PREVIEW_GLYPHS}</span>
       </div>
     </div>
   )
