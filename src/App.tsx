@@ -9,7 +9,7 @@ import { Navbar } from '@/components/Navbar/Navbar'
 import { SettingsView } from '@/components/Settings/SettingsView'
 import { TitleBar } from '@/components/TitleBar/TitleBar'
 import { Workspace } from '@/components/Workspace/Workspace'
-import { WorkspaceSetup } from '@/components/WorkspaceSetup/WorkspaceSetup'
+import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
 import { onPreviewOpen } from '@/tauri/deeplink'
@@ -27,20 +27,32 @@ function liveTerminalIds(workspaces: WorkspaceModel[]): Set<string> {
 export default function App(): ReactElement {
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
-  const createWorkspace = useAppStore((s) => s.createWorkspace)
-  const [wizardOpen, setWizardOpen] = useState(false)
+  const welcomeFocused = useAppStore((s) => s.welcomeFocused)
+  const openWelcome = useAppStore((s) => s.openWelcome)
+  const closeWelcome = useAppStore((s) => s.closeWelcome)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const browserVisible = useBrowserStore((s) => s.visible)
   const browserFullscreen = useBrowserStore((s) => s.fullscreen)
 
   const noWorkspaces = workspaces.length === 0
-  // The setup wizard is forced open (and uncancellable) whenever none exist.
-  const setupOpen = wizardOpen || noWorkspaces
+  // Welcome shows when explicitly focused, or forced (uncloseable) when none exist.
+  const showWelcome = welcomeFocused || noWorkspaces
+  const welcomeClosable = !noWorkspaces
 
   useEffect(() => {
     void showWindow()
   }, [])
+
+  // Esc closes the Welcome page when it's closeable and Settings isn't covering it.
+  useEffect(() => {
+    if (!showWelcome || !welcomeClosable || settingsOpen) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') closeWelcome()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showWelcome, welcomeClosable, settingsOpen, closeWelcome])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -98,7 +110,7 @@ export default function App(): ReactElement {
 
       <div className="relative flex min-h-0 flex-1">
         <Navbar
-          onNewWorkspace={() => setWizardOpen(true)}
+          onNewWorkspace={openWelcome}
           settingsOpen={settingsOpen}
           onToggleSettings={() => setSettingsOpen((open) => !open)}
         />
@@ -108,7 +120,7 @@ export default function App(): ReactElement {
               not — the Settings modal dims them behind its backdrop, and their
               terminals (and PTYs) survive a Settings detour. */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
+            <WorkspaceTabs onNewWorkspace={openWelcome} />
 
             <div className="relative min-h-0 flex-1 bg-canvas">
               {browserFullscreen ? (
@@ -148,17 +160,13 @@ export default function App(): ReactElement {
                   )}
                 </Group>
               )}
-            </div>
 
-            <WorkspaceSetup
-              open={setupOpen}
-              required={noWorkspaces}
-              onCreate={(config) => {
-                createWorkspace(config)
-                setWizardOpen(false)
-              }}
-              onCancel={() => setWizardOpen(false)}
-            />
+              {showWelcome && (
+                <div className="absolute inset-0 z-20 overflow-y-auto bg-background">
+                  <Welcome />
+                </div>
+              )}
+            </div>
           </div>
 
         </main>
