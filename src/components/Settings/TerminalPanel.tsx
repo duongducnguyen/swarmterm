@@ -57,8 +57,8 @@ export function TerminalPanel(): ReactElement {
           Terminal
         </h1>
         <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
-          Choose which shell each new terminal pane starts with. Only affects new
-          panes — already-running terminals keep their current shell.
+          Customise the terminal — text rendering and the shell each new pane
+          starts with.
         </p>
       </section>
 
@@ -71,8 +71,14 @@ export function TerminalPanel(): ReactElement {
         </div>
       )}
 
-      <section>
-        <h2 className="mb-4 text-sm font-semibold text-foreground">Shell</h2>
+      <section className="rounded-xl border border-border bg-card/40 p-5 sm:p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Shell</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Which shell each new pane starts with. Only affects new panes —
+            running terminals keep their current shell.
+          </p>
+        </div>
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
           {KNOWN_SHELLS.map((meta) => {
@@ -199,15 +205,6 @@ function TextSettings(): ReactElement {
   const [customMode, setCustomMode] = useState(!matched)
   const [customDraft, setCustomDraft] = useState(matched ? '' : primaryFamily(text.fontFamily))
 
-  // When the font becomes a catalogued stack from outside this control (e.g.
-  // Reset to default), leave custom mode so the dropdown reflects the change.
-  useEffect(() => {
-    if (MONO_FONTS.find((f) => f.stack === text.fontFamily)) {
-      setCustomMode(false)
-      setCustomDraft('')
-    }
-  }, [text.fontFamily])
-
   const isCustom = customMode || !matched
   const selectValue = isCustom ? 'custom' : matched!.id
 
@@ -223,15 +220,29 @@ function TextSettings(): ReactElement {
   }
 
   function onCustomChange(value: string): void {
+    // Stay in custom mode while editing — clearing the field is allowed and
+    // simply falls back to the system font without yanking the input away.
     setCustomDraft(value)
     setFontFamily(customFontStack(value))
   }
 
+  function onReset(): void {
+    setCustomMode(false)
+    setCustomDraft('')
+    reset()
+  }
+
   return (
-    <section>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Text</h2>
-        <Button variant="ghost" size="sm" onClick={reset}>
+    <section className="rounded-xl border border-border bg-card/40 p-5 sm:p-6">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Text</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Font and rendering for every terminal pane. Applies live to open
+            terminals.
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onReset} className="shrink-0">
           Reset to default
         </Button>
       </div>
@@ -288,6 +299,7 @@ function TextSettings(): ReactElement {
               <span className="block text-xs font-medium text-muted-foreground">Ligatures</span>
               <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/70">
                 Needs a ligature font (Cascadia Code, JetBrains Mono, Fira Code).
+                Joins within same-colour text.
               </span>
             </div>
             <button
