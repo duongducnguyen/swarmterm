@@ -32,8 +32,8 @@
     --sb-radius: 8px;
     --sb-thumb: 0 0% 100%;    /* thumb color (HSL triplet, used with alpha) */
     --sb-thumb-rest: 0;       /* hidden at rest */
-    --sb-thumb-hover: 0.22;   /* revealed on region hover */
-    --sb-thumb-active: 0.40;  /* darkened on direct thumb hover */
+    --sb-thumb-hover: 0.28;   /* revealed while scrolling or on region hover */
+    --sb-thumb-active: 0.50;  /* darkened on direct thumb hover */
   }
 }
 
@@ -82,8 +82,10 @@
     background: hsl(var(--sb-thumb) / var(--sb-thumb-rest));
   }
 
-  /* Reveal when the pointer is anywhere over a scroll region (hover bubbles
-     up from descendants to the scroll container). */
+  /* Reveal while actively scrolling ([data-scrolling] is toggled by
+     installScrollbarActivity), or when the pointer is anywhere over a scroll
+     region (hover bubbles up from descendants to the scroll container). */
+  [data-scrolling]::-webkit-scrollbar-thumb,
   :hover::-webkit-scrollbar-thumb {
     background: hsl(var(--sb-thumb) / var(--sb-thumb-hover));
   }
