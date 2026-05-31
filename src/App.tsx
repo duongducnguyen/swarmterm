@@ -104,12 +104,10 @@ export default function App(): ReactElement {
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
-          {/* Workspaces stay mounted whether Settings is open or not, so their
+          {/* Workspaces stay mounted and visible whether Settings is open or
+              not — the Settings modal dims them behind its backdrop, and their
               terminals (and PTYs) survive a Settings detour. */}
-          <div
-            className="flex min-h-0 flex-1 flex-col"
-            style={{ display: settingsOpen ? 'none' : 'flex' }}
-          >
+          <div className="flex min-h-0 flex-1 flex-col">
             <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
 
             <div className="relative min-h-0 flex-1 bg-canvas">
@@ -163,11 +161,7 @@ export default function App(): ReactElement {
             />
           </div>
 
-          {settingsOpen && (
-            <div className="absolute inset-0">
-              <SettingsView onClose={() => setSettingsOpen(false)} />
-            </div>
-          )}
+          {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
         </main>
       </div>
     </div>
