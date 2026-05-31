@@ -81,7 +81,7 @@ function WorkspaceTab({
       className={cn(
         'group flex min-w-[130px] max-w-[200px] cursor-pointer items-center gap-2 border-r border-t-2 border-r-border px-3 text-sm transition-colors',
         active
-          ? 'border-t-ring bg-background text-foreground'
+          ? 'border-t-ring bg-canvas text-foreground'
           : 'border-t-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
       )}
     >

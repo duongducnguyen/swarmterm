@@ -118,7 +118,7 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
       onMouseDown={() => setFocusedLeaf(leafId)}
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-md border bg-background',
-        isFocused ? 'border-ring' : 'border-border'
+        isFocused ? 'border-ring' : 'border-pane-border'
       )}
     >
       <PaneHeader

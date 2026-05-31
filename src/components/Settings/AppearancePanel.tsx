@@ -63,10 +63,10 @@ function ThemeCard({ option, active, onSelect }: ThemeCardProps): ReactElement {
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        'flex flex-col gap-3 rounded-lg border p-3 text-left transition-colors',
+        'flex flex-col gap-3 rounded-lg border bg-card p-3 text-left transition-colors',
         active
-          ? 'border-primary/50 bg-muted/20 ring-2 ring-primary/15'
-          : 'border-border hover:border-border/80 hover:bg-muted/20'
+          ? 'border-primary/50 ring-2 ring-primary/15'
+          : 'border-pane-border hover:border-pane-border/80 hover:bg-muted/40'
       )}
     >
       <div className="relative">
@@ -93,7 +93,7 @@ function ThemeCard({ option, active, onSelect }: ThemeCardProps): ReactElement {
 /** A miniature terminal pane showing what swarmterm looks like in this style. */
 function TerminalPreview({ active }: { active: boolean }): ReactElement {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-background">
+    <div className="overflow-hidden rounded-md border border-border bg-canvas">
       <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-2.5 py-1.5">
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
         <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
