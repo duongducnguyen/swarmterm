@@ -5,13 +5,6 @@
 
 import claudeIcon from '@/assets/agents/claude-code.svg'
 import codexIcon from '@/assets/agents/codex.svg'
-import geminiIcon from '@/assets/agents/gemini.svg'
-import copilotIcon from '@/assets/agents/copilot.svg'
-import cursorIcon from '@/assets/agents/cursor.svg'
-import opencodeIcon from '@/assets/agents/opencode.svg'
-import aiderIcon from '@/assets/agents/aider.png'
-import qwenIcon from '@/assets/agents/qwen.svg'
-import ampIcon from '@/assets/agents/amp.svg'
 
 export interface WorkspaceTemplate {
   id: string
@@ -37,55 +30,6 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     description: "OpenAI's Codex CLI.",
     command: 'codex',
     icon: codexIcon
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini CLI',
-    description: "Google's open-source Gemini CLI.",
-    command: 'gemini',
-    icon: geminiIcon
-  },
-  {
-    id: 'copilot',
-    name: 'Copilot CLI',
-    description: "GitHub's Copilot coding agent.",
-    command: 'copilot',
-    icon: copilotIcon
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor CLI',
-    description: "Cursor's terminal coding agent.",
-    command: 'cursor-agent',
-    icon: cursorIcon
-  },
-  {
-    id: 'opencode',
-    name: 'opencode',
-    description: 'Open-source terminal AI agent.',
-    command: 'opencode',
-    icon: opencodeIcon
-  },
-  {
-    id: 'aider',
-    name: 'Aider',
-    description: 'AI pair programming in your terminal.',
-    command: 'aider',
-    icon: aiderIcon
-  },
-  {
-    id: 'qwen',
-    name: 'Qwen Code',
-    description: "Alibaba's Qwen Code CLI.",
-    command: 'qwen',
-    icon: qwenIcon
-  },
-  {
-    id: 'amp',
-    name: 'Amp',
-    description: "Sourcegraph's agentic CLI.",
-    command: 'amp',
-    icon: ampIcon
   },
   {
     id: 'terminal',
