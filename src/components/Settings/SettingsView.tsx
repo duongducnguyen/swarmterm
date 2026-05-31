@@ -69,7 +69,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
         </div>
       </nav>
 
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col bg-canvas">
         <Button
           variant="ghost"
           size="icon-sm"
