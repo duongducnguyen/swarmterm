@@ -40,7 +40,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
       onMouseDown={onClose}
     >
       <div
@@ -48,7 +48,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
         aria-modal="true"
         aria-label="Settings"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex h-[80vh] w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="flex h-[85vh] w-full max-w-6xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
       >
         <nav className="flex w-56 shrink-0 flex-col border-r border-border">
           <div className="border-b border-border px-3 py-3">

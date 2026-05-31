@@ -96,7 +96,7 @@ export default function App(): ReactElement {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       <TitleBar />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <Navbar
           onNewWorkspace={() => setWizardOpen(true)}
           settingsOpen={settingsOpen}
@@ -161,8 +161,9 @@ export default function App(): ReactElement {
             />
           </div>
 
-          {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
         </main>
+
+        {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
       </div>
     </div>
   )
