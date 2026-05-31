@@ -80,6 +80,15 @@ function getOrCreate(id: string): Entry {
   const host = document.createElement('div')
   host.style.width = '100%'
   host.style.height = '100%'
+  // Inset the terminal content from the pane edges so text isn't flush against
+  // the border. Padding lives on the host (not the .xterm element) and the host
+  // carries the terminal's own background, so the dark interior still bleeds to
+  // the pane edges — only the rows are pushed inward. box-sizing keeps the host
+  // filling the container despite the padding. The FitAddon reads the host's
+  // content-box size, so cols/rows already exclude this padding.
+  host.style.boxSizing = 'border-box'
+  host.style.padding = '6px 8px'
+  host.style.background = VSCODE_DARK_THEME.background as string
 
   const term = new Terminal({
     cursorBlink: true,
