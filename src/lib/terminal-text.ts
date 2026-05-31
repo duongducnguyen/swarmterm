@@ -6,7 +6,7 @@ export interface TextPrefStorage {
 
 /** User-configurable terminal text settings. */
 export interface TerminalTextPref {
-  /** Full CSS font-family stack, always ending in `monospace`. */
+  /** Full CSS font-family stack; should end in `monospace`. */
   fontFamily: string
   /** Font size in px. */
   fontSize: number
@@ -78,9 +78,12 @@ export function clampLineHeight(n: number): number {
 
 /** Wrap a raw family name as a stack with a monospace fallback. */
 export function customFontStack(family: string): string {
-  const trimmed = family.trim()
-  if (trimmed.length === 0) return SYSTEM_FONT_STACK
-  return `"${trimmed}", monospace`
+  // Strip any surrounding double quotes so callers can pass either a bare
+  // family ("Fira Code") or an already-quoted one without producing a
+  // malformed stack.
+  const bare = family.trim().replace(/^"|"$/g, '').trim()
+  if (bare.length === 0) return SYSTEM_FONT_STACK
+  return `"${bare}", monospace`
 }
 
 /** Best-effort: pull the first family out of a stack, for display in the custom input. */

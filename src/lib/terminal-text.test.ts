@@ -83,6 +83,9 @@ describe('clampLineHeight', () => {
   it('rounds to one decimal place', () => {
     expect(clampLineHeight(1.2000001)).toBe(1.2)
   })
+  it('falls back to the default for NaN', () => {
+    expect(clampLineHeight(Number.NaN)).toBe(DEFAULT_TERMINAL_TEXT.lineHeight)
+  })
 })
 
 describe('customFontStack / primaryFamily', () => {
@@ -95,6 +98,9 @@ describe('customFontStack / primaryFamily', () => {
   it('extracts the first family for display', () => {
     expect(primaryFamily('"Fira Code", monospace')).toBe('Fira Code')
     expect(primaryFamily('Menlo, monospace')).toBe('Menlo')
+  })
+  it('strips surrounding double quotes from the input', () => {
+    expect(customFontStack('"Fira Code"')).toBe('"Fira Code", monospace')
   })
 })
 
