@@ -112,7 +112,7 @@ export default function App(): ReactElement {
           >
             <WorkspaceTabs onNewWorkspace={() => setWizardOpen(true)} />
 
-            <div className="relative min-h-0 flex-1">
+            <div className="relative min-h-0 flex-1 bg-canvas">
               {browserFullscreen ? (
                 /* Fullscreen: BrowserColumn fills the entire content area. */
                 <div className="absolute inset-0">
@@ -141,7 +141,7 @@ export default function App(): ReactElement {
                   {browserVisible && (
                     <>
                       <Separator
-                        className="w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-ring data-[separator]:bg-border"
+                        className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
                       />
                       <Panel id="app-browser" minSize="20%" className="h-full w-full overflow-hidden">
                         <BrowserColumn terminalIndexOf={terminalIndexOf} />
