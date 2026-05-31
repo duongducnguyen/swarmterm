@@ -4,6 +4,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/tauri/terminal'
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
+import { useTerminalTextStore } from '@/store/terminal-text-store'
+import type { TerminalTextPref } from '@/lib/terminal-text'
 
 export type { TerminalStatus }
 
@@ -36,6 +38,11 @@ const VSCODE_DARK_THEME: ITheme = {
   brightCyan: '#29B8DB',
   white: '#E5E5E5',
   brightWhite: '#E5E5E5'
+}
+
+/** CSS font-feature-settings value enabling programming ligatures, or off. */
+function ligatureFeatureSettings(on: boolean): string {
+  return on ? '"liga" 1, "calt" 1' : 'normal'
 }
 
 /** Per-terminal options that persist across re-attaches (size is read live). */
@@ -90,10 +97,14 @@ function getOrCreate(id: string): Entry {
   host.style.padding = '6px 8px'
   host.style.background = VSCODE_DARK_THEME.background as string
 
+  const text = useTerminalTextStore.getState().text
+  host.style.fontFeatureSettings = ligatureFeatureSettings(text.ligatures)
+
   const term = new Terminal({
     cursorBlink: true,
-    fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
-    fontSize: 13,
+    fontFamily: text.fontFamily,
+    fontSize: text.fontSize,
+    lineHeight: text.lineHeight,
     scrollback: 5000,
     theme: VSCODE_DARK_THEME
   })
@@ -205,3 +216,23 @@ export function getTerminalStatus(id: string): TerminalStatus {
 export function subscribeTerminalStatus(id: string, listener: () => void): () => void {
   return entries.get(id)?.session.subscribe(listener) ?? (() => {})
 }
+
+/**
+ * Push the latest text prefs onto every live terminal, then reflow so cols/rows
+ * follow the new metrics. Font family/size/line-height set xterm options
+ * directly; ligatures are a CSS feature on the host element (xterm's DOM
+ * renderer inherits it into the rows).
+ */
+export function applyTerminalText(pref: TerminalTextPref): void {
+  for (const [id, entry] of entries) {
+    entry.term.options.fontFamily = pref.fontFamily
+    entry.term.options.fontSize = pref.fontSize
+    entry.term.options.lineHeight = pref.lineHeight
+    entry.host.style.fontFeatureSettings = ligatureFeatureSettings(pref.ligatures)
+    if (safeFit(entry)) resizeTerminal(id, entry.term.cols, entry.term.rows)
+  }
+}
+
+// Push text-preference changes to every live terminal. Subscribing here (rather
+// than the store importing the registry) keeps the dependency one-directional.
+useTerminalTextStore.subscribe((state) => applyTerminalText(state.text))
