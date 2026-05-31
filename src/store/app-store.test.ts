@@ -295,3 +295,55 @@ describe('setPaneShell', () => {
     expect(leaf?.shellId).toBe('wsl')
   })
 })
+
+// --- welcome state --------------------------------------------------------
+
+describe('welcome state', () => {
+  it('starts open and focused', () => {
+    const s = freshStore().getState()
+    expect(s.welcomeOpen).toBe(true)
+    expect(s.welcomeFocused).toBe(true)
+  })
+
+  it('openWelcome opens and focuses it', () => {
+    const store = storeWithWorkspace() // creating a workspace closes welcome
+    store.getState().openWelcome()
+    expect(store.getState().welcomeOpen).toBe(true)
+    expect(store.getState().welcomeFocused).toBe(true)
+  })
+
+  it('closeWelcome closes and unfocuses it', () => {
+    const store = freshStore()
+    store.getState().closeWelcome()
+    expect(store.getState().welcomeOpen).toBe(false)
+    expect(store.getState().welcomeFocused).toBe(false)
+  })
+
+  it('focusWelcome focuses it', () => {
+    const store = storeWithWorkspace()
+    store.getState().focusWelcome()
+    expect(store.getState().welcomeFocused).toBe(true)
+  })
+
+  it('creating a workspace closes welcome', () => {
+    const store = storeWithWorkspace()
+    expect(store.getState().welcomeOpen).toBe(false)
+    expect(store.getState().welcomeFocused).toBe(false)
+  })
+
+  it('switching to a workspace unfocuses welcome', () => {
+    const store = storeWithWorkspace()
+    const id = store.getState().workspaces[0].id
+    store.getState().focusWelcome()
+    store.getState().setActiveWorkspace(id)
+    expect(store.getState().welcomeFocused).toBe(false)
+  })
+
+  it('closing the only workspace reopens welcome', () => {
+    const store = storeWithWorkspace()
+    store.getState().closeWorkspace(store.getState().workspaces[0].id)
+    expect(store.getState().welcomeOpen).toBe(true)
+    expect(store.getState().welcomeFocused).toBe(true)
+  })
+})
+

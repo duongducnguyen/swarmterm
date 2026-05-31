@@ -2,52 +2,27 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { Folder, FolderSearch } from 'lucide-react'
 import { gridFor, TERMINAL_COUNTS } from '@/lib/layout-tree'
 import { DEFAULT_TEMPLATE_ID, TEMPLATES } from '@/lib/templates'
-import type { CreateWorkspaceConfig } from '@/store/app-store'
+import { useAppStore } from '@/store/app-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 
-interface WorkspaceSetupProps {
-  open: boolean
-  /** When true the wizard cannot be cancelled — no workspaces exist yet. */
-  required: boolean
-  onCreate: (config: CreateWorkspaceConfig) => void
-  onCancel: () => void
-}
-
 /**
- * Modal wizard for creating a workspace: pick a working folder, how many
- * terminals (a grid), and a template that decides what each terminal runs.
+ * Welcome page shown in place of a workspace while creating one (or when none
+ * exist yet). A branded header plus an inline "Start a workspace" form: pick a
+ * working folder, a terminal-grid size, and a template. Replaces the old modal
+ * setup wizard; creating a workspace closes Welcome via the store.
  */
-export function WorkspaceSetup({
-  open,
-  required,
-  onCreate,
-  onCancel
-}: WorkspaceSetupProps): ReactElement | null {
+export function Welcome(): ReactElement {
+  const createWorkspace = useAppStore((s) => s.createWorkspace)
   const [folder, setFolder] = useState('')
   const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
 
-  // Reset to defaults and pre-fill the home directory each time the wizard opens.
+  // Pre-fill the home directory on mount.
   useEffect(() => {
-    if (!open) return
-    setTerminalCount(TERMINAL_COUNTS[0])
-    setTemplateId(DEFAULT_TEMPLATE_ID)
     void getHomeDir().then(setFolder)
-  }, [open])
-
-  // Esc cancels the wizard, but only when cancelling is allowed.
-  useEffect(() => {
-    if (!open || required) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, required, onCancel])
-
-  if (!open) return null
+  }, [])
 
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
@@ -59,30 +34,21 @@ export function WorkspaceSetup({
 
   const submit = (): void => {
     if (trimmedFolder === '') return
-    onCreate({ cwd: trimmedFolder, terminalCount, templateId })
+    createWorkspace({ cwd: trimmedFolder, terminalCount, templateId })
   }
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
-      onMouseDown={() => {
-        if (!required) onCancel()
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Set up your workspace"
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-2xl flex-col overflow-y-auto rounded-xl border border-border bg-card p-7 shadow-2xl"
-      >
-        <header className="text-center">
-          <h2 className="text-xl font-semibold text-foreground">Set up your workspace</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pick a folder to work in and choose how many terminals you want.
-          </p>
-        </header>
+    <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-10 py-12">
+      <header>
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground">Swarmterm</h1>
+        <p className="mt-1 text-base text-muted-foreground">Run many terminals, side by side.</p>
+      </header>
 
+      <h2 className="mt-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Start a workspace
+      </h2>
+
+      <div className="mt-4 space-y-6">
         <Section title="Working folder" hint="Where your terminals will start">
           <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring">
             <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -151,16 +117,11 @@ export function WorkspaceSetup({
           </div>
         </Section>
 
-        <footer className="mt-6 flex justify-end gap-2">
-          {!required && (
-            <Button variant="ghost" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
+        <div className="flex justify-end pt-2">
           <Button onClick={submit} disabled={trimmedFolder === ''}>
             Create workspace
           </Button>
-        </footer>
+        </div>
       </div>
     </div>
   )
@@ -173,10 +134,10 @@ interface SectionProps {
   children: ReactElement
 }
 
-/** A labelled wizard section: bold title, muted hint, optional right-aligned aside. */
+/** A labelled form section: bold title, muted hint, optional right-aligned aside. */
 function Section({ title, hint, aside, children }: SectionProps): ReactElement {
   return (
-    <section className="mt-6">
+    <section>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold text-foreground">{title}</span>
