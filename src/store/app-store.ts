@@ -35,10 +35,17 @@ export interface AppState {
   activeWorkspaceId: string
   /** Monotonic counter used to name new workspaces "Workspace N". */
   nextWorkspaceNumber: number
+  /** Whether the Welcome tab exists in the tab strip. */
+  welcomeOpen: boolean
+  /** Whether the Welcome tab (vs the active workspace) is the foreground view. */
+  welcomeFocused: boolean
 }
 
 export interface AppActions {
   createWorkspace: (config: CreateWorkspaceConfig) => void
+  openWelcome: () => void
+  focusWelcome: () => void
+  closeWelcome: () => void
   setActiveWorkspace: (id: string) => void
   renameWorkspace: (id: string, name: string) => void
   closeWorkspace: (id: string) => void
@@ -82,6 +89,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   workspaces: [],
   activeWorkspaceId: '',
   nextWorkspaceNumber: 1,
+  welcomeOpen: true,
+  welcomeFocused: true,
 
   createWorkspace: (config) =>
     set((s) => {
@@ -103,12 +112,24 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       return {
         workspaces: [...s.workspaces, ws],
         activeWorkspaceId: ws.id,
-        nextWorkspaceNumber: s.nextWorkspaceNumber + 1
+        nextWorkspaceNumber: s.nextWorkspaceNumber + 1,
+        welcomeOpen: false,
+        welcomeFocused: false
       }
     }),
 
+  openWelcome: () => set({ welcomeOpen: true, welcomeFocused: true }),
+
+  focusWelcome: () => set({ welcomeFocused: true }),
+
+  closeWelcome: () => set({ welcomeOpen: false, welcomeFocused: false }),
+
   setActiveWorkspace: (id) =>
-    set((s) => (s.workspaces.some((w) => w.id === id) ? { activeWorkspaceId: id } : {})),
+    set((s) =>
+      s.workspaces.some((w) => w.id === id)
+        ? { activeWorkspaceId: id, welcomeFocused: false }
+        : {}
+    ),
 
   renameWorkspace: (id, name) =>
     set((s) => {
@@ -126,7 +147,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       const remaining = s.workspaces.filter((w) => w.id !== id)
       // Closing the last workspace leaves none — the app reopens the setup wizard.
       if (remaining.length === 0) {
-        return { workspaces: [], activeWorkspaceId: '' }
+        return { workspaces: [], activeWorkspaceId: '', welcomeOpen: true, welcomeFocused: true }
       }
       let activeWorkspaceId = s.activeWorkspaceId
       if (id === s.activeWorkspaceId) {
