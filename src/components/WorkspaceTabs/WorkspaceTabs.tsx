@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Plus, Sparkles, X } from 'lucide-react'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 
@@ -18,11 +18,23 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
   const renameWorkspace = useAppStore((s) => s.renameWorkspace)
   const closeWorkspace = useAppStore((s) => s.closeWorkspace)
+  const welcomeOpen = useAppStore((s) => s.welcomeOpen)
+  const welcomeFocused = useAppStore((s) => s.welcomeFocused)
+  const focusWelcome = useAppStore((s) => s.focusWelcome)
+  const closeWelcome = useAppStore((s) => s.closeWelcome)
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
   return (
     <div className="flex h-12 shrink-0 items-stretch border-b border-border bg-card">
       <div className="flex items-stretch overflow-x-auto">
+        {welcomeOpen && (
+          <WelcomeTab
+            active={welcomeFocused}
+            closable={workspaces.length > 0}
+            onSelect={focusWelcome}
+            onClose={closeWelcome}
+          />
+        )}
         {workspaces.map((ws) => (
           <WorkspaceTab
             key={ws.id}
@@ -49,6 +61,44 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
       >
         <Plus className="h-4 w-4" />
       </button>
+    </div>
+  )
+}
+
+interface WelcomeTabProps {
+  active: boolean
+  closable: boolean
+  onSelect: () => void
+  onClose: () => void
+}
+
+/** The leading "Welcome" tab — selectable; closeable only when workspaces exist. */
+function WelcomeTab({ active, closable, onSelect, onClose }: WelcomeTabProps): ReactElement {
+  return (
+    <div
+      onClick={onSelect}
+      className={cn(
+        'group flex min-w-[130px] max-w-[200px] cursor-pointer items-center gap-2 border-r border-t-2 border-r-border px-3 text-sm transition-colors',
+        active
+          ? 'border-t-ring bg-canvas text-foreground'
+          : 'border-t-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+      )}
+    >
+      <Sparkles className="h-3.5 w-3.5 shrink-0" />
+      <span className="flex-1 truncate">Welcome</span>
+      {closable && (
+        <button
+          type="button"
+          title="Close Welcome"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-background/80 group-hover:opacity-100"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   )
 }
