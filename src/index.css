@@ -26,6 +26,14 @@
     --input: 0 0% 19%;
     --ring: 206 100% 42%;
     --radius: 0.5rem;
+
+    /* Scrollbar (see docs/design-docs/specs/2026-05-31-scrollbar-redesign-design.md) */
+    --sb-size: 10px;          /* channel width — slim but easy to grab */
+    --sb-radius: 8px;
+    --sb-thumb: 0 0% 100%;    /* thumb color (HSL triplet, used with alpha) */
+    --sb-thumb-rest: 0;       /* hidden at rest */
+    --sb-thumb-hover: 0.28;   /* revealed while scrolling or on region hover */
+    --sb-thumb-active: 0.50;  /* darkened on direct thumb hover */
   }
 }
 
@@ -46,5 +54,45 @@
     overflow: hidden;
     font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer base {
+  /* Unified minimal-overlay scrollbars. webkit pseudo-elements only — do NOT
+     add standard scrollbar-color/scrollbar-width (newer Chromium would let the
+     standard props override this custom styling). Covers .xterm-viewport and
+     all overflow regions. transition on these pseudo-elements is ignored by
+     the engine, so the hover reveal is intentionally instant. */
+  ::-webkit-scrollbar {
+    width: var(--sb-size);
+    height: var(--sb-size);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: var(--sb-radius);
+    min-height: 32px;
+    background: hsl(var(--sb-thumb) / var(--sb-thumb-rest));
+  }
+
+  /* Reveal while actively scrolling ([data-scrolling] is toggled by
+     installScrollbarActivity), or when the pointer is anywhere over a scroll
+     region (hover bubbles up from descendants to the scroll container). */
+  [data-scrolling]::-webkit-scrollbar-thumb,
+  :hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--sb-thumb) / var(--sb-thumb-hover));
+  }
+
+  /* Darken when the thumb itself is hovered. Must come AFTER the rule above:
+     equal specificity, so source order wins. */
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sb-thumb) / var(--sb-thumb-active));
   }
 }
