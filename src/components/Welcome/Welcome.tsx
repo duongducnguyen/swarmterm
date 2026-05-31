@@ -38,7 +38,7 @@ export function Welcome(): ReactElement {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-10 py-12">
+    <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-10 py-12">
       <header>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground">Swarmterm</h1>
         <p className="mt-1 text-base text-muted-foreground">Run many terminals, side by side.</p>
