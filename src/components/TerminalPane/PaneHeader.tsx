@@ -1,4 +1,5 @@
-import { Bot, Folder, Terminal as ShellIcon, Check, Columns2, Rows2, X } from 'lucide-react'
+import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, X } from 'lucide-react'
+import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -6,7 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu'
-import { TEMPLATES } from '@/lib/templates'
+import { TEMPLATES, templateById } from '@/lib/templates'
 import { KNOWN_SHELLS, type ShellId } from '@/lib/terminal-pref'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +32,8 @@ interface PaneHeaderProps {
 /** The per-pane header: agent / path / shell dropdowns plus split & close. */
 export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
   const { agentId, shellId, resolvedCwd, hasCwdOverride } = props
-  const agentLabel = TEMPLATES.find((t) => t.id === agentId)?.name ?? TEMPLATES[0].name
+  const agent = templateById(agentId)
+  const agentLabel = agent.name
   const shellLabel = KNOWN_SHELLS.find((s) => s.id === shellId)?.label ?? KNOWN_SHELLS[0].label
 
   return (
@@ -41,13 +43,14 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" title={`Agent: ${agentLabel}`} aria-label={`Agent: ${agentLabel}`}>
-              <Bot className="h-3.5 w-3.5 text-ring" />
+              <AgentIcon template={agent} className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {TEMPLATES.map((t) => (
               <DropdownMenuItem key={t.id} onSelect={() => props.onAgentChange(t.id)}>
                 <Check aria-hidden="true" className={cn('h-3.5 w-3.5', t.id === agentId ? 'opacity-100' : 'opacity-0')} />
+                <AgentIcon template={t} className="h-4 w-4 shrink-0" />
                 <span>{t.name}</span>
               </DropdownMenuItem>
             ))}

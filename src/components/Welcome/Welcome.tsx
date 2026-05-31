@@ -3,6 +3,7 @@ import { Folder, FolderSearch } from 'lucide-react'
 import { gridFor, TERMINAL_COUNTS } from '@/lib/layout-tree'
 import { DEFAULT_TEMPLATE_ID, TEMPLATES } from '@/lib/templates'
 import { useAppStore } from '@/store/app-store'
+import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
@@ -92,26 +93,24 @@ export function Welcome(): ReactElement {
         </Section>
 
         <Section title="Template" hint="What each terminal runs on start">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTemplateId(t.id)}
                 className={cn(
-                  'flex-1 rounded-lg border p-3 text-left transition-colors',
+                  'min-w-0 rounded-lg border p-3 text-left transition-colors',
                   t.id === templateId
                     ? 'border-ring bg-accent'
                     : 'border-border hover:border-ring/50 hover:bg-accent/40'
                 )}
               >
-                <div className="text-sm font-medium text-foreground">{t.name}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{t.description}</div>
-                {t.command && (
-                  <code className="mt-1.5 block truncate rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                    {t.command}
-                  </code>
-                )}
+                <div className="flex items-center gap-2">
+                  <AgentIcon template={t} className="h-5 w-5 shrink-0" />
+                  <div className="text-sm font-medium text-foreground">{t.name}</div>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">{t.description}</div>
               </button>
             ))}
           </div>
