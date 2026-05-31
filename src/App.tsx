@@ -162,7 +162,7 @@ export default function App(): ReactElement {
               )}
 
               {showWelcome && (
-                <div className="absolute inset-0 z-20 overflow-y-auto bg-background">
+                <div className="absolute inset-0 z-20 overflow-y-auto bg-canvas">
                   <Welcome />
                 </div>
               )}
