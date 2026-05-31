@@ -47,7 +47,7 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
         <Separator
           className={cn(
             'shrink-0 bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas',
-            node.direction === 'horizontal' ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'
+            node.direction === 'horizontal' ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'
           )}
         />
         <Panel id={rightId} minSize="8%" className="h-full w-full overflow-hidden">
@@ -57,5 +57,5 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
     )
   }
 
-  return <div className="h-full w-full bg-canvas p-1.5">{renderNode(workspace.layout)}</div>
+  return <div className="h-full w-full bg-canvas p-2">{renderNode(workspace.layout)}</div>
 }
