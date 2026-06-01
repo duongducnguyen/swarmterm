@@ -1,6 +1,7 @@
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/tauri/terminal'
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
@@ -67,6 +68,27 @@ interface Entry {
 const entries = new Map<string, Entry>()
 
 const NO_STATUS: TerminalStatus = { kind: 'connecting' }
+
+/**
+ * Switch the terminal to the GPU (WebGL) renderer. xterm's default DOM renderer
+ * rebuilds per-cell spans and reflows on every frame; the WebGL renderer offloads
+ * drawing to the GPU and is markedly cheaper per frame under heavy output, which
+ * is why every serious terminal (VS Code, Hyper) uses it.
+ *
+ * Must run AFTER `term.open()` (the addon needs a live render surface). Degrades
+ * gracefully: if WebGL2 is unavailable, the browser hits its live-context limit
+ * (~16 per page), or the GPU context is later lost, we dispose the addon and
+ * xterm falls back to the DOM renderer — slower, but always functional.
+ */
+function loadWebglRenderer(term: Terminal): void {
+  try {
+    const addon = new WebglAddon()
+    addon.onContextLoss(() => addon.dispose())
+    term.loadAddon(addon)
+  } catch {
+    // WebGL2 unavailable — stay on the DOM renderer.
+  }
+}
 
 /** Fit the terminal to its host, skipping when the host has no laid-out size. */
 function safeFit(entry: Entry): boolean {
@@ -142,6 +164,7 @@ export function attachTerminal(id: string, container: HTMLElement, config: Attac
 
   if (!entry.opened) {
     entry.term.open(entry.host)
+    loadWebglRenderer(entry.term)
     entry.opened = true
   }
   safeFit(entry)
