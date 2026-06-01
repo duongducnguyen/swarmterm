@@ -15,6 +15,9 @@ import {
   storeRecents
 } from '@/lib/recent-folders'
 
+/** How many recents show before the "More…" toggle reveals the rest. */
+const RECENTS_COLLAPSED_COUNT = 5
+
 /**
  * Welcome page shown in place of a workspace while creating one (or when none
  * exist yet). A branded header plus an inline "Start a workspace" form: pick a
@@ -27,6 +30,7 @@ export function Welcome(): ReactElement {
   const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
   const [recents, setRecents] = useState<string[]>(() => readRecents(window.localStorage))
+  const [showAllRecents, setShowAllRecents] = useState(false)
 
   // Pre-fill the home directory on mount.
   useEffect(() => {
@@ -35,6 +39,8 @@ export function Welcome(): ReactElement {
 
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
+  const hasMoreRecents = recents.length > RECENTS_COLLAPSED_COUNT
+  const visibleRecents = showAllRecents ? recents : recents.slice(0, RECENTS_COLLAPSED_COUNT)
 
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
@@ -86,8 +92,8 @@ export function Welcome(): ReactElement {
             {recents.length > 0 && (
               <div className="mt-3">
                 <div className="mb-1 text-xs font-medium text-muted-foreground">Recent</div>
-                <div className="max-h-56 space-y-px overflow-y-auto">
-                  {recents.map((path) => (
+                <div className="space-y-px">
+                  {visibleRecents.map((path) => (
                     <RecentRow
                       key={path}
                       path={path}
@@ -96,6 +102,15 @@ export function Welcome(): ReactElement {
                     />
                   ))}
                 </div>
+                {hasMoreRecents && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRecents((v) => !v)}
+                    className="mt-1 px-2 py-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    {showAllRecents ? 'Show less' : 'More…'}
+                  </button>
+                )}
               </div>
             )}
           </>
