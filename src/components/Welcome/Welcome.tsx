@@ -43,7 +43,9 @@ export function Welcome(): ReactElement {
 
   const submit = (): void => {
     if (trimmedFolder === '') return
-    storeRecents(window.localStorage, addRecent(readRecents(window.localStorage), trimmedFolder))
+    const next = addRecent(recents, trimmedFolder)
+    setRecents(next)
+    storeRecents(window.localStorage, next)
     createWorkspace({ cwd: trimmedFolder, terminalCount, templateId })
   }
 
