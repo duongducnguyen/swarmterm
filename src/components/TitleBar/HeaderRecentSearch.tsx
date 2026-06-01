@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
-import { Search, X } from 'lucide-react'
+import { ChevronDown, Search, X } from 'lucide-react'
 import { filterRecents, folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAppStore } from '@/store/app-store'
@@ -21,6 +21,7 @@ export function HeaderRecentSearch(): ReactElement {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const filtered = filterRecents(recents, query)
 
@@ -63,10 +64,14 @@ export function HeaderRecentSearch(): ReactElement {
   }
 
   return (
-    <div ref={rootRef} data-tauri-drag-region="false" className="relative w-full max-w-md">
-      <div className="flex h-[22px] items-center gap-2 rounded border border-border bg-muted px-2 focus-within:border-ring">
-        <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
+    <div ref={rootRef} data-tauri-drag-region="false" className="relative w-full max-w-[480px]">
+      <div
+        onClick={() => inputRef.current?.focus()}
+        className="flex h-[26px] cursor-text items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 transition-colors hover:bg-white/10 focus-within:border-white/20 focus-within:bg-white/10"
+      >
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <input
+          ref={inputRef}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -74,10 +79,11 @@ export function HeaderRecentSearch(): ReactElement {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search recent folders…"
+          placeholder="Search recent folders"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
         />
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </div>
 
       {open && recents.length > 0 && (
