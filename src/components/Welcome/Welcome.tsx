@@ -14,6 +14,7 @@ import {
   removeRecent,
   storeRecents
 } from '@/lib/recent-folders'
+import { RecentFoldersPalette } from './RecentFoldersPalette'
 
 /** How many recents show before the "More…" toggle reveals the rest. */
 const RECENTS_COLLAPSED_COUNT = 5
@@ -30,7 +31,7 @@ export function Welcome(): ReactElement {
   const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
   const [recents, setRecents] = useState<string[]>(() => readRecents(window.localStorage))
-  const [showAllRecents, setShowAllRecents] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   // Pre-fill the home directory on mount.
   useEffect(() => {
@@ -40,7 +41,7 @@ export function Welcome(): ReactElement {
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
   const hasMoreRecents = recents.length > RECENTS_COLLAPSED_COUNT
-  const visibleRecents = showAllRecents ? recents : recents.slice(0, RECENTS_COLLAPSED_COUNT)
+  const visibleRecents = recents.slice(0, RECENTS_COLLAPSED_COUNT)
 
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
@@ -105,10 +106,10 @@ export function Welcome(): ReactElement {
                 {hasMoreRecents && (
                   <button
                     type="button"
-                    onClick={() => setShowAllRecents((v) => !v)}
+                    onClick={() => setPaletteOpen(true)}
                     className="mt-1 px-2 py-1 text-xs font-medium text-primary hover:underline"
                   >
-                    {showAllRecents ? 'Show less' : 'More…'}
+                    More…
                   </button>
                 )}
               </div>
@@ -171,6 +172,15 @@ export function Welcome(): ReactElement {
           </Button>
         </div>
       </div>
+
+      {paletteOpen && (
+        <RecentFoldersPalette
+          recents={recents}
+          onSelect={setFolder}
+          onRemove={removeRecentFolder}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   )
 }
