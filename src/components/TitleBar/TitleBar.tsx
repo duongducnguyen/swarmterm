@@ -15,6 +15,7 @@ import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { useBrowserStore } from '@/store/browser-store'
 import { minimize, toggleMaximize, closeWindow, onMaximizedChanged } from '@/tauri/window'
+import { HeaderRecentSearch } from './HeaderRecentSearch'
 
 /**
  * Custom window title bar for the frameless window. Left cluster:
@@ -32,6 +33,8 @@ export function TitleBar(): ReactElement {
     const active = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
     return active?.name
   })
+  // Home view = Welcome focused, or no workspaces yet (matches App's showWelcome).
+  const onHome = useAppStore((s) => s.welcomeFocused || s.workspaces.length === 0)
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -63,10 +66,14 @@ export function TitleBar(): ReactElement {
         data-tauri-drag-region
         className="flex min-w-0 flex-1 items-center justify-center px-2"
       >
-        {activeWorkspaceName !== undefined && (
-          <div className="inline-flex h-[22px] max-w-[40vw] items-center rounded border border-border bg-muted px-3 text-xs text-muted-foreground">
-            <span className="truncate">{activeWorkspaceName}</span>
-          </div>
+        {onHome ? (
+          <HeaderRecentSearch />
+        ) : (
+          activeWorkspaceName !== undefined && (
+            <div className="inline-flex h-[22px] max-w-[40vw] items-center rounded border border-border bg-muted px-3 text-xs text-muted-foreground">
+              <span className="truncate">{activeWorkspaceName}</span>
+            </div>
+          )
         )}
       </div>
 

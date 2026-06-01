@@ -7,13 +7,8 @@ import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
-import {
-  addRecent,
-  folderName,
-  readRecents,
-  removeRecent,
-  storeRecents
-} from '@/lib/recent-folders'
+import { folderName } from '@/lib/recent-folders'
+import { useRecentsStore } from '@/store/recents-store'
 import { RecentFoldersPalette } from './RecentFoldersPalette'
 
 /** How many recents show before the "More…" toggle reveals the rest. */
@@ -27,16 +22,22 @@ const RECENTS_COLLAPSED_COUNT = 5
  */
 export function Welcome(): ReactElement {
   const createWorkspace = useAppStore((s) => s.createWorkspace)
-  const [folder, setFolder] = useState('')
+  const folder = useAppStore((s) => s.welcomeFolder)
+  const setFolder = useAppStore((s) => s.setWelcomeFolder)
   const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
-  const [recents, setRecents] = useState<string[]>(() => readRecents(window.localStorage))
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const recents = useRecentsStore((s) => s.recents)
+  const addRecentFolder = useRecentsStore((s) => s.add)
+  const removeRecentFolder = useRecentsStore((s) => s.remove)
 
-  // Pre-fill the home directory on mount.
+  // Pre-fill the home directory on mount, unless a folder is already chosen
+  // (e.g. picked from the title-bar search before Welcome mounted).
   useEffect(() => {
-    void getHomeDir().then(setFolder)
-  }, [])
+    void getHomeDir().then((home) => {
+      if (useAppStore.getState().welcomeFolder === '') setFolder(home)
+    })
+  }, [setFolder])
 
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
@@ -50,16 +51,8 @@ export function Welcome(): ReactElement {
 
   const submit = (): void => {
     if (trimmedFolder === '') return
-    const next = addRecent(recents, trimmedFolder)
-    setRecents(next)
-    storeRecents(window.localStorage, next)
+    addRecentFolder(trimmedFolder)
     createWorkspace({ cwd: trimmedFolder, terminalCount, templateId })
-  }
-
-  const removeRecentFolder = (path: string): void => {
-    const next = removeRecent(recents, path)
-    setRecents(next)
-    storeRecents(window.localStorage, next)
   }
 
   return (

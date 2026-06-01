@@ -48,3 +48,12 @@ export function folderName(path: string): string {
   const segments = path.split(/[\\/]+/).filter((s) => s !== '')
   return segments.length > 0 ? segments[segments.length - 1] : path
 }
+
+/** Filter recents by a case-insensitive query matching the folder name or full path. Empty query → all. */
+export function filterRecents(recents: string[], query: string): string[] {
+  const q = query.trim().toLowerCase()
+  if (q === '') return recents
+  return recents.filter(
+    (p) => p.toLowerCase().includes(q) || folderName(p).toLowerCase().includes(q)
+  )
+}

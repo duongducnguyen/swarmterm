@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { X } from 'lucide-react'
-import { folderName } from '@/lib/recent-folders'
+import { filterRecents, folderName } from '@/lib/recent-folders'
 import { cn } from '@/lib/utils'
 
 interface RecentFoldersPaletteProps {
@@ -27,13 +27,7 @@ export function RecentFoldersPalette({
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const q = query.trim().toLowerCase()
-  const filtered =
-    q === ''
-      ? recents
-      : recents.filter(
-          (p) => p.toLowerCase().includes(q) || folderName(p).toLowerCase().includes(q)
-        )
+  const filtered = filterRecents(recents, query)
 
   // Keep the highlighted row in range as the filtered list changes.
   useEffect(() => {

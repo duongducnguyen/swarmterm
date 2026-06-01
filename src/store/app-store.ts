@@ -39,10 +39,13 @@ export interface AppState {
   welcomeOpen: boolean
   /** Whether the Welcome tab (vs the active workspace) is the foreground view. */
   welcomeFocused: boolean
+  /** Draft working folder shown in the Welcome form (shared with the title-bar search). */
+  welcomeFolder: string
 }
 
 export interface AppActions {
   createWorkspace: (config: CreateWorkspaceConfig) => void
+  setWelcomeFolder: (path: string) => void
   openWelcome: () => void
   focusWelcome: () => void
   closeWelcome: () => void
@@ -91,6 +94,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   nextWorkspaceNumber: 1,
   welcomeOpen: true,
   welcomeFocused: true,
+  welcomeFolder: '',
 
   createWorkspace: (config) =>
     set((s) => {
@@ -117,6 +121,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         welcomeFocused: false
       }
     }),
+
+  setWelcomeFolder: (path) => set({ welcomeFolder: path }),
 
   openWelcome: () => set({ welcomeOpen: true, welcomeFocused: true }),
 

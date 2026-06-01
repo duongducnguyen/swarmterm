@@ -7,6 +7,7 @@ import {
   removeRecent,
   storeRecents,
   folderName,
+  filterRecents,
   type RecentsStorage
 } from './recent-folders'
 
@@ -103,5 +104,26 @@ describe('folderName', () => {
 
   it('returns the drive segment for a root path', () => {
     expect(folderName('C:\\')).toBe('C:')
+  })
+})
+
+describe('filterRecents', () => {
+  const recents = ['C:\\Project\\2025\\frida-hook', 'C:\\Project\\2026\\wowshop', '/home/duo/app']
+
+  it('returns all recents for an empty / whitespace query', () => {
+    expect(filterRecents(recents, '')).toEqual(recents)
+    expect(filterRecents(recents, '   ')).toEqual(recents)
+  })
+
+  it('matches on the folder name, case-insensitively', () => {
+    expect(filterRecents(recents, 'FRIDA')).toEqual(['C:\\Project\\2025\\frida-hook'])
+  })
+
+  it('matches on the full path', () => {
+    expect(filterRecents(recents, '2026')).toEqual(['C:\\Project\\2026\\wowshop'])
+  })
+
+  it('returns [] when nothing matches', () => {
+    expect(filterRecents(recents, 'zzz')).toEqual([])
   })
 })

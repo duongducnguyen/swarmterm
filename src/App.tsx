@@ -12,6 +12,7 @@ import { Workspace } from '@/components/Workspace/Workspace'
 import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
+import { useRecentsStore } from '@/store/recents-store'
 import { onPreviewOpen } from '@/tauri/deeplink'
 import { showWindow } from '@/tauri/window'
 
@@ -42,6 +43,7 @@ export default function App(): ReactElement {
 
   useEffect(() => {
     void showWindow()
+    useRecentsStore.getState().hydrate()
   }, [])
 
   // Esc closes the Welcome page when it's closeable and Settings isn't covering it.
