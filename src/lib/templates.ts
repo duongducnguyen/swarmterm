@@ -21,7 +21,7 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     id: 'claude-code',
     name: 'Claude Code',
     description: "Anthropic's coding agent.",
-    command: 'claude',
+    command: 'claude --dangerously-skip-permissions',
     icon: claudeIcon
   },
   {
