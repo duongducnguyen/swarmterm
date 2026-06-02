@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { MoreVertical, Pencil, Plus, Settings, X } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GuardedPointerSensor } from '@/lib/dnd-sensors'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
@@ -21,8 +39,9 @@ interface NavbarProps {
   onToggleSettings: () => void
 }
 
-/** Left navigation rail: the workspace list — add / switch / rename / close.
- * Collapses to 0 width when the title bar's toggle button is off.
+/** Left navigation rail: the workspace list — add / switch / rename / close / reorder.
+ * Drag an item to reorder (synced with the tab strip). Collapses to 0 width when
+ * the title bar's toggle button is off.
  */
 export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: NavbarProps): ReactElement {
   const visible = useNavbarVisibilityStore((s) => s.visible)
@@ -31,7 +50,28 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
   const renameWorkspace = useAppStore((s) => s.renameWorkspace)
   const closeWorkspace = useAppStore((s) => s.closeWorkspace)
+  const moveWorkspace = useAppStore((s) => s.moveWorkspace)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const draggingWorkspace = workspaces.find((w) => w.id === draggingId) ?? null
+
+  function handleDragStart(event: DragStartEvent): void {
+    setDraggingId(String(event.active.id))
+  }
+
+  function handleDragEnd(event: DragEndEvent): void {
+    setDraggingId(null)
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      moveWorkspace(String(active.id), String(over.id))
+    }
+  }
 
   return (
     <nav
@@ -45,24 +85,47 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
           <p className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Workspaces
           </p>
-          <ul className="space-y-0.5">
-            {workspaces.map((ws) => (
-              <WorkspaceItem
-                key={ws.id}
-                workspace={ws}
-                active={ws.id === activeWorkspaceId}
-                renaming={renamingId === ws.id}
-                onSelect={() => setActiveWorkspace(ws.id)}
-                onStartRename={() => setRenamingId(ws.id)}
-                onCommitRename={(name) => {
-                  renameWorkspace(ws.id, name)
-                  setRenamingId(null)
-                }}
-                onCancelRename={() => setRenamingId(null)}
-                onClose={() => closeWorkspace(ws.id)}
-              />
-            ))}
-          </ul>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setDraggingId(null)}
+          >
+            <SortableContext
+              items={workspaces.map((w) => w.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="space-y-0.5">
+                {workspaces.map((ws) => (
+                  <WorkspaceItem
+                    key={ws.id}
+                    workspace={ws}
+                    active={ws.id === activeWorkspaceId}
+                    renaming={renamingId === ws.id}
+                    onSelect={() => setActiveWorkspace(ws.id)}
+                    onStartRename={() => setRenamingId(ws.id)}
+                    onCommitRename={(name) => {
+                      renameWorkspace(ws.id, name)
+                      setRenamingId(null)
+                    }}
+                    onCancelRename={() => setRenamingId(null)}
+                    onClose={() => closeWorkspace(ws.id)}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+            <DragOverlay>
+              {draggingWorkspace ? (
+                <div aria-hidden className="flex items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-sm text-accent-foreground shadow-lg">
+                  <span className="flex-1 truncate">{draggingWorkspace.name}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {collectLeaves(draggingWorkspace.layout).length}
+                  </span>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
           <Button
             variant="ghost"
             size="sm"
@@ -117,11 +180,16 @@ function WorkspaceItem({
   onCancelRename,
   onClose
 }: WorkspaceItemProps): ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: workspace.id,
+    disabled: renaming
+  })
+  const style = { transform: CSS.Transform.toString(transform), transition }
   const paneCount = collectLeaves(workspace.layout).length
 
   if (renaming) {
     return (
-      <li>
+      <li ref={setNodeRef} style={style}>
         <RenameInput
           initialValue={workspace.name}
           onCommit={onCommitRename}
@@ -132,7 +200,13 @@ function WorkspaceItem({
   }
 
   return (
-    <li>
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(isDragging && 'opacity-40')}
+    >
       <div
         onClick={onSelect}
         className={cn(
@@ -147,6 +221,7 @@ function WorkspaceItem({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              data-no-dnd
               onClick={(e) => e.stopPropagation()}
               className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-background/80 group-hover:opacity-100 data-[state=open]:opacity-100"
               title="Workspace actions"

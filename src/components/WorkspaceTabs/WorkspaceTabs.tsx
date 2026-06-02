@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Plus, Sparkles, X } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GuardedPointerSensor } from '@/lib/dnd-sensors'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 
@@ -8,9 +26,20 @@ interface WorkspaceTabsProps {
   onNewWorkspace: () => void
 }
 
+/** Shared tab box styling — used by the live tabs and the drag overlay. */
+const TAB_BASE =
+  'group flex min-w-[130px] max-w-[200px] items-center gap-2 border-r border-t-2 border-r-border px-3 text-sm transition-colors'
+
+function tabStateClass(active: boolean): string {
+  return active
+    ? 'border-t-ring bg-canvas text-foreground'
+    : 'border-t-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+}
+
 /**
- * Workspace tab strip below the title bar. Switch / close / rename workspaces;
- * the trailing `+` opens the setup wizard. Stays in sync with the navbar list.
+ * Workspace tab strip below the title bar. Switch / close / rename / reorder
+ * workspaces; the trailing `+` opens the setup wizard. Drag a tab to reorder;
+ * the Welcome tab stays pinned first. Stays in sync with the navbar list.
  */
 export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElement {
   const workspaces = useAppStore((s) => s.workspaces)
@@ -18,11 +47,32 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
   const renameWorkspace = useAppStore((s) => s.renameWorkspace)
   const closeWorkspace = useAppStore((s) => s.closeWorkspace)
+  const moveWorkspace = useAppStore((s) => s.moveWorkspace)
   const welcomeOpen = useAppStore((s) => s.welcomeOpen)
   const welcomeFocused = useAppStore((s) => s.welcomeFocused)
   const focusWelcome = useAppStore((s) => s.focusWelcome)
   const closeWelcome = useAppStore((s) => s.closeWelcome)
   const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const draggingWorkspace = workspaces.find((w) => w.id === draggingId) ?? null
+
+  function handleDragStart(event: DragStartEvent): void {
+    setDraggingId(String(event.active.id))
+  }
+
+  function handleDragEnd(event: DragEndEvent): void {
+    setDraggingId(null)
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      moveWorkspace(String(active.id), String(over.id))
+    }
+  }
 
   return (
     <div className="flex h-12 shrink-0 items-stretch border-b border-border bg-card">
@@ -35,22 +85,49 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
             onClose={closeWelcome}
           />
         )}
-        {workspaces.map((ws) => (
-          <WorkspaceTab
-            key={ws.id}
-            workspace={ws}
-            active={ws.id === activeWorkspaceId}
-            renaming={renamingId === ws.id}
-            onSelect={() => setActiveWorkspace(ws.id)}
-            onStartRename={() => setRenamingId(ws.id)}
-            onCommitRename={(name) => {
-              renameWorkspace(ws.id, name)
-              setRenamingId(null)
-            }}
-            onCancelRename={() => setRenamingId(null)}
-            onClose={() => closeWorkspace(ws.id)}
-          />
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDraggingId(null)}
+        >
+          <SortableContext
+            items={workspaces.map((w) => w.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {workspaces.map((ws) => (
+              <SortableWorkspaceTab
+                key={ws.id}
+                workspace={ws}
+                active={ws.id === activeWorkspaceId}
+                renaming={renamingId === ws.id}
+                onSelect={() => setActiveWorkspace(ws.id)}
+                onStartRename={() => setRenamingId(ws.id)}
+                onCommitRename={(name) => {
+                  renameWorkspace(ws.id, name)
+                  setRenamingId(null)
+                }}
+                onCancelRename={() => setRenamingId(null)}
+                onClose={() => closeWorkspace(ws.id)}
+              />
+            ))}
+          </SortableContext>
+          <DragOverlay>
+            {draggingWorkspace ? (
+              <div
+                aria-hidden
+                className={cn(
+                  TAB_BASE,
+                  tabStateClass(draggingWorkspace.id === activeWorkspaceId),
+                  'h-12 cursor-grabbing bg-canvas shadow-lg'
+                )}
+              >
+                <span className="flex-1 truncate">{draggingWorkspace.name}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </div>
       <button
         type="button"
@@ -72,17 +149,12 @@ interface WelcomeTabProps {
   onClose: () => void
 }
 
-/** The leading "Welcome" tab — selectable; closeable only when workspaces exist. */
+/** The leading "Welcome" tab — pinned first, not draggable; closeable only when workspaces exist. */
 function WelcomeTab({ active, closable, onSelect, onClose }: WelcomeTabProps): ReactElement {
   return (
     <div
       onClick={onSelect}
-      className={cn(
-        'group flex min-w-[130px] max-w-[200px] cursor-pointer items-center gap-2 border-r border-t-2 border-r-border px-3 text-sm transition-colors',
-        active
-          ? 'border-t-ring bg-canvas text-foreground'
-          : 'border-t-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-      )}
+      className={cn(TAB_BASE, 'cursor-pointer', tabStateClass(active))}
     >
       <Sparkles className="h-3.5 w-3.5 shrink-0" />
       <span className="flex-1 truncate">Welcome</span>
@@ -114,7 +186,8 @@ interface WorkspaceTabProps {
   onClose: () => void
 }
 
-function WorkspaceTab({
+/** A draggable, sortable workspace tab. Click selects, double-click renames, X closes. */
+function SortableWorkspaceTab({
   workspace,
   active,
   renaming,
@@ -124,16 +197,21 @@ function WorkspaceTab({
   onCancelRename,
   onClose
 }: WorkspaceTabProps): ReactElement {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: workspace.id,
+    disabled: renaming
+  })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
+      {...(renaming ? {} : attributes)}
+      {...(renaming ? {} : listeners)}
       onClick={onSelect}
       onDoubleClick={onStartRename}
-      className={cn(
-        'group flex min-w-[130px] max-w-[200px] cursor-pointer items-center gap-2 border-r border-t-2 border-r-border px-3 text-sm transition-colors',
-        active
-          ? 'border-t-ring bg-canvas text-foreground'
-          : 'border-t-transparent text-muted-foreground hover:bg-accent/40 hover:text-foreground'
-      )}
+      className={cn(TAB_BASE, 'cursor-pointer', tabStateClass(active), isDragging && 'opacity-40')}
     >
       {renaming ? (
         <TabRenameInput
@@ -147,6 +225,7 @@ function WorkspaceTab({
             {workspace.name}
           </span>
           <button
+            data-no-dnd
             type="button"
             title="Close workspace"
             onClick={(e) => {

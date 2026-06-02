@@ -52,6 +52,7 @@ export interface AppActions {
   setActiveWorkspace: (id: string) => void
   renameWorkspace: (id: string, name: string) => void
   closeWorkspace: (id: string) => void
+  moveWorkspace: (fromId: string, toId: string) => void
   setFocusedLeaf: (leafId: string) => void
   splitPane: (leafId: string, direction: Direction) => void
   closePane: (leafId: string) => void
@@ -67,6 +68,14 @@ export type AppStore = AppState & AppActions
 
 function uid(): string {
   return crypto.randomUUID()
+}
+
+/** Return `list` with the item at index `from` moved to index `to`. */
+function arrayMove<T>(list: T[], from: number, to: number): T[] {
+  const next = list.slice()
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
 }
 
 /** A plain-shell leaf — no template command. Used when splitting a pane. */
@@ -160,6 +169,15 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         activeWorkspaceId = remaining[Math.min(index, remaining.length - 1)].id
       }
       return { workspaces: remaining, activeWorkspaceId }
+    }),
+
+  moveWorkspace: (fromId, toId) =>
+    set((s) => {
+      if (fromId === toId) return {}
+      const from = s.workspaces.findIndex((w) => w.id === fromId)
+      const to = s.workspaces.findIndex((w) => w.id === toId)
+      if (from === -1 || to === -1) return {}
+      return { workspaces: arrayMove(s.workspaces, from, to) }
     }),
 
   setFocusedLeaf: (leafId) =>
