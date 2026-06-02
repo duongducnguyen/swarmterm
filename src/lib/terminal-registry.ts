@@ -7,6 +7,8 @@ import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/t
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
 import { useTerminalTextStore } from '@/store/terminal-text-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
+import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
+import { readClipboard, writeClipboard } from '@/tauri/clipboard'
 
 export type { TerminalStatus }
 
@@ -134,6 +136,27 @@ function getOrCreate(id: string): Entry {
   term.loadAddon(fit)
   term.loadAddon(new WebLinksAddon())
   term.onData((data) => void writeTerminal(id, data))
+
+  // Match VS Code: Ctrl+C copies the selection (Cmd+C on mac), Ctrl+V pastes.
+  // Returning false stops xterm from forwarding the key to the pty. Ctrl+C with
+  // no selection returns true so the shell still receives SIGINT.
+  const isMac = isMacPlatform()
+  term.attachCustomKeyEventHandler((event) => {
+    const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
+    if (action === 'copy') {
+      const selection = term.getSelection()
+      if (selection) void writeClipboard(selection)
+      return false
+    }
+    if (action === 'paste') {
+      // Async read; fire-and-forget and suppress xterm's default handling now.
+      void readClipboard().then((text) => {
+        if (text) term.paste(text)
+      })
+      return false
+    }
+    return true
+  })
 
   const session = new TerminalSession(
     id,
