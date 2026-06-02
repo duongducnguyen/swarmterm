@@ -4,7 +4,6 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -18,6 +17,7 @@ import {
   useSortable
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { GuardedPointerSensor } from '@/lib/dnd-sensors'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
@@ -55,7 +55,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
@@ -90,6 +90,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
             collisionDetection={closestCenter}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragCancel={() => setDraggingId(null)}
           >
             <SortableContext
               items={workspaces.map((w) => w.id)}
@@ -116,7 +117,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
             </SortableContext>
             <DragOverlay>
               {draggingWorkspace ? (
-                <div className="flex items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-sm text-accent-foreground shadow-lg">
+                <div aria-hidden className="flex items-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-sm text-accent-foreground shadow-lg">
                   <span className="flex-1 truncate">{draggingWorkspace.name}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {collectLeaves(draggingWorkspace.layout).length}
@@ -220,6 +221,7 @@ function WorkspaceItem({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              data-no-dnd
               onClick={(e) => e.stopPropagation()}
               className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-background/80 group-hover:opacity-100 data-[state=open]:opacity-100"
               title="Workspace actions"

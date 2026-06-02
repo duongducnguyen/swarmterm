@@ -4,7 +4,6 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -18,6 +17,7 @@ import {
   useSortable
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { GuardedPointerSensor } from '@/lib/dnd-sensors'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 
@@ -56,7 +56,7 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
@@ -90,6 +90,7 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setDraggingId(null)}
         >
           <SortableContext
             items={workspaces.map((w) => w.id)}
@@ -115,10 +116,11 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
           <DragOverlay>
             {draggingWorkspace ? (
               <div
+                aria-hidden
                 className={cn(
                   TAB_BASE,
                   tabStateClass(draggingWorkspace.id === activeWorkspaceId),
-                  'cursor-grabbing bg-canvas shadow-lg'
+                  'h-12 cursor-grabbing bg-canvas shadow-lg'
                 )}
               >
                 <span className="flex-1 truncate">{draggingWorkspace.name}</span>
@@ -223,6 +225,7 @@ function SortableWorkspaceTab({
             {workspace.name}
           </span>
           <button
+            data-no-dnd
             type="button"
             title="Close workspace"
             onClick={(e) => {
