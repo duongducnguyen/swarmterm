@@ -20,6 +20,8 @@
     "deep-link:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "core:webview:allow-create-webview-window"
+    "core:webview:allow-create-webview-window",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
   ]
 }

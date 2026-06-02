@@ -30,8 +30,8 @@ describe('TEMPLATES catalog', () => {
     expect(templateById('terminal').command).toBeNull()
   })
 
-  it('runs a plain claude command for claude-code', () => {
-    expect(templateById('claude-code').command).toBe('claude')
+  it('runs the skip-permissions command for claude-code', () => {
+    expect(templateById('claude-code').command).toBe('claude --dangerously-skip-permissions')
   })
 
   it('runs a plain codex command for codex', () => {
@@ -49,7 +49,7 @@ describe('agentCommand', () => {
   })
 
   it('returns the command string for a command agent', () => {
-    expect(agentCommand('claude-code')).toBe('claude')
+    expect(agentCommand('claude-code')).toBe('claude --dangerously-skip-permissions')
     expect(agentCommand('codex')).toBe('codex')
   })
 
