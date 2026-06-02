@@ -173,6 +173,61 @@ describe('closeWorkspace', () => {
   })
 })
 
+// --- moveWorkspace --------------------------------------------------------
+
+describe('moveWorkspace', () => {
+  function threeWorkspaces(): StoreApi<AppStore> {
+    const store = storeWithWorkspace()
+    store.getState().createWorkspace(SINGLE_TERMINAL)
+    store.getState().createWorkspace(SINGLE_TERMINAL)
+    return store
+  }
+
+  it('moves a workspace later in the list', () => {
+    const store = threeWorkspaces()
+    const [a, , c] = store.getState().workspaces
+    store.getState().moveWorkspace(a.id, c.id)
+    expect(store.getState().workspaces.map((w) => w.name)).toEqual([
+      'Workspace 2',
+      'Workspace 3',
+      'Workspace 1'
+    ])
+  })
+
+  it('moves a workspace earlier in the list', () => {
+    const store = threeWorkspaces()
+    const [a, , c] = store.getState().workspaces
+    store.getState().moveWorkspace(c.id, a.id)
+    expect(store.getState().workspaces.map((w) => w.name)).toEqual([
+      'Workspace 3',
+      'Workspace 1',
+      'Workspace 2'
+    ])
+  })
+
+  it('ignores a non-existent id', () => {
+    const store = threeWorkspaces()
+    const before = store.getState().workspaces.map((w) => w.id)
+    store.getState().moveWorkspace('nope', before[0])
+    expect(store.getState().workspaces.map((w) => w.id)).toEqual(before)
+  })
+
+  it('is a no-op when source and target are the same', () => {
+    const store = threeWorkspaces()
+    const before = store.getState().workspaces.map((w) => w.id)
+    store.getState().moveWorkspace(before[1], before[1])
+    expect(store.getState().workspaces.map((w) => w.id)).toEqual(before)
+  })
+
+  it('does not change the active workspace', () => {
+    const store = threeWorkspaces()
+    const activeBefore = store.getState().activeWorkspaceId
+    const [a, , c] = store.getState().workspaces
+    store.getState().moveWorkspace(a.id, c.id)
+    expect(store.getState().activeWorkspaceId).toBe(activeBefore)
+  })
+})
+
 // --- splitPane ------------------------------------------------------------
 
 describe('splitPane', () => {
