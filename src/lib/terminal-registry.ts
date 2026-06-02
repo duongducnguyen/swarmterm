@@ -145,14 +145,16 @@ function getOrCreate(id: string): Entry {
     const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
     if (action === 'copy') {
       const selection = term.getSelection()
-      if (selection) void writeClipboard(selection)
+      if (selection) writeClipboard(selection).catch(console.warn)
       return false
     }
     if (action === 'paste') {
       // Async read; fire-and-forget and suppress xterm's default handling now.
-      void readClipboard().then((text) => {
-        if (text) term.paste(text)
-      })
+      readClipboard()
+        .then((text) => {
+          if (text) term.paste(text)
+        })
+        .catch(console.warn)
       return false
     }
     return true
