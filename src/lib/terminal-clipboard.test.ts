@@ -49,6 +49,13 @@ describe('decideClipboardAction', () => {
     expect(
       decideClipboardAction(ev({ key: 'c', metaKey: true }), { hasSelection: true, isMac: false })
     ).toBe('passthrough')
+    // Paste's modifier gate is locked the same way for `v`.
+    expect(
+      decideClipboardAction(ev({ key: 'v', metaKey: true }), { hasSelection: false, isMac: false })
+    ).toBe('passthrough')
+    expect(
+      decideClipboardAction(ev({ key: 'v', ctrlKey: true }), { hasSelection: false, isMac: true })
+    ).toBe('passthrough')
   })
 
   it('only acts on keydown, not keyup/keypress', () => {
