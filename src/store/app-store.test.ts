@@ -212,6 +212,13 @@ describe('moveWorkspace', () => {
     expect(store.getState().workspaces.map((w) => w.id)).toEqual(before)
   })
 
+  it('ignores a non-existent target id', () => {
+    const store = threeWorkspaces()
+    const before = store.getState().workspaces.map((w) => w.id)
+    store.getState().moveWorkspace(before[0], 'nope')
+    expect(store.getState().workspaces.map((w) => w.id)).toEqual(before)
+  })
+
   it('is a no-op when source and target are the same', () => {
     const store = threeWorkspaces()
     const before = store.getState().workspaces.map((w) => w.id)
