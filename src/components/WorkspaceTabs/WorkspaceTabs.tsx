@@ -100,7 +100,7 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
               <SortableWorkspaceTab
                 key={ws.id}
                 workspace={ws}
-                active={ws.id === activeWorkspaceId}
+                active={!welcomeFocused && ws.id === activeWorkspaceId}
                 renaming={renamingId === ws.id}
                 onSelect={() => setActiveWorkspace(ws.id)}
                 onStartRename={() => setRenamingId(ws.id)}

@@ -47,6 +47,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
   const visible = useNavbarVisibilityStore((s) => s.visible)
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
+  const welcomeFocused = useAppStore((s) => s.welcomeFocused)
   const setActiveWorkspace = useAppStore((s) => s.setActiveWorkspace)
   const renameWorkspace = useAppStore((s) => s.renameWorkspace)
   const closeWorkspace = useAppStore((s) => s.closeWorkspace)
@@ -101,7 +102,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
                   <WorkspaceItem
                     key={ws.id}
                     workspace={ws}
-                    active={ws.id === activeWorkspaceId}
+                    active={!welcomeFocused && ws.id === activeWorkspaceId}
                     renaming={renamingId === ws.id}
                     onSelect={() => setActiveWorkspace(ws.id)}
                     onStartRename={() => setRenamingId(ws.id)}
