@@ -1,0 +1,142 @@
+# CLAUDE.md
+
+Guidance for AI agents working in this repo. Keep it lean — it points at the
+code and docs rather than duplicating them. When this file and the code
+disagree, **trust the code**.
+
+## What this is
+
+**Swarmterm** — a desktop multi-terminal app: a left navbar of workspaces, each
+a binary split-tree of real terminal panes (xterm.js front, `portable-pty`
+shell back), plus an optional Chrome-style web-preview column. Built on
+**Tauri 2 + Rust** (frontend: **React 19 + TypeScript + Vite**). Ported from an
+earlier Electron app; no state is persisted between launches by design.
+
+Full feature list and manual smoke-test checklist live in `README.md` (Vietnamese).
+
+**Cross-platform intent:** build for macOS and Linux as well as Windows, even
+though primary development happens on Windows. Don't hard-code Windows-only
+assumptions; gate platform code behind `#[cfg(...)]` (Rust) or runtime checks (TS).
+
+## Commands
+
+Run from the repo root unless noted. The shell here is **PowerShell** — use
+PowerShell syntax (`$env:VAR`, `$null`), not bash.
+
+| Command | What it does |
+|---|---|
+| `npm install` | Install JS dependencies. |
+| `npm run tauri dev` | Run the full app (Vite HMR frontend + Rust auto-rebuild). |
+| `npm test` | Run the JS/TS unit suite (Vitest, run-once). |
+| `npm run test:watch` | Vitest in watch mode. |
+| `npx tsc --noEmit` | Type-check the whole frontend (strict). |
+| `npm run build` | Frontend-only build (`tsc && vite build`) — no Rust. |
+| `npm run tauri build` | Production bundle (installer). |
+| `npm run tauri build -- --no-bundle` | Release binary, skip installer. |
+| `cargo test` *(from `src-tauri/`)* | Rust unit tests (pty/shell/deeplink helpers). |
+
+**Before claiming done:** run `npm test`, `npx tsc --noEmit`, and — if you
+touched `src-tauri/` — `cargo test`. Don't assert success without the output.
+
+## Architecture
+
+```
+┌─ Renderer (src/) ─────────────┐         ┌─ Backend (src-tauri/src/) ─┐
+│ components/  React UI          │         │ lib.rs     builder/plugins │
+│ store/       zustand state     │ invoke  │ commands.rs #[command] fns │
+│ lib/         pure logic (TDD)  │ ──────► │ pty.rs      spawn + reader │
+│ tauri/       IPC bridge ───────┼─────────┤ shell.rs    shell discovery│
+│                                │ Channel │ tray.rs / deeplink.rs      │
+└────────────────────────────────┘ ◄────── └────────────────────────────┘
+                                    PtyOut
+```
+
+- **`src/tauri/*` is the ONLY IPC surface.** There is no `window.api` shim. Every
+  call into Rust goes through a thin typed module here: `terminal.ts` (pty
+  create/write/resize/kill + the `Channel<PtyOut>` stream), `window.ts`,
+  `dialog.ts`, `clipboard.ts`, `shell.ts`, `deeplink.ts`, `popout.ts`. New
+  backend calls get a new function in one of these — components never call
+  `invoke` directly.
+- **`#[tauri::command]` handlers live in `commands.rs`** and delegate to module
+  logic (`pty.rs`, `shell.rs`). Register new commands in the
+  `invoke_handler!` list in `lib.rs`.
+- **Per-terminal streaming:** each pty gets its own `Channel<PtyOut>`; a Rust
+  reader thread decodes output and sends `Data` chunks, then a final `Exit`.
+  The Serde tagging (`type`/`payload`, camelCase) must stay in lockstep with the
+  `PtyOut` union in `src/tauri/terminal.ts`.
+
+## Module boundaries (respect these)
+
+- **`src/lib/`** — pure, framework-free logic, each with a `*.test.ts` beside it
+  (layout-tree, web-url, templates, terminal-session, appearance, etc.). This is
+  where business rules go so they can be unit-tested without a DOM or a pty.
+- **`src/store/`** — zustand stores. UI state and actions only; keep pure
+  transforms in `lib/` and call them from the store (see `app-store.ts` ↔
+  `layout-tree.ts`).
+- **`src/lib/terminal-registry.ts`** — owns the live xterm `Terminal` instances
+  **outside React's render tree**, keyed by `terminalId`. Components attach/detach
+  by id; the registry survives remounts so a pane re-parenting (split collapse)
+  doesn't kill the shell. Don't put xterm instances in React state.
+- **`src/components/`** — thin. Layout + wiring; logic belongs in `lib`/`store`.
+  `components/ui/` is shadcn-style primitives (button, dropdown-menu).
+
+## Conventions
+
+- **Imports:** use the `@/` alias for `src/` (`@/lib/...`), configured in both
+  `vite.config.ts` and `tsconfig.json`.
+- **TypeScript is strict**, including `noUnusedLocals` / `noUnusedParameters` /
+  `noFallthroughCasesInSwitch`. Dead code fails the type-check.
+- **TDD for `lib/`:** write/extend the `*.test.ts` first. Run via Vitest.
+- **Comments explain *why*, not *what*.** This codebase leans on dense rationale
+  comments for non-obvious platform/lifecycle decisions — match that density when
+  you add similar logic (see `pty.rs`, `terminal-registry.ts` for the bar).
+- **Styling:** Tailwind (`tailwind.config.cjs`) + CSS variables in
+  `src/index.css` for light/dark theming. The visual target is **VS Code** —
+  mirror its chrome, palettes, and patterns closely (the terminal palette in
+  `terminal-registry.ts` is VS Code "Dark Modern" verbatim).
+- **Rust:** platform-specific code behind `#[cfg(windows)]` / `#[cfg(not(windows))]`;
+  keep testable helpers pure with a `#[cfg(test)] mod tests` block (see
+  `take_valid_utf8`).
+
+## Gotchas (the non-obvious stuff)
+
+- **Terminal respawn ordering.** `create_terminal` rejects a duplicate live id.
+  So killing must free the id *before* the renderer retries: `kill_terminal`
+  removes the entry from the map and drops the master PTY to force the reader to
+  observe EOF (on Windows ConPTY the pipe stays open until the master is dropped),
+  and `read_loop` removes the id from state *before* emitting `Exit`. A same-id
+  respawn (agent/cwd/shell switch) waits for that `Exit`. Touch this carefully.
+- **Windows process-tree teardown.** Shells are captured in a kill-on-close **Job
+  Object** so closing a pane/workspace kills children/grandchildren, not just the
+  shell. See `pty.rs::job`.
+- **UTF-8 chunk boundaries.** `take_valid_utf8` buffers a split trailing multibyte
+  sequence across reads to avoid mojibake (emoji/box-drawing). Don't "simplify" it
+  into a lossy decode.
+- **Close-to-tray vs Quit.** Closing the window hides it to the tray (pty stays
+  alive); `on_window_event` calls `prevent_close()` unless `AppState.quitting` is
+  set (tray → Quit). Killing the app for real must set that flag.
+- **Truecolor.** The shell is spawned with `COLORTERM=truecolor` /
+  `TERM=xterm-256color`; ConPTY forwards 24-bit color and xterm renders it
+  verbatim. Don't downscale.
+- **Deep-link preview.** `SWARMTERM_SESSION` (the terminalId, a random UUID) is
+  injected into each shell's env and doubles as the unguessable secret for
+  `swarmterm://preview?session=&url=`. On Windows/Linux a deep link to a running
+  instance arrives as a CLI arg via single-instance; on macOS via `on_open_url`.
+- **No persistence.** Every launch starts fresh (one Welcome → one workspace).
+  Don't assume saved state.
+
+## Dev workflow
+
+This project uses the **design-docs** flow: brainstorm a design →
+`docs/design-docs/specs/YYYY-MM-DD-<topic>-design.md` → implementation plan in
+`docs/design-docs/plans/` → TDD implementation. New features should follow the
+same trail; the existing specs/plans are good templates and the best record of
+*why* features look the way they do.
+
+## Note on README drift
+
+`README.md` is detailed but its folder tree has drifted from the current code
+(e.g. it lists `theme-store.ts`, a `hooks/` dir, `WorkspaceSetup/`, and
+`tauri/preview.ts` that no longer exist; theming now lives in
+`appearance-store.ts` and the preview bridge is `tauri/popout.ts`). Read it for
+intent and the feature/test checklist, but verify file paths against the tree.
