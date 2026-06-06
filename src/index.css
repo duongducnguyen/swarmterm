@@ -25,6 +25,7 @@
     --pane-border: 0 0% 25%;
     --input: 0 0% 19%;
     --ring: 206 100% 42%;
+    --broadcast: 174 62% 47%;   /* teal accent for broadcast-group panes */
     --radius: 0.5rem;
 
     /* Scrollbar (see docs/design-docs/specs/2026-05-31-scrollbar-redesign-design.md) */

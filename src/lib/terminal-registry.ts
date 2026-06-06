@@ -6,6 +6,8 @@ import '@xterm/xterm/css/xterm.css'
 import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/tauri/terminal'
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
 import { useTerminalTextStore } from '@/store/terminal-text-store'
+import { resolveBroadcastTargets } from '@/lib/broadcast-input'
+import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
@@ -135,7 +137,19 @@ function getOrCreate(id: string): Entry {
   const fit = new FitAddon()
   term.loadAddon(fit)
   term.loadAddon(new WebLinksAddon())
-  term.onData((data) => void writeTerminal(id, data))
+  // Fan out to the broadcast group when this terminal is an armed member;
+  // otherwise this is the only target, so behaviour is unchanged. onData fires
+  // only for the terminal the user is typing in, so `id` is the source. Paste
+  // (term.paste) flows through onData too, so it fans out for free. Each target
+  // pty echoes independently — this is real broadcast, not a text mirror.
+  term.onData((data) => {
+    const state = useAppStore.getState()
+    const ws = selectWorkspaceByTerminalId(state, id)
+    const targets = ws
+      ? resolveBroadcastTargets(ws.layout, ws.broadcastActive, ws.broadcastLeafIds, id)
+      : [id]
+    for (const target of targets) void writeTerminal(target, data)
+  })
 
   // Match VS Code: Ctrl+C copies the selection (Cmd+C on mac), Ctrl+V pastes.
   // Returning false stops xterm from forwarding the key to the pty. Ctrl+C with

@@ -64,6 +64,23 @@ export default function App(): ReactElement {
         useBrowserStore.getState().setFullscreen(false)
         return
       }
+      // Esc also exits broadcast mode (which clears the group).
+      if (e.key === 'Escape') {
+        const st = useAppStore.getState()
+        const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
+        if (ws?.broadcastActive) {
+          e.preventDefault()
+          st.toggleBroadcast()
+          return
+        }
+      }
+      // Ctrl+Shift+B toggles broadcast mode for the active workspace.
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        useAppStore.getState().toggleBroadcast()
+        return
+      }
+      // Ctrl+B (no shift) toggles the navbar.
       if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
         e.preventDefault()
         useNavbarVisibilityStore.getState().toggle()

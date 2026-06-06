@@ -9,6 +9,7 @@ module.exports = {
         'pane-border': 'hsl(var(--pane-border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        broadcast: 'hsl(var(--broadcast))',
         background: 'hsl(var(--background))',
         canvas: 'hsl(var(--canvas))',
         foreground: 'hsl(var(--foreground))',

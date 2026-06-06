@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import {
   appStoreCreator,
+  selectWorkspaceByTerminalId,
   type AppStore,
   type CreateWorkspaceConfig,
   type Workspace
@@ -406,6 +407,115 @@ describe('welcome state', () => {
     store.getState().closeWorkspace(store.getState().workspaces[0].id)
     expect(store.getState().welcomeOpen).toBe(true)
     expect(store.getState().welcomeFocused).toBe(true)
+  })
+})
+
+// --- broadcast ------------------------------------------------------------
+
+describe('broadcast group', () => {
+  it('a new workspace starts with broadcast off and an empty group', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const ws = activeWorkspace(store)
+    expect(ws.broadcastActive).toBe(false)
+    expect(ws.broadcastLeafIds).toEqual([])
+  })
+
+  it('toggleBroadcast turns on and selects every pane', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast()
+    const ws = activeWorkspace(store)
+    const all = collectLeaves(ws.layout).map((l) => l.id)
+    expect(ws.broadcastActive).toBe(true)
+    expect([...ws.broadcastLeafIds].sort()).toEqual([...all].sort())
+  })
+
+  it('toggleBroadcast again turns off and clears the group', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast()
+    store.getState().toggleBroadcast()
+    const ws = activeWorkspace(store)
+    expect(ws.broadcastActive).toBe(false)
+    expect(ws.broadcastLeafIds).toEqual([])
+  })
+
+  it('toggleBroadcastMember removes a member that is present', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast() // selects all
+    const target = collectLeaves(activeWorkspace(store).layout)[0].id
+    store.getState().toggleBroadcastMember(target)
+    expect(activeWorkspace(store).broadcastLeafIds).not.toContain(target)
+  })
+
+  it('toggleBroadcastMember adds a member that is absent', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast()
+    const target = collectLeaves(activeWorkspace(store).layout)[0].id
+    store.getState().toggleBroadcastMember(target) // remove
+    store.getState().toggleBroadcastMember(target) // add back
+    expect(activeWorkspace(store).broadcastLeafIds).toContain(target)
+  })
+
+  it('toggleBroadcastMember adds a member even while broadcast mode is off', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const target = collectLeaves(activeWorkspace(store).layout)[0].id
+    // Mode is off (never toggled on). Editing the group is still allowed.
+    store.getState().toggleBroadcastMember(target)
+    expect(activeWorkspace(store).broadcastActive).toBe(false)
+    expect(activeWorkspace(store).broadcastLeafIds).toEqual([target])
+  })
+
+  it('toggleBroadcastMember ignores an unknown leaf id', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
+    store.getState().toggleBroadcast()
+    const before = activeWorkspace(store).broadcastLeafIds.length
+    store.getState().toggleBroadcastMember('nope')
+    expect(activeWorkspace(store).broadcastLeafIds).toHaveLength(before)
+  })
+
+  it('selectAllBroadcast sets the group to every pane', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast()
+    store.getState().clearBroadcast()
+    store.getState().selectAllBroadcast()
+    const ws = activeWorkspace(store)
+    expect([...ws.broadcastLeafIds].sort()).toEqual(
+      [...collectLeaves(ws.layout).map((l) => l.id)].sort()
+    )
+  })
+
+  it('clearBroadcast empties the group and leaves the mode flag unchanged', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    store.getState().toggleBroadcast()
+    const activeBefore = activeWorkspace(store).broadcastActive
+    store.getState().clearBroadcast()
+    const ws = activeWorkspace(store)
+    expect(ws.broadcastActive).toBe(activeBefore)
+    expect(ws.broadcastLeafIds).toEqual([])
+  })
+
+  it('closePane prunes the closed pane from the broadcast group', () => {
+    const store = storeWithWorkspace()
+    store.getState().splitPane(activeWorkspace(store).focusedLeafId, 'horizontal')
+    store.getState().toggleBroadcast() // both panes selected
+    const leaves = collectLeaves(activeWorkspace(store).layout)
+    const closed = leaves[0].id
+    store.getState().closePane(closed)
+    expect(activeWorkspace(store).broadcastLeafIds).not.toContain(closed)
+    expect(activeWorkspace(store).broadcastLeafIds).toHaveLength(1)
+  })
+})
+
+describe('selectWorkspaceByTerminalId', () => {
+  it('finds the workspace whose layout contains the terminalId', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
+    const ws = activeWorkspace(store)
+    const termId = collectLeaves(ws.layout)[0].terminalId
+    expect(selectWorkspaceByTerminalId(store.getState(), termId)?.id).toBe(ws.id)
+  })
+
+  it('returns undefined for an unknown terminalId', () => {
+    const store = storeWithWorkspace()
+    expect(selectWorkspaceByTerminalId(store.getState(), 'nope')).toBeUndefined()
   })
 })
 

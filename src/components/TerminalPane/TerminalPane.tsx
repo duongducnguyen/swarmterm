@@ -24,6 +24,10 @@ interface TerminalPaneProps {
   /** Working directory the terminal's shell starts in. */
   cwd: string
   isFocused: boolean
+  /** Whether broadcast mode is armed for this workspace. */
+  broadcastActive: boolean
+  /** Whether this pane is in the broadcast group. */
+  isBroadcastMember: boolean
 }
 
 /**
@@ -33,12 +37,19 @@ interface TerminalPaneProps {
  * pane (which remounts this one as the split tree collapses) no longer kills or
  * re-spawns the shell. The pty is killed only when the leaf is truly removed.
  */
-export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React.ReactElement {
+export function TerminalPane({
+  leaf,
+  cwd,
+  isFocused,
+  broadcastActive,
+  isBroadcastMember
+}: TerminalPaneProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const splitPane = useAppStore((s) => s.splitPane)
   const closePane = useAppStore((s) => s.closePane)
   const setFocusedLeaf = useAppStore((s) => s.setFocusedLeaf)
+  const toggleBroadcastMember = useAppStore((s) => s.toggleBroadcastMember)
   const setPaneAgent = useAppStore((s) => s.setPaneAgent)
   const setPaneCwd = useAppStore((s) => s.setPaneCwd)
   const setPaneShell = useAppStore((s) => s.setPaneShell)
@@ -115,10 +126,25 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
 
   return (
     <div
-      onMouseDown={() => setFocusedLeaf(leafId)}
+      onMouseDown={(e) => {
+        // Alt+Click adds/removes this pane from the broadcast group instead of
+        // focusing it. Ctrl/Cmd is avoided — xterm's WebLinks addon uses it.
+        if (e.altKey) {
+          e.preventDefault()
+          toggleBroadcastMember(leafId)
+          return
+        }
+        setFocusedLeaf(leafId)
+      }}
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-md border bg-background',
-        isFocused ? 'border-ring' : 'border-pane-border'
+        isFocused
+          ? 'border-ring'
+          : isBroadcastMember
+            ? 'border-broadcast'
+            : 'border-pane-border',
+        // Dim non-members while the mode is on, so the group reads at a glance.
+        broadcastActive && !isBroadcastMember && 'opacity-60'
       )}
     >
       <PaneHeader
@@ -133,6 +159,9 @@ export function TerminalPane({ leaf, cwd, isFocused }: TerminalPaneProps): React
         onSplitRight={() => splitPane(leafId, 'horizontal')}
         onSplitDown={() => splitPane(leafId, 'vertical')}
         onClose={() => closePane(leafId)}
+        broadcastActive={broadcastActive}
+        isBroadcastMember={isBroadcastMember}
+        onToggleBroadcast={() => toggleBroadcastMember(leafId)}
       />
 
       <div className="relative flex-1 overflow-hidden">
