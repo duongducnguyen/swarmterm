@@ -3,6 +3,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels'
 import type { LayoutNode } from '@/lib/layout-tree'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
 import { TerminalPane } from '@/components/TerminalPane/TerminalPane'
+import { BroadcastBanner } from '@/components/Workspace/BroadcastBanner'
 import { cn } from '@/lib/utils'
 
 interface WorkspaceProps {
@@ -61,5 +62,10 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
     )
   }
 
-  return <div className="h-full w-full bg-canvas p-2">{renderNode(workspace.layout)}</div>
+  return (
+    <div className="flex h-full w-full flex-col bg-canvas">
+      <BroadcastBanner workspace={workspace} />
+      <div className="min-h-0 flex-1 p-2">{renderNode(workspace.layout)}</div>
+    </div>
+  )
 }
