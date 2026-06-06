@@ -22,6 +22,7 @@
     "core:event:allow-emit",
     "core:webview:allow-create-webview-window",
     "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    "opener:allow-open-url"
   ]
 }
