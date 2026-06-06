@@ -15,7 +15,7 @@ export function KeyboardShortcutsPanel(): ReactElement {
 
       {SHORTCUT_GROUPS.map((group) => (
         <section key={group.id}>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-[#7a9cc6]">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
             {group.label}
           </h2>
           <table className="w-full border-collapse text-sm">
@@ -38,7 +38,7 @@ export function KeyboardShortcutsPanel(): ReactElement {
                   <td className="py-2 pr-8 text-foreground/90">{entry.description}</td>
                   <td className="py-2">
                     <span className="flex items-center gap-1">
-                      {(entry.keys as readonly string[]).map((token, i) => (
+                      {entry.keys.map((token, i) => (
                         token.startsWith('+')
                           ? <span key={i} className="text-xs text-muted-foreground">{token}</span>
                           : <kbd
