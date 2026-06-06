@@ -24,6 +24,9 @@ pub fn parse_auth_callback(uri: &str) -> Option<AuthCallback> {
         .query_pairs()
         .find(|(k, _)| k == "code")
         .map(|(_, v)| v.into_owned())?;
+    if code.is_empty() {
+        return None;
+    }
     Some(AuthCallback { code })
 }
 
@@ -96,24 +99,26 @@ pub struct AuthCallbackEvent {
     pub code: String,
 }
 
-/// Validate every URL in `uris` and emit `preview:open` for the good ones.
+/// Validate every URL in `uris` and emit the appropriate event.
+/// Auth callbacks are checked first so they never fall through to preview
+/// parsing (which would print a spurious "ignored deep link" to stderr).
 pub fn handle_uris(app: &AppHandle, uris: &[String]) {
     let state = app.state::<AppState>();
     for uri in uris {
-        match parse_preview(uri, |id| state.terminals.lock().unwrap().contains_key(id)) {
-            Ok(open) => {
-                let _ = app.emit(
-                    "preview:open",
-                    PreviewOpenEvent { terminal_id: open.terminal_id, url: open.url },
-                );
-            }
-            Err(reason) => {
-                eprintln!("ignored deep link {uri}: {reason:?}");
-            }
-        }
-        // Also check for OAuth auth callback.
         if let Some(auth) = parse_auth_callback(uri) {
             let _ = app.emit("auth:callback", AuthCallbackEvent { code: auth.code });
+        } else {
+            match parse_preview(uri, |id| state.terminals.lock().unwrap().contains_key(id)) {
+                Ok(open) => {
+                    let _ = app.emit(
+                        "preview:open",
+                        PreviewOpenEvent { terminal_id: open.terminal_id, url: open.url },
+                    );
+                }
+                Err(reason) => {
+                    eprintln!("ignored deep link {uri}: {reason:?}");
+                }
+            }
         }
     }
 }
@@ -195,6 +200,12 @@ mod tests {
     #[test]
     fn auth_callback_rejects_non_swarmterm_scheme() {
         let uri = "https://auth/callback?code=abc";
+        assert_eq!(parse_auth_callback(uri), None);
+    }
+
+    #[test]
+    fn auth_callback_rejects_empty_code() {
+        let uri = "swarmterm://auth/callback?code=";
         assert_eq!(parse_auth_callback(uri), None);
     }
 }
