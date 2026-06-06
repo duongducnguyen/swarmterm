@@ -6,6 +6,7 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Radio,
   Square,
   SquareTerminal,
   X
@@ -35,6 +36,11 @@ export function TitleBar(): ReactElement {
   })
   // Home view = Welcome focused, or no workspaces yet (matches App's showWelcome).
   const onHome = useAppStore((s) => s.welcomeFocused || s.workspaces.length === 0)
+  const broadcastActive = useAppStore((s) => {
+    const active = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
+    return active?.broadcastActive ?? false
+  })
+  const toggleBroadcast = useAppStore((s) => s.toggleBroadcast)
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -78,6 +84,22 @@ export function TitleBar(): ReactElement {
       </div>
 
       <div className="flex h-full items-center">
+        {!onHome && (
+          <button
+            type="button"
+            data-tauri-drag-region="false"
+            aria-label="Toggle broadcast input (Ctrl+Shift+B)"
+            aria-pressed={broadcastActive}
+            title="Broadcast input to selected terminals (Ctrl+Shift+B)"
+            onClick={toggleBroadcast}
+            className={cn(
+              'mr-1 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground',
+              broadcastActive ? 'text-broadcast' : 'text-muted-foreground'
+            )}
+          >
+            <Radio className="h-4 w-4" />
+          </button>
+        )}
         {browserTabs.length > 0 && (
           <button
             type="button"
