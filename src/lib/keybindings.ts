@@ -26,6 +26,7 @@ export const SHORTCUT_GROUPS = [
     label: 'Window',
     entries: [
       { description: 'Toggle sidebar',              keys: ['Ctrl', 'B'] },
+      { description: 'Close Settings',              keys: ['Esc'] },
       { description: 'Exit web preview fullscreen', keys: ['Esc'] },
     ],
   },
