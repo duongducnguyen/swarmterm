@@ -48,4 +48,9 @@ describe('resolveBroadcastTargets', () => {
   it('returns only the source when the source terminalId is unknown', () => {
     expect(resolveBroadcastTargets(layout, true, ['a', 'b'], 'unknown')).toEqual(['unknown'])
   })
+
+  it('returns only the source when the group is empty but broadcast is on', () => {
+    // e.g. after "Clear" with the mode still armed — the keystroke must not be dropped.
+    expect(resolveBroadcastTargets(layout, true, [], 'ta')).toEqual(['ta'])
+  })
 })

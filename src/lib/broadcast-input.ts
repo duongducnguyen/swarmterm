@@ -8,6 +8,7 @@ import { collectLeaves, type LayoutNode } from '@/lib/layout-tree'
  * Rules: if broadcast is off, or the source pane is not part of the group, the
  * keystroke stays local (just the source). Otherwise it fans out to every group
  * member that still exists in the layout (stale ids are dropped).
+ * Returned terminalIds are in layout depth-first (left-to-right) order.
  */
 export function resolveBroadcastTargets(
   layout: LayoutNode,
