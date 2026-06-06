@@ -21,6 +21,10 @@ export interface Workspace {
   cwd: string
   layout: LayoutNode
   focusedLeafId: string
+  /** Whether broadcast (keystroke fan-out) is armed for this workspace. */
+  broadcastActive: boolean
+  /** Leaf ids that receive broadcast keystrokes while `broadcastActive`. */
+  broadcastLeafIds: string[]
 }
 
 /** What the setup wizard collects to build a new workspace. */
@@ -60,6 +64,10 @@ export interface AppActions {
   setPaneAgent: (leafId: string, agentId: string) => void
   setPaneCwd: (leafId: string, cwd: string | undefined) => void
   setPaneShell: (leafId: string, shellId: ShellId) => void
+  toggleBroadcast: () => void
+  toggleBroadcastMember: (leafId: string) => void
+  selectAllBroadcast: () => void
+  clearBroadcast: () => void
 }
 
 export type AppStore = AppState & AppActions
@@ -86,6 +94,16 @@ function makeLeaf(): LeafNode {
 /** Return the active workspace, or `undefined` if it cannot be resolved. */
 export function selectActiveWorkspace(state: AppState): Workspace | undefined {
   return state.workspaces.find((w) => w.id === state.activeWorkspaceId)
+}
+
+/** The workspace whose layout owns `terminalId`, or `undefined` if none. */
+export function selectWorkspaceByTerminalId(
+  state: AppState,
+  terminalId: string
+): Workspace | undefined {
+  return state.workspaces.find((w) =>
+    collectLeaves(w.layout).some((l) => l.terminalId === terminalId)
+  )
 }
 
 /** Map the active workspace through `fn`, leaving the others untouched. */
@@ -120,7 +138,9 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         name: `Workspace ${s.nextWorkspaceNumber}`,
         cwd: config.cwd,
         layout,
-        focusedLeafId: collectLeaves(layout)[0].id
+        focusedLeafId: collectLeaves(layout)[0].id,
+        broadcastActive: false,
+        broadcastLeafIds: []
       }
       return {
         workspaces: [...s.workspaces, ws],
@@ -210,10 +230,14 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     set((s) =>
       mapActive(s, (w) => {
         const leaves = collectLeaves(layout)
-        const focusedLeafId = leaves.some((l) => l.id === w.focusedLeafId)
-          ? w.focusedLeafId
-          : leaves[0].id
-        return { ...w, layout, focusedLeafId }
+        const ids = new Set(leaves.map((l) => l.id))
+        const focusedLeafId = ids.has(w.focusedLeafId) ? w.focusedLeafId : leaves[0].id
+        return {
+          ...w,
+          layout,
+          focusedLeafId,
+          broadcastLeafIds: w.broadcastLeafIds.filter((id) => ids.has(id))
+        }
       })
     )
   },
@@ -228,7 +252,42 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { cwd }) }))),
 
   setPaneShell: (leafId, shellId) =>
-    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) })))
+    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) }))),
+
+  toggleBroadcast: () =>
+    set((s) =>
+      mapActive(s, (w) => {
+        const active = !w.broadcastActive
+        return {
+          ...w,
+          broadcastActive: active,
+          // Turning on selects every pane (the common "drive all" case); the
+          // user narrows from there. Turning off clears the group.
+          broadcastLeafIds: active ? collectLeaves(w.layout).map((l) => l.id) : []
+        }
+      })
+    ),
+
+  toggleBroadcastMember: (leafId) =>
+    set((s) =>
+      mapActive(s, (w) => {
+        if (!findLeaf(w.layout, leafId)) return w
+        const has = w.broadcastLeafIds.includes(leafId)
+        return {
+          ...w,
+          broadcastLeafIds: has
+            ? w.broadcastLeafIds.filter((id) => id !== leafId)
+            : [...w.broadcastLeafIds, leafId]
+        }
+      })
+    ),
+
+  selectAllBroadcast: () =>
+    set((s) =>
+      mapActive(s, (w) => ({ ...w, broadcastLeafIds: collectLeaves(w.layout).map((l) => l.id) }))
+    ),
+
+  clearBroadcast: () => set((s) => mapActive(s, (w) => ({ ...w, broadcastLeafIds: [] })))
 })
 
 export const useAppStore = create<AppStore>()(appStoreCreator)
