@@ -268,6 +268,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       })
     ),
 
+  // Group membership can be edited even while broadcast is off; turning it on
+  // via toggleBroadcast re-selects all panes, so off-mode edits are harmless.
   toggleBroadcastMember: (leafId) =>
     set((s) =>
       mapActive(s, (w) => {

@@ -455,6 +455,15 @@ describe('broadcast group', () => {
     expect(activeWorkspace(store).broadcastLeafIds).toContain(target)
   })
 
+  it('toggleBroadcastMember adds a member even while broadcast mode is off', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const target = collectLeaves(activeWorkspace(store).layout)[0].id
+    // Mode is off (never toggled on). Editing the group is still allowed.
+    store.getState().toggleBroadcastMember(target)
+    expect(activeWorkspace(store).broadcastActive).toBe(false)
+    expect(activeWorkspace(store).broadcastLeafIds).toEqual([target])
+  })
+
   it('toggleBroadcastMember ignores an unknown leaf id', () => {
     const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
     store.getState().toggleBroadcast()
@@ -474,12 +483,13 @@ describe('broadcast group', () => {
     )
   })
 
-  it('clearBroadcast empties the group but keeps the mode on', () => {
+  it('clearBroadcast empties the group and leaves the mode flag unchanged', () => {
     const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
     store.getState().toggleBroadcast()
+    const activeBefore = activeWorkspace(store).broadcastActive
     store.getState().clearBroadcast()
     const ws = activeWorkspace(store)
-    expect(ws.broadcastActive).toBe(true)
+    expect(ws.broadcastActive).toBe(activeBefore)
     expect(ws.broadcastLeafIds).toEqual([])
   })
 
