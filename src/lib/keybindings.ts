@@ -11,14 +11,14 @@ export interface KeybindingGroup {
 }
 
 // If you change a binding in App.tsx, update this list to match.
-export const SHORTCUT_GROUPS: readonly KeybindingGroup[] = [
+export const SHORTCUT_GROUPS = [
   {
     id: 'broadcast',
     label: 'Broadcast',
     entries: [
-      { description: 'Toggle broadcast mode',       keys: ['Ctrl', 'Shift', 'B'] },
-      { description: 'Exit broadcast mode',         keys: ['Esc'] },
-      { description: 'Add/remove pane from group',  keys: ['Alt', '+ Click'] },
+      { description: 'Toggle broadcast mode',      keys: ['Ctrl', 'Shift', 'B'] },
+      { description: 'Exit broadcast mode',        keys: ['Esc'] },
+      { description: 'Add/remove pane from group', keys: ['Alt', '+ Click'] },
     ],
   },
   {
@@ -29,4 +29,4 @@ export const SHORTCUT_GROUPS: readonly KeybindingGroup[] = [
       { description: 'Exit web preview fullscreen', keys: ['Esc'] },
     ],
   },
-]
+] as const satisfies readonly KeybindingGroup[]

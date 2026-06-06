@@ -29,4 +29,10 @@ describe('SHORTCUT_GROUPS', () => {
       expect(unique.size).toBe(descs.length)
     }
   })
+
+  it('every group has a non-empty id and ids are unique', () => {
+    const ids = SHORTCUT_GROUPS.map((g) => g.id)
+    expect(ids.every((id) => id.trim() !== '')).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
 })
