@@ -21,6 +21,10 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
           leaf={node}
           cwd={workspace.cwd}
           isFocused={node.id === workspace.focusedLeafId}
+          broadcastActive={workspace.broadcastActive}
+          isBroadcastMember={
+            workspace.broadcastActive && workspace.broadcastLeafIds.includes(node.id)
+          }
         />
       )
     }

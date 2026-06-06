@@ -1,4 +1,4 @@
-import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, X } from 'lucide-react'
+import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, Radio, X } from 'lucide-react'
 import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,6 +27,12 @@ interface PaneHeaderProps {
   onSplitRight: () => void
   onSplitDown: () => void
   onClose: () => void
+  /** Whether broadcast mode is armed for this workspace. */
+  broadcastActive: boolean
+  /** Whether this pane is in the broadcast group. */
+  isBroadcastMember: boolean
+  /** Toggle this pane's membership in the broadcast group. */
+  onToggleBroadcast: () => void
 }
 
 /** The per-pane header: agent / path / shell dropdowns plus split & close. */
@@ -95,6 +101,23 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
       </div>
 
       <div className="flex items-center gap-0.5">
+        {props.broadcastActive && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Toggle broadcast membership"
+            aria-pressed={props.isBroadcastMember}
+            title={
+              props.isBroadcastMember
+                ? 'In broadcast group — click to remove'
+                : 'Add to broadcast group'
+            }
+            onClick={props.onToggleBroadcast}
+            className={cn(props.isBroadcastMember && 'text-broadcast')}
+          >
+            <Radio className="h-3.5 w-3.5" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon-sm" title="Split right" aria-label="Split right" onClick={props.onSplitRight}>
           <Columns2 className="h-3.5 w-3.5" />
         </Button>
