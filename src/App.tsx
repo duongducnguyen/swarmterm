@@ -74,12 +74,14 @@ export default function App(): ReactElement {
           return
         }
       }
+      // Ctrl+Shift+B — if this binding changes, update src/lib/keybindings.ts
       // Ctrl+Shift+B toggles broadcast mode for the active workspace.
       if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
         e.preventDefault()
         useAppStore.getState().toggleBroadcast()
         return
       }
+      // Ctrl+B — if this binding changes, update src/lib/keybindings.ts
       // Ctrl+B (no shift) toggles the navbar.
       if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
         e.preventDefault()
