@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { Keyboard, Palette, Terminal, X } from 'lucide-react'
+import { Keyboard, Palette, Terminal, User, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AppearancePanel } from './AppearancePanel'
 import { TerminalPanel } from './TerminalPanel'
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel'
+import { AccountPanel } from './AccountPanel'
 
-type CategoryId = 'appearance' | 'terminal' | 'shortcuts'
+export type CategoryId = 'appearance' | 'terminal' | 'shortcuts' | 'account'
 
 interface Category {
   id: CategoryId
@@ -18,10 +19,12 @@ const CATEGORIES: Category[] = [
   { id: 'appearance', label: 'Appearance', Icon: Palette },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'shortcuts', label: 'Keyboard Shortcuts', Icon: Keyboard },
+  { id: 'account', label: 'Account', Icon: User },
 ]
 
 interface SettingsViewProps {
   onClose: () => void
+  initialCategory?: CategoryId
 }
 
 /**
@@ -29,8 +32,8 @@ interface SettingsViewProps {
  * the active category; the right pane renders its panel. Click the backdrop,
  * press Esc, or click the close button to dismiss.
  */
-export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
-  const [activeCategory, setActiveCategory] = useState<CategoryId>('appearance')
+export function SettingsView({ onClose, initialCategory }: SettingsViewProps): ReactElement {
+  const [activeCategory, setActiveCategory] = useState<CategoryId>(initialCategory ?? 'appearance')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -99,6 +102,7 @@ export function SettingsView({ onClose }: SettingsViewProps): ReactElement {
               {activeCategory === 'appearance' && <AppearancePanel />}
               {activeCategory === 'terminal' && <TerminalPanel />}
               {activeCategory === 'shortcuts' && <KeyboardShortcutsPanel />}
+              {activeCategory === 'account' && <AccountPanel />}
             </div>
           </div>
         </div>

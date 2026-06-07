@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { AccountIcon } from '@/components/Account/AccountIcon'
 
 interface NavbarProps {
   /** Open the setup wizard to create a new workspace. */
@@ -37,13 +38,15 @@ interface NavbarProps {
   settingsOpen: boolean
   /** Toggle the Settings page open/closed. */
   onToggleSettings: () => void
+  /** Open Settings pre-navigated to the Account tab. */
+  onOpenAccountSettings: () => void
 }
 
 /** Left navigation rail: the workspace list — add / switch / rename / close / reorder.
  * Drag an item to reorder (synced with the tab strip). Collapses to 0 width when
  * the title bar's toggle button is off.
  */
-export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: NavbarProps): ReactElement {
+export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenAccountSettings }: NavbarProps): ReactElement {
   const visible = useNavbarVisibilityStore((s) => s.visible)
   const workspaces = useAppStore((s) => s.workspaces)
   const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
@@ -139,6 +142,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
         </div>
 
         <div className="shrink-0 space-y-0.5 border-t border-border p-2">
+          <AccountIcon onOpenAccountSettings={onOpenAccountSettings} />
           <Button
             variant="ghost"
             size="sm"

@@ -13,8 +13,10 @@ import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
 import { useRecentsStore } from '@/store/recents-store'
-import { onPreviewOpen } from '@/tauri/deeplink'
+import { useAuthStore } from '@/store/auth-store'
+import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { showWindow } from '@/tauri/window'
+import type { CategoryId } from '@/components/Settings/SettingsView'
 
 /** Terminal ids referenced by any workspace's layout — the ones to keep alive. */
 function liveTerminalIds(workspaces: WorkspaceModel[]): Set<string> {
@@ -32,6 +34,12 @@ export default function App(): ReactElement {
   const openWelcome = useAppStore((s) => s.openWelcome)
   const closeWelcome = useAppStore((s) => s.closeWelcome)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<CategoryId>('appearance')
+
+  const openAccountSettings = useCallback(() => {
+    setSettingsTab('account')
+    setSettingsOpen(true)
+  }, [])
 
   const browserVisible = useBrowserStore((s) => s.visible)
   const browserFullscreen = useBrowserStore((s) => s.fullscreen)
@@ -44,6 +52,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     void showWindow()
     useRecentsStore.getState().hydrate()
+    void useAuthStore.getState().hydrate()
   }, [])
 
   // Esc closes the Welcome page when it's closeable and Settings isn't covering it.
@@ -115,6 +124,16 @@ export default function App(): ReactElement {
     }
   }, [])
 
+  // Wire deep-link OAuth callback to auth store handler.
+  useEffect(() => {
+    const unlisten = onAuthCallback((code) => {
+      void useAuthStore.getState().handleCallback(code)
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
   /** Index of a terminal within the ordered set of live terminal ids (0 if not found). */
   const terminalIndexOf = useCallback(
     (terminalId: string): number => {
@@ -133,7 +152,11 @@ export default function App(): ReactElement {
         <Navbar
           onNewWorkspace={openWelcome}
           settingsOpen={settingsOpen}
-          onToggleSettings={() => setSettingsOpen((open) => !open)}
+          onToggleSettings={() => {
+            setSettingsTab('appearance')
+            setSettingsOpen((open) => !open)
+          }}
+          onOpenAccountSettings={openAccountSettings}
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
@@ -192,7 +215,13 @@ export default function App(): ReactElement {
 
         </main>
 
-        {settingsOpen && <SettingsView onClose={() => setSettingsOpen(false)} />}
+        {settingsOpen && (
+          <SettingsView
+            key={settingsTab}
+            onClose={() => setSettingsOpen(false)}
+            initialCategory={settingsTab}
+          />
+        )}
       </div>
     </div>
   )
