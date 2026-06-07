@@ -5,18 +5,7 @@ describe('TEMPLATES catalog', () => {
   it('lists the AI agents first and the plain terminal last', () => {
     const ids = TEMPLATES.map((t) => t.id)
     expect(ids[ids.length - 1]).toBe('terminal')
-    expect(ids).toEqual([
-      'claude-code',
-      'codex',
-      'gemini',
-      'copilot',
-      'cursor',
-      'opencode',
-      'aider',
-      'qwen',
-      'amp',
-      'terminal'
-    ])
+    expect(ids).toEqual(['claude-code', 'codex', 'terminal'])
   })
 
   it('gives every agent a non-empty launch command except the plain terminal', () => {
