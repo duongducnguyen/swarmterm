@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { Button } from '@/components/ui/button'
 
@@ -9,12 +9,23 @@ interface LoginModalProps {
 
 export function LoginModal({ onClose }: LoginModalProps): ReactElement {
   const signIn = useAuthStore((s) => s.signIn)
-  const status = useAuthStore((s) => s.status)
-  const loading = status === 'loading'
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSignIn = (provider: 'google' | 'github'): void => {
-    void signIn(provider)
-    onClose()
+    setLoading(true)
+    setError(null)
+    void signIn(provider).then(() => {
+      // signIn catches internally — check store state to know if it succeeded.
+      const { status, error: storeError } = useAuthStore.getState()
+      if (status === 'error') {
+        setError(storeError ?? 'Unknown error')
+        setLoading(false)
+      } else {
+        // Browser is opening — close modal.
+        onClose()
+      }
+    })
   }
 
   return (
@@ -44,6 +55,12 @@ export function LoginModal({ onClose }: LoginModalProps): ReactElement {
             Unlock sync and subscription features
           </p>
         </div>
+
+        {error && (
+          <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {error}
+          </p>
+        )}
 
         <div className="flex flex-col gap-2">
           <Button

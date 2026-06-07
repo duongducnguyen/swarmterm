@@ -2,6 +2,7 @@ import { UserRound } from 'lucide-react'
 import { useState, type ReactElement } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { LoginModal } from '@/components/Account/LoginModal'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,15 +28,16 @@ export function AccountIcon({ onOpenAccountSettings }: AccountIconProps): ReactE
   if (!isAuthenticated) {
     return (
       <>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           title="Sign in"
           onClick={() => setShowLoginModal(true)}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+          className="w-full justify-start text-muted-foreground"
         >
-          <UserRound className="h-4 w-4 shrink-0 opacity-50" />
-          <span>Sign in</span>
-        </button>
+          <UserRound className="h-4 w-4" />
+          Sign in
+        </Button>
         {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
       </>
     )

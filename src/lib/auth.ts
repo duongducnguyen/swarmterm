@@ -11,7 +11,9 @@ export async function signInWithOAuth(provider: 'google' | 'github'): Promise<vo
     },
   })
   if (error) throw error
-  if (data.url) await openUrl(data.url)
+  if (data.url) {
+    await openUrl(data.url)
+  }
 }
 
 export async function signOut(): Promise<void> {
