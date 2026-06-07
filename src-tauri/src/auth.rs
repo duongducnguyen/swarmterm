@@ -28,7 +28,7 @@ pub fn load_auth_session(account: String) -> Result<Option<String>, String> {
 pub fn clear_auth_session(account: String) -> Result<(), String> {
     match Entry::new(SERVICE, &account)
         .map_err(|e| e.to_string())?
-        .delete_credential()
+        .delete_password()
     {
         Ok(_) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
