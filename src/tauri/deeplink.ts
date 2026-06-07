@@ -9,3 +9,8 @@ export interface PreviewOpenEvent {
 export function onPreviewOpen(handler: (e: PreviewOpenEvent) => void): Promise<UnlistenFn> {
   return listen<PreviewOpenEvent>('preview:open', (event) => handler(event.payload))
 }
+
+/** Subscribe to backend `auth:callback` events (OAuth PKCE code arrived). */
+export function onAuthCallback(handler: (code: string) => void): Promise<UnlistenFn> {
+  return listen<{ code: string }>('auth:callback', (event) => handler(event.payload.code))
+}

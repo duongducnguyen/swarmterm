@@ -1,3 +1,4 @@
+mod auth;
 mod commands;
 mod deeplink;
 mod pty;
@@ -32,6 +33,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             tray::setup_tray(app)?;
             let handle = app.handle().clone();
@@ -61,6 +63,9 @@ pub fn run() {
             commands::resize_terminal,
             commands::kill_terminal,
             commands::list_available_shells,
+            auth::save_auth_session,
+            auth::load_auth_session,
+            auth::clear_auth_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

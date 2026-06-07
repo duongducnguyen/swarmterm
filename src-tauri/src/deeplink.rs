@@ -4,6 +4,32 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::pty::AppState;
 use serde::Serialize;
 
+/// A validated OAuth callback with the PKCE exchange code.
+#[derive(Debug, PartialEq)]
+pub struct AuthCallback {
+    pub code: String,
+}
+
+/// Parse `swarmterm://auth/callback?code=<pkce_code>`.
+/// Returns None for any other URI or if the `code` query param is missing.
+pub fn parse_auth_callback(uri: &str) -> Option<AuthCallback> {
+    let parsed = url::Url::parse(uri).ok()?;
+    if parsed.scheme() != "swarmterm" || parsed.host_str() != Some("auth") {
+        return None;
+    }
+    if parsed.path() != "/callback" {
+        return None;
+    }
+    let code = parsed
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.into_owned())?;
+    if code.is_empty() {
+        return None;
+    }
+    Some(AuthCallback { code })
+}
+
 /// A validated request to open a web preview for a terminal session.
 #[derive(Debug, PartialEq)]
 pub struct PreviewOpen {
@@ -66,19 +92,32 @@ pub struct PreviewOpenEvent {
     pub url: String,
 }
 
-/// Validate every URL in `uris` and emit `preview:open` for the good ones.
+/// Payload emitted to the renderer when a valid OAuth callback arrives.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthCallbackEvent {
+    pub code: String,
+}
+
+/// Validate every URL in `uris` and emit the appropriate event.
+/// Auth callbacks are checked first so they never fall through to preview
+/// parsing (which would print a spurious "ignored deep link" to stderr).
 pub fn handle_uris(app: &AppHandle, uris: &[String]) {
     let state = app.state::<AppState>();
     for uri in uris {
-        match parse_preview(uri, |id| state.terminals.lock().unwrap().contains_key(id)) {
-            Ok(open) => {
-                let _ = app.emit(
-                    "preview:open",
-                    PreviewOpenEvent { terminal_id: open.terminal_id, url: open.url },
-                );
-            }
-            Err(reason) => {
-                eprintln!("ignored deep link {uri}: {reason:?}");
+        if let Some(auth) = parse_auth_callback(uri) {
+            let _ = app.emit("auth:callback", AuthCallbackEvent { code: auth.code });
+        } else {
+            match parse_preview(uri, |id| state.terminals.lock().unwrap().contains_key(id)) {
+                Ok(open) => {
+                    let _ = app.emit(
+                        "preview:open",
+                        PreviewOpenEvent { terminal_id: open.terminal_id, url: open.url },
+                    );
+                }
+                Err(reason) => {
+                    eprintln!("ignored deep link {uri}: {reason:?}");
+                }
             }
         }
     }
@@ -129,5 +168,44 @@ mod tests {
     fn rejects_missing_url() {
         let uri = "swarmterm://preview?session=t1";
         assert_eq!(parse_preview(uri, is_live), Err(Reject::MissingField));
+    }
+
+    #[test]
+    fn accepts_valid_auth_callback() {
+        let uri = "swarmterm://auth/callback?code=pkce_code_abc123";
+        assert_eq!(
+            parse_auth_callback(uri),
+            Some(AuthCallback { code: "pkce_code_abc123".into() })
+        );
+    }
+
+    #[test]
+    fn auth_callback_rejects_wrong_host() {
+        let uri = "swarmterm://preview/callback?code=abc";
+        assert_eq!(parse_auth_callback(uri), None);
+    }
+
+    #[test]
+    fn auth_callback_rejects_wrong_path() {
+        let uri = "swarmterm://auth/other?code=abc";
+        assert_eq!(parse_auth_callback(uri), None);
+    }
+
+    #[test]
+    fn auth_callback_rejects_missing_code() {
+        let uri = "swarmterm://auth/callback?state=xyz";
+        assert_eq!(parse_auth_callback(uri), None);
+    }
+
+    #[test]
+    fn auth_callback_rejects_non_swarmterm_scheme() {
+        let uri = "https://auth/callback?code=abc";
+        assert_eq!(parse_auth_callback(uri), None);
+    }
+
+    #[test]
+    fn auth_callback_rejects_empty_code() {
+        let uri = "swarmterm://auth/callback?code=";
+        assert_eq!(parse_auth_callback(uri), None);
     }
 }
