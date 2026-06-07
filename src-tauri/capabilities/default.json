@@ -23,6 +23,12 @@
     "core:webview:allow-create-webview-window",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    "opener:allow-open-url"
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://*/**" },
+        { "url": "http://127.0.0.1:54321/**" }
+      ]
+    }
   ]
 }
