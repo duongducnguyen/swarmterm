@@ -111,5 +111,17 @@ describe('auth-store', () => {
       expect(useAuthStore.getState().status).toBe('idle')
       expect(useAuthStore.getState().user).toBeNull()
     })
+
+    it('stays idle when getSession returns an error', async () => {
+      vi.mocked(supabase.auth.getSession).mockResolvedValue({
+        data: { session: null },
+        error: { message: 'network failure' } as any,
+      } as any)
+
+      await useAuthStore.getState().hydrate()
+
+      expect(useAuthStore.getState().status).toBe('idle')
+      expect(useAuthStore.getState().user).toBeNull()
+    })
   })
 })

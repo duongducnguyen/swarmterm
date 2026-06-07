@@ -33,7 +33,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signOut: async () => {
-    await authSignOut()
+    try {
+      await authSignOut()
+    } catch {
+      // sign-out failures are non-fatal — clear local state regardless
+    }
     set({ status: 'idle', user: null, session: null, error: null })
   },
 
@@ -48,9 +52,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   hydrate: async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
-      set({ status: 'authenticated', session, user: session.user })
-    }
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error || !session) return
+    set({ status: 'authenticated', session, user: session.user })
   },
 }))
