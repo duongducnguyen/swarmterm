@@ -1,3 +1,4 @@
+mod agents;
 mod auth;
 mod commands;
 mod deeplink;
