@@ -16,12 +16,21 @@ import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { useBrowserStore } from '@/store/browser-store'
 import { minimize, toggleMaximize, closeWindow, onMaximizedChanged } from '@/tauri/window'
+import { isMacPlatform } from '@/lib/platform'
 import { HeaderRecentSearch } from './HeaderRecentSearch'
+
+// On macOS the OS draws native traffic lights over this header (titleBarStyle
+// Overlay — see tauri.macos.conf.json): hide the custom window buttons and
+// inset the left cluster so it clears the lights. Platform never changes at
+// runtime, so a module-level constant is fine.
+const isMac = isMacPlatform()
 
 /**
  * Custom window title bar for the frameless window. Left cluster:
  * [sidebar toggle] [app icon] [app name]. Centre: a read-only pill showing the
- * active workspace's name. Right: minimize / maximize / close window controls.
+ * active workspace's name. Right: minimize / maximize / close window controls
+ * on Windows/Linux; on macOS those are hidden — the OS overlays native
+ * traffic lights at the left instead (see tauri.macos.conf.json).
  */
 export function TitleBar(): ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -43,6 +52,7 @@ export function TitleBar(): ReactElement {
   const toggleBroadcast = useAppStore((s) => s.toggleBroadcast)
 
   useEffect(() => {
+    if (isMac) return // maximize icon swap only exists on the custom buttons
     let unlisten: (() => void) | undefined
     onMaximizedChanged(setIsMaximized).then((un) => (unlisten = un))
     return () => unlisten?.()
@@ -51,7 +61,10 @@ export function TitleBar(): ReactElement {
   return (
     <div
       data-tauri-drag-region
-      className="flex h-9 shrink-0 items-center justify-between border-b border-border bg-card pl-1.5"
+      className={cn(
+        'flex h-9 shrink-0 items-center justify-between border-b border-border bg-card pl-1.5',
+        isMac && 'pl-20'
+      )}
     >
       <div className="flex items-center gap-1.5">
         <button
@@ -113,22 +126,26 @@ export function TitleBar(): ReactElement {
             {browserVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
         )}
-        <TitleBarButton label="Minimize" onClick={() => minimize()}>
-          <Minus className="h-4 w-4" />
-        </TitleBarButton>
-        <TitleBarButton
-          label={isMaximized ? 'Restore' : 'Maximize'}
-          onClick={() => toggleMaximize()}
-        >
-          {isMaximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
-        </TitleBarButton>
-        <TitleBarButton
-          label="Close"
-          onClick={() => closeWindow()}
-          className="hover:bg-destructive hover:text-destructive-foreground"
-        >
-          <X className="h-4 w-4" />
-        </TitleBarButton>
+        {!isMac && (
+          <>
+            <TitleBarButton label="Minimize" onClick={() => minimize()}>
+              <Minus className="h-4 w-4" />
+            </TitleBarButton>
+            <TitleBarButton
+              label={isMaximized ? 'Restore' : 'Maximize'}
+              onClick={() => toggleMaximize()}
+            >
+              {isMaximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+            </TitleBarButton>
+            <TitleBarButton
+              label="Close"
+              onClick={() => closeWindow()}
+              className="hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <X className="h-4 w-4" />
+            </TitleBarButton>
+          </>
+        )}
       </div>
     </div>
   )
