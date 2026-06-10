@@ -58,3 +58,8 @@ pub fn kill_terminal(state: State<'_, AppState>, id: String) {
 pub fn list_available_shells() -> Vec<crate::shell::ShellEntry> {
     crate::shell::list_shells().to_vec()
 }
+
+#[tauri::command]
+pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
+    crate::agents::list_agents()
+}
