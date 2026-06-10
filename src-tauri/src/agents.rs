@@ -52,8 +52,15 @@ fn search_dirs() -> Vec<PathBuf> {
 
 #[cfg(windows)]
 fn extra_bin_dirs() -> Vec<PathBuf> {
-    // Windows installers (npm shim, native .exe) put themselves on PATH already.
-    vec![]
+    // npm shims live in dirs already on PATH, but the native Claude installer
+    // drops claude.exe into %USERPROFILE%\.local\bin and appends it to the
+    // *registry* PATH — a running app's environment snapshot won't include
+    // that until restart. Probing the dir directly keeps mid-session installs
+    // visible without one.
+    match std::env::var("USERPROFILE") {
+        Ok(home) => vec![PathBuf::from(home).join(".local").join("bin")],
+        Err(_) => vec![],
+    }
 }
 
 #[cfg(not(windows))]
