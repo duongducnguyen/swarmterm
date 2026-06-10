@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { TEMPLATES, DEFAULT_TEMPLATE_ID, templateById, agentCommand } from './templates'
+import {
+  TEMPLATES,
+  DEFAULT_TEMPLATE_ID,
+  templateById,
+  agentCommand,
+  isTemplateAvailable
+} from './templates'
 
 describe('TEMPLATES catalog', () => {
   it('lists the AI agents first and the plain terminal last', () => {
@@ -48,5 +54,30 @@ describe('agentCommand', () => {
 
   it('exposes terminal as the default agent id', () => {
     expect(DEFAULT_TEMPLATE_ID).toBe('terminal')
+  })
+})
+
+describe('isTemplateAvailable', () => {
+  const claude = templateById('claude-code')
+  const terminal = templateById('terminal')
+
+  it('marks the AI agents with their executable names, terminal with none', () => {
+    expect(templateById('claude-code').executable).toBe('claude')
+    expect(templateById('codex').executable).toBe('codex')
+    expect(templateById('terminal').executable).toBeUndefined()
+  })
+
+  it('treats templates without an executable as always available', () => {
+    expect(isTemplateAvailable(terminal, {})).toBe(true)
+    expect(isTemplateAvailable(terminal, { terminal: false })).toBe(true)
+  })
+
+  it('reads the availability map for executable-backed templates', () => {
+    expect(isTemplateAvailable(claude, { 'claude-code': true })).toBe(true)
+    expect(isTemplateAvailable(claude, { 'claude-code': false })).toBe(false)
+  })
+
+  it('is optimistic when the map has no entry (probe pending or failed)', () => {
+    expect(isTemplateAvailable(claude, {})).toBe(true)
   })
 })

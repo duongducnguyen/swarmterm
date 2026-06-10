@@ -12,6 +12,8 @@ export interface WorkspaceTemplate {
   description: string
   /** Command run when each terminal first spawns, or `null` for a plain shell. */
   command: string | null
+  /** Executable probed by the backend to decide availability; `undefined` ⇒ always available. */
+  executable?: string
   /** Brand logo URL for the agent, or `undefined` for the plain terminal. */
   icon?: string
 }
@@ -22,6 +24,7 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     name: 'Claude Code',
     description: "Anthropic's coding agent.",
     command: 'claude --dangerously-skip-permissions',
+    executable: 'claude',
     icon: claudeIcon
   },
   {
@@ -29,6 +32,7 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     name: 'Codex',
     description: "OpenAI's Codex CLI.",
     command: 'codex',
+    executable: 'codex',
     icon: codexIcon
   },
   {
@@ -53,4 +57,21 @@ export function templateById(id: string): WorkspaceTemplate {
 /** The startup command for an agent id, or `undefined` for a plain shell. */
 export function agentCommand(agentId: string | undefined): string | undefined {
   return templateById(agentId ?? DEFAULT_TEMPLATE_ID).command ?? undefined
+}
+
+/**
+ * Template id → installed?, from the backend probe (`list_available_agents`).
+ * A missing id reads as installed — optimistic, so a pending or failed probe
+ * never locks out a working CLI.
+ */
+export type AgentAvailabilityMap = Record<string, boolean>
+
+/** Whether a template's CLI is installed. Templates with no executable (plain
+ *  Terminal) are always available. */
+export function isTemplateAvailable(
+  template: WorkspaceTemplate,
+  availability: AgentAvailabilityMap
+): boolean {
+  if (!template.executable) return true
+  return availability[template.id] !== false
 }
