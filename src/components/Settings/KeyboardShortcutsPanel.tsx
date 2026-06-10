@@ -2,8 +2,11 @@ import { type ReactElement } from 'react'
 import { getShortcutGroups } from '@/lib/keybindings'
 import { isMacPlatform } from '@/lib/platform'
 
+// Platform never changes at runtime; compute the display groups once instead
+// of re-reading navigator and reallocating on every render.
+const groups = getShortcutGroups(isMacPlatform())
+
 export function KeyboardShortcutsPanel(): ReactElement {
-  const groups = getShortcutGroups(isMacPlatform())
   return (
     <div className="space-y-8">
       <section>
