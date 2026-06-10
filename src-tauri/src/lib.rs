@@ -69,6 +69,15 @@ pub fn run() {
             auth::load_auth_session,
             auth::clear_auth_session,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // macOS: clicking the Dock icon while the window is hidden
+            // (close-to-tray) fires Reopen — re-show like the tray's "Show".
+            // Other platforms get here via the single-instance plugin instead.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                crate::tray::show_main(_app);
+            }
+        });
 }

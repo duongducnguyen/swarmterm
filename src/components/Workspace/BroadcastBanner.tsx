@@ -1,6 +1,10 @@
 import type { ReactElement } from 'react'
 import { Radio } from 'lucide-react'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
+import { isMacPlatform } from '@/lib/platform'
+
+// Hint must match the platform binding shown in Settings (Option on mac).
+const altHint = isMacPlatform() ? '⌥' : 'Alt'
 
 interface BroadcastBannerProps {
   workspace: WorkspaceModel
@@ -31,7 +35,7 @@ export function BroadcastBanner({ workspace }: BroadcastBannerProps): ReactEleme
       <button type="button" onClick={clear} className="rounded px-1.5 py-0.5 hover:bg-broadcast/20">
         Clear
       </button>
-      <span className="ml-auto text-muted-foreground">Alt+Click panes to toggle</span>
+      <span className="ml-auto text-muted-foreground">{altHint}+Click panes to toggle</span>
       <button
         type="button"
         onClick={toggle}

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
+import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves } from '@/lib/layout-tree'
+import { isMacPlatform } from '@/lib/platform'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
 import { BrowserColumn } from '@/components/Browser/BrowserColumn'
 import { Navbar } from '@/components/Navbar/Navbar'
@@ -68,6 +70,7 @@ export default function App(): ReactElement {
   }, [showWelcome, welcomeClosable, settingsOpen, closeWelcome])
 
   useEffect(() => {
+    const isMac = isMacPlatform()
     const onKeyDown = (e: KeyboardEvent): void => {
       // Esc exits browser fullscreen first — before any other handler.
       if (e.key === 'Escape' && useBrowserStore.getState().fullscreen) {
@@ -85,16 +88,15 @@ export default function App(): ReactElement {
           return
         }
       }
-      // Ctrl+Shift+B toggles broadcast mode for the active workspace.
-      // If this binding changes, update src/lib/keybindings.ts.
-      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
+      // Cmd+B / Cmd+Shift+B on mac, Ctrl+B / Ctrl+Shift+B elsewhere.
+      // If these bindings change, update src/lib/keybindings.ts.
+      const action = matchAppShortcut(e, isMac)
+      if (action === 'toggle-broadcast') {
         e.preventDefault()
         useAppStore.getState().toggleBroadcast()
         return
       }
-      // Ctrl+B (no shift) toggles the navbar.
-      // If this binding changes, update src/lib/keybindings.ts.
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'b') {
+      if (action === 'toggle-navbar') {
         e.preventDefault()
         useNavbarVisibilityStore.getState().toggle()
       }

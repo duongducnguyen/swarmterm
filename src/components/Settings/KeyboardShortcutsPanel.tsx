@@ -1,5 +1,10 @@
 import { type ReactElement } from 'react'
-import { SHORTCUT_GROUPS } from '@/lib/keybindings'
+import { getShortcutGroups } from '@/lib/keybindings'
+import { isMacPlatform } from '@/lib/platform'
+
+// Platform never changes at runtime; compute the display groups once instead
+// of re-reading navigator and reallocating on every render.
+const groups = getShortcutGroups(isMacPlatform())
 
 export function KeyboardShortcutsPanel(): ReactElement {
   return (
@@ -24,7 +29,7 @@ export function KeyboardShortcutsPanel(): ReactElement {
             </th>
           </tr>
         </thead>
-        {SHORTCUT_GROUPS.map((group) => (
+        {groups.map((group) => (
           <tbody key={group.id}>
             <tr>
               <td

@@ -19,7 +19,8 @@ tính năng iteration 1 được giữ nguyên.
 - **Single-instance** — mở app lần 2 chỉ focus cửa sổ cũ
   (`tauri-plugin-single-instance`).
 - **Frameless window** — titlebar tự vẽ; kéo vùng titlebar di chuyển cửa sổ;
-  minimize / maximize-restore / close-to-tray hoạt động qua Tauri window API.
+  minimize / maximize-restore / close-to-tray hoạt động qua Tauri window API
+  (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
 - **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
   theo.
 - **Web browser preview** — cột thứ 3 kiểu Chrome hiển thị web gắn theo từng
@@ -190,9 +191,11 @@ Sau `npm run tauri dev`:
 - [ ] Đóng cửa sổ → ẩn xuống tray (pty vẫn sống); tray → Show mở lại;
       tray → Quit tắt hẳn và kill mọi pty.
 - [ ] Mở app lần 2 → chỉ focus cửa sổ cũ (single-instance).
-- [ ] Titlebar tự vẽ hiển thị; kéo vùng titlebar di chuyển cửa sổ; kéo viền resize được.
-- [ ] Nút minimize / maximize-restore hoạt động; icon nút maximize đổi đúng trạng thái.
-- [ ] Nút close ẩn cửa sổ xuống tray (app không tắt).
+- [ ] Titlebar tự vẽ hiển thị; kéo vùng titlebar di chuyển cửa sổ; kéo viền resize được
+      (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
+- [ ] Nút minimize / maximize-restore hoạt động; icon nút maximize đổi đúng trạng thái
+      (Windows/Linux only).
+- [ ] Nút close ẩn cửa sổ xuống tray (app không tắt) (Windows/Linux only).
 - [ ] Toggle theme đổi cả giao diện lẫn màu nền terminal.
 - [ ] Khởi động lại app → theme giữ đúng lựa chọn lần trước.
 - [ ] **Truecolor:** chạy CLI 24-bit màu (ví dụ `claude` nếu đã cài) → màu
