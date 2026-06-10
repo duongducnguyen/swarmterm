@@ -5,6 +5,7 @@ mod deeplink;
 mod pty;
 mod shell;
 mod tray;
+mod window_fit;
 
 use pty::AppState;
 use std::sync::atomic::Ordering;
@@ -36,6 +37,29 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // The configured 1280×820 overflows small displays (on a MacBook
+            // the Dock covers the bottom edge), so clamp the window to the
+            // monitor's work area and center it. The window is created with
+            // `visible: false` and shown later by the renderer, so resizing
+            // here never flashes.
+            if let Some(win) = app.get_webview_window("main") {
+                let monitor = win
+                    .current_monitor()
+                    .ok()
+                    .flatten()
+                    .or_else(|| win.primary_monitor().ok().flatten());
+                if let Some(monitor) = monitor {
+                    let wa = monitor.work_area();
+                    let desired = win.outer_size().unwrap_or(wa.size);
+                    let fit = window_fit::fit_to_work_area(
+                        (wa.position.x, wa.position.y),
+                        (wa.size.width, wa.size.height),
+                        (desired.width, desired.height),
+                    );
+                    let _ = win.set_size(tauri::PhysicalSize::new(fit.width, fit.height));
+                    let _ = win.set_position(tauri::PhysicalPosition::new(fit.x, fit.y));
+                }
+            }
             tray::setup_tray(app)?;
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
