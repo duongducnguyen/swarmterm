@@ -73,6 +73,7 @@ describe('matchAppShortcut', () => {
 
   it('rejects when Alt is held', () => {
     expect(matchAppShortcut(key({ ctrlKey: true, altKey: true }), false)).toBeNull()
+    expect(matchAppShortcut(key({ metaKey: true, altKey: true }), true)).toBeNull()
   })
 
   it('rejects other keys', () => {
