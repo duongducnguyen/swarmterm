@@ -42,10 +42,5 @@ export function decideClipboardAction(
   return 'passthrough'
 }
 
-/** True when running on macOS (Cmd-based copy/paste). */
-export function isMacPlatform(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const platform = navigator.platform || ''
-  if (platform) return /mac/i.test(platform)
-  return /mac/i.test(navigator.userAgent || '')
-}
+/** Re-export: platform detection moved to platform.ts; old import paths keep working. */
+export { isMacPlatform } from '@/lib/platform'
