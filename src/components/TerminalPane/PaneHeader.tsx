@@ -7,7 +7,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu'
-import { TEMPLATES, templateById } from '@/lib/templates'
+import { TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
+import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { KNOWN_SHELLS, type ShellId } from '@/lib/terminal-pref'
 import { cn } from '@/lib/utils'
 
@@ -41,25 +42,36 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
   const agent = templateById(agentId)
   const agentLabel = agent.name
   const shellLabel = KNOWN_SHELLS.find((s) => s.id === shellId)?.label ?? KNOWN_SHELLS[0].label
+  const availability = useAgentAvailabilityStore((s) => s.availability)
 
   return (
     <div className="flex h-7 shrink-0 items-center justify-between border-b border-border bg-card px-1.5">
       <div className="flex items-center gap-0.5">
         {/* Agent */}
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) void useAgentAvailabilityStore.getState().refresh()
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" title={`Agent: ${agentLabel}`} aria-label={`Agent: ${agentLabel}`}>
               <AgentIcon template={agent} className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {TEMPLATES.map((t) => (
-              <DropdownMenuItem key={t.id} onSelect={() => props.onAgentChange(t.id)}>
-                <Check aria-hidden="true" className={cn('h-3.5 w-3.5', t.id === agentId ? 'opacity-100' : 'opacity-0')} />
-                <AgentIcon template={t} className="h-4 w-4 shrink-0" />
-                <span>{t.name}</span>
-              </DropdownMenuItem>
-            ))}
+            {TEMPLATES.map((t) => {
+              const available = isTemplateAvailable(t, availability)
+              return (
+                <DropdownMenuItem key={t.id} disabled={!available} onSelect={() => props.onAgentChange(t.id)}>
+                  <Check aria-hidden="true" className={cn('h-3.5 w-3.5', t.id === agentId ? 'opacity-100' : 'opacity-0')} />
+                  <AgentIcon template={t} className="h-4 w-4 shrink-0" />
+                  <span>{t.name}</span>
+                  {!available && (
+                    <span className="ml-auto pl-3 text-xs text-muted-foreground">Not installed</span>
+                  )}
+                </DropdownMenuItem>
+              )
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
 

@@ -1,3 +1,4 @@
+mod agents;
 mod auth;
 mod commands;
 mod deeplink;
@@ -63,6 +64,7 @@ pub fn run() {
             commands::resize_terminal,
             commands::kill_terminal,
             commands::list_available_shells,
+            commands::list_available_agents,
             auth::save_auth_session,
             auth::load_auth_session,
             auth::clear_auth_session,
