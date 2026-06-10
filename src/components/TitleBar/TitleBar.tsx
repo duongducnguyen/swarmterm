@@ -24,6 +24,9 @@ import { HeaderRecentSearch } from './HeaderRecentSearch'
 // inset the left cluster so it clears the lights. Platform never changes at
 // runtime, so a module-level constant is fine.
 const isMac = isMacPlatform()
+// Tooltip hints must match the platform binding (mac convention: ⇧ before ⌘).
+const navbarHint = isMac ? '⌘B' : 'Ctrl+B'
+const broadcastHint = isMac ? '⇧⌘B' : 'Ctrl+Shift+B'
 
 /**
  * Custom window title bar for the frameless window. Left cluster:
@@ -70,8 +73,8 @@ export function TitleBar(): ReactElement {
         <button
           type="button"
           data-tauri-drag-region="false"
-          aria-label={visible ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
-          title={visible ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
+          aria-label={visible ? `Hide sidebar (${navbarHint})` : `Show sidebar (${navbarHint})`}
+          title={visible ? `Hide sidebar (${navbarHint})` : `Show sidebar (${navbarHint})`}
           onClick={toggleNavbar}
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
@@ -101,9 +104,9 @@ export function TitleBar(): ReactElement {
           <button
             type="button"
             data-tauri-drag-region="false"
-            aria-label="Toggle broadcast input (Ctrl+Shift+B)"
+            aria-label={`Toggle broadcast input (${broadcastHint})`}
             aria-pressed={broadcastActive}
-            title="Broadcast input to selected terminals (Ctrl+Shift+B)"
+            title={`Broadcast input to selected terminals (${broadcastHint})`}
             onClick={toggleBroadcast}
             className={cn(
               'mr-1 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground',
