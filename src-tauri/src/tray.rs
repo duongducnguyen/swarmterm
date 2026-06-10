@@ -46,7 +46,7 @@ fn tray_image() -> Image<'static> {
     Image::new_owned(buf, SIZE as u32, SIZE as u32)
 }
 
-fn show_main(app: &tauri::AppHandle) {
+pub fn show_main(app: &tauri::AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.unminimize();
         let _ = win.show();
