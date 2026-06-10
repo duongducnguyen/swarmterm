@@ -43,4 +43,4 @@ export function decideClipboardAction(
 }
 
 /** Re-export: platform detection moved to platform.ts; old import paths keep working. */
-export { isMacPlatform } from '@/lib/platform'
+export { isMacPlatform } from './platform'
