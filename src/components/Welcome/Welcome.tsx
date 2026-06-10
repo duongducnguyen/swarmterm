@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { Folder, FolderSearch, X } from 'lucide-react'
 import { gridFor, TERMINAL_COUNTS } from '@/lib/layout-tree'
-import { DEFAULT_TEMPLATE_ID, TEMPLATES } from '@/lib/templates'
+import { DEFAULT_TEMPLATE_ID, TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
+import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useAppStore } from '@/store/app-store'
 import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ export function Welcome(): ReactElement {
   const recents = useRecentsStore((s) => s.recents)
   const addRecentFolder = useRecentsStore((s) => s.add)
   const removeRecentFolder = useRecentsStore((s) => s.remove)
+  const availability = useAgentAvailabilityStore((s) => s.availability)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen
   // (e.g. picked from the title-bar search before Welcome mounted).
@@ -38,6 +40,21 @@ export function Welcome(): ReactElement {
       if (useAppStore.getState().welcomeFolder === '') setFolder(home)
     })
   }, [setFolder])
+
+  // Re-probe installed agent CLIs every time Welcome is shown (it mounts
+  // fresh each time), so a CLI installed while the app runs is picked up
+  // without a restart.
+  useEffect(() => {
+    void useAgentAvailabilityStore.getState().refresh()
+  }, [])
+
+  // If the chosen template turns out to be uninstalled (probe resolved after
+  // the user clicked it), fall back to the always-available plain terminal.
+  useEffect(() => {
+    if (!isTemplateAvailable(templateById(templateId), availability)) {
+      setTemplateId(DEFAULT_TEMPLATE_ID)
+    }
+  }, [availability, templateId])
 
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
@@ -137,25 +154,33 @@ export function Welcome(): ReactElement {
 
         <Section title="Template" hint="What each terminal runs on start">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {TEMPLATES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTemplateId(t.id)}
-                className={cn(
-                  'min-w-0 rounded-lg border p-3 text-left transition-colors',
-                  t.id === templateId
-                    ? 'border-ring bg-accent'
-                    : 'border-border hover:border-ring/50 hover:bg-accent/40'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <AgentIcon template={t} className="h-5 w-5 shrink-0" />
-                  <div className="text-sm font-medium text-foreground">{t.name}</div>
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{t.description}</div>
-              </button>
-            ))}
+            {TEMPLATES.map((t) => {
+              const available = isTemplateAvailable(t, availability)
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={!available}
+                  onClick={() => setTemplateId(t.id)}
+                  className={cn(
+                    'min-w-0 rounded-lg border p-3 text-left transition-colors',
+                    !available && 'cursor-not-allowed border-border opacity-50',
+                    available &&
+                      (t.id === templateId
+                        ? 'border-ring bg-accent'
+                        : 'border-border hover:border-ring/50 hover:bg-accent/40')
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <AgentIcon template={t} className="h-5 w-5 shrink-0" />
+                    <div className="text-sm font-medium text-foreground">{t.name}</div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {available ? t.description : 'Not installed'}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </Section>
 
