@@ -152,17 +152,23 @@ function getOrCreate(id: string): Entry {
   })
 
   // Match VS Code: Ctrl+C copies the selection (Cmd+C on mac), Ctrl+V pastes.
-  // Returning false stops xterm from forwarding the key to the pty. Ctrl+C with
-  // no selection returns true so the shell still receives SIGINT.
+  // Returning false stops xterm from forwarding the key to the pty, but does
+  // NOT cancel the browser default action: without preventDefault() the
+  // webview still fires a native `paste` event into xterm's hidden textarea,
+  // which xterm pastes into the pty a second time (double-paste). So every
+  // handled action also calls preventDefault(). Ctrl+C with no selection
+  // returns true so the shell still receives SIGINT.
   const isMac = isMacPlatform()
   term.attachCustomKeyEventHandler((event) => {
     const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
     if (action === 'copy') {
+      event.preventDefault()
       const selection = term.getSelection()
       if (selection) writeClipboard(selection).catch(console.warn)
       return false
     }
     if (action === 'paste') {
+      event.preventDefault()
       // Async read; fire-and-forget and suppress xterm's default handling now.
       readClipboard()
         .then((text) => {
