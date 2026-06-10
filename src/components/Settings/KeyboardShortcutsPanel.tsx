@@ -1,7 +1,9 @@
 import { type ReactElement } from 'react'
-import { SHORTCUT_GROUPS } from '@/lib/keybindings'
+import { getShortcutGroups } from '@/lib/keybindings'
+import { isMacPlatform } from '@/lib/platform'
 
 export function KeyboardShortcutsPanel(): ReactElement {
+  const groups = getShortcutGroups(isMacPlatform())
   return (
     <div className="space-y-8">
       <section>
@@ -24,7 +26,7 @@ export function KeyboardShortcutsPanel(): ReactElement {
             </th>
           </tr>
         </thead>
-        {SHORTCUT_GROUPS.map((group) => (
+        {groups.map((group) => (
           <tbody key={group.id}>
             <tr>
               <td

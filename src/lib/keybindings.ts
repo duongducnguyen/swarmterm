@@ -40,23 +40,27 @@ export function matchAppShortcut(
 }
 
 // If you change a binding in App.tsx, update this list to match.
-export const SHORTCUT_GROUPS = [
-  {
-    id: 'broadcast',
-    label: 'Broadcast',
-    entries: [
-      { description: 'Toggle broadcast mode',      keys: ['Ctrl', 'Shift', 'B'] },
-      { description: 'Exit broadcast mode',        keys: ['Esc'] },
-      { description: 'Add/remove pane from group', keys: ['Alt', '+ Click'] },
-    ],
-  },
-  {
-    id: 'window',
-    label: 'Window',
-    entries: [
-      { description: 'Toggle sidebar',              keys: ['Ctrl', 'B'] },
-      { description: 'Close Settings',              keys: ['Esc'] },
-      { description: 'Exit web preview fullscreen', keys: ['Esc'] },
-    ],
-  },
-] as const satisfies readonly KeybindingGroup[]
+export function getShortcutGroups(isMac: boolean): KeybindingGroup[] {
+  const mod = isMac ? '⌘' : 'Ctrl'
+  const alt = isMac ? '⌥' : 'Alt'
+  return [
+    {
+      id: 'broadcast',
+      label: 'Broadcast',
+      entries: [
+        { description: 'Toggle broadcast mode',      keys: [mod, 'Shift', 'B'] },
+        { description: 'Exit broadcast mode',        keys: ['Esc'] },
+        { description: 'Add/remove pane from group', keys: [alt, '+ Click'] },
+      ],
+    },
+    {
+      id: 'window',
+      label: 'Window',
+      entries: [
+        { description: 'Toggle sidebar',              keys: [mod, 'B'] },
+        { description: 'Close Settings',              keys: ['Esc'] },
+        { description: 'Exit web preview fullscreen', keys: ['Esc'] },
+      ],
+    },
+  ]
+}

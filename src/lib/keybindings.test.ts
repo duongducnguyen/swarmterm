@@ -1,20 +1,25 @@
 import { describe, it, expect } from 'vitest'
-import { SHORTCUT_GROUPS, matchAppShortcut, type ShortcutKeyEvent } from './keybindings'
+import { getShortcutGroups, matchAppShortcut, type ShortcutKeyEvent } from './keybindings'
 
-describe('SHORTCUT_GROUPS', () => {
+describe.each([
+  { label: 'non-mac', isMac: false },
+  { label: 'mac', isMac: true },
+])('getShortcutGroups ($label)', ({ isMac }) => {
+  const groups = getShortcutGroups(isMac)
+
   it('is non-empty', () => {
-    expect(SHORTCUT_GROUPS.length).toBeGreaterThan(0)
+    expect(groups.length).toBeGreaterThan(0)
   })
 
   it('every group has a non-empty label and at least one entry', () => {
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of groups) {
       expect(group.label.trim()).not.toBe('')
       expect(group.entries.length).toBeGreaterThan(0)
     }
   })
 
   it('every entry has a non-empty description and at least one key token', () => {
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of groups) {
       for (const entry of group.entries) {
         expect(entry.description.trim()).not.toBe('')
         expect(entry.keys.length).toBeGreaterThan(0)
@@ -23,17 +28,37 @@ describe('SHORTCUT_GROUPS', () => {
   })
 
   it('no duplicate descriptions within a group', () => {
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of groups) {
       const descs = group.entries.map((e) => e.description)
-      const unique = new Set(descs)
-      expect(unique.size).toBe(descs.length)
+      expect(new Set(descs).size).toBe(descs.length)
     }
   })
 
   it('every group has a non-empty id and ids are unique', () => {
-    const ids = SHORTCUT_GROUPS.map((g) => g.id)
+    const ids = groups.map((g) => g.id)
     expect(ids.every((id) => id.trim() !== '')).toBe(true)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('getShortcutGroups platform tokens', () => {
+  const tokens = (isMac: boolean): string[] =>
+    getShortcutGroups(isMac).flatMap((g) => g.entries.flatMap((e) => e.keys))
+
+  it('uses Ctrl/Alt on non-mac, never ⌘/⌥', () => {
+    const t = tokens(false)
+    expect(t).toContain('Ctrl')
+    expect(t).toContain('Alt')
+    expect(t).not.toContain('⌘')
+    expect(t).not.toContain('⌥')
+  })
+
+  it('uses ⌘/⌥ on mac, never Ctrl/Alt', () => {
+    const t = tokens(true)
+    expect(t).toContain('⌘')
+    expect(t).toContain('⌥')
+    expect(t).not.toContain('Ctrl')
+    expect(t).not.toContain('Alt')
   })
 })
 
