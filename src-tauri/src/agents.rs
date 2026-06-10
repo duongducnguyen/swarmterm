@@ -1,4 +1,5 @@
-//! AI-agent CLI catalog + probing (`claude`, `codex`). Unlike `shell.rs`, the
+//! AI-agent CLI catalog + probing (`claude`, `codex`, `opencode`, `aider`,
+//! `cursor-agent`, `gemini`). Unlike `shell.rs`, the
 //! result is intentionally NOT cached: the renderer re-asks whenever it shows
 //! agent options (Welcome opens, pane agent dropdown opens), so a CLI
 //! installed while the app is running lights up without a restart. A probe is
@@ -18,8 +19,17 @@ pub struct AgentEntry {
     pub detected_path: Option<String>,
 }
 
-/// (template id, executable base name) for each agent CLI we probe.
-const AGENTS: &[(&str, &str)] = &[("claude-code", "claude"), ("codex", "codex")];
+/// (template id, executable base name) for each agent CLI we probe. Keep in
+/// template order — `src/lib/templates.ts` is the source of truth for ids.
+const AGENTS: &[(&str, &str)] = &[
+    ("claude-code", "claude"),
+    ("codex", "codex"),
+    ("opencode", "opencode"),
+    ("aider", "aider"),
+    // Cursor's terminal agent installs as `cursor-agent`; `cursor` is the GUI.
+    ("cursor", "cursor-agent"),
+    ("gemini", "gemini"),
+];
 
 /// Probe every known agent CLI. Fresh scan on every call (no cache) — see
 /// module docs.
@@ -166,9 +176,19 @@ mod tests {
     }
 
     #[test]
-    fn list_agents_covers_both_ai_agents_in_template_order() {
+    fn list_agents_covers_all_ai_agents_in_template_order() {
         let ids: Vec<String> = list_agents().into_iter().map(|a| a.id).collect();
         // Availability depends on the host machine; only the catalog is asserted.
-        assert_eq!(ids, vec!["claude-code", "codex"]);
+        assert_eq!(
+            ids,
+            vec![
+                "claude-code",
+                "codex",
+                "opencode",
+                "aider",
+                "cursor",
+                "gemini"
+            ]
+        );
     }
 }

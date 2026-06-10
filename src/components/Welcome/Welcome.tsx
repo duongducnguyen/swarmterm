@@ -73,17 +73,17 @@ export function Welcome(): ReactElement {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-10 py-12">
+    <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-10 py-8">
       <header>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground">Swarmterm</h1>
         <p className="mt-1 text-base text-muted-foreground">Run many terminals, side by side.</p>
       </header>
 
-      <h2 className="mt-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Start a workspace
       </h2>
 
-      <div className="mt-4 space-y-6">
+      <div className="mt-4 space-y-5">
         <Section title="Working folder" hint="Where your terminals will start">
           <>
             <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring">
@@ -153,7 +153,9 @@ export function Welcome(): ReactElement {
         </Section>
 
         <Section title="Template" hint="What each terminal runs on start">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {/* 4 columns on wide windows keeps the 7 templates to two rows, so the
+              whole form fits a 1080p window without scrolling. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
             {TEMPLATES.map((t) => {
               const available = isTemplateAvailable(t, availability)
               return (
@@ -175,7 +177,10 @@ export function Welcome(): ReactElement {
                     <AgentIcon template={t} className="h-5 w-5 shrink-0" />
                     <div className="text-sm font-medium text-foreground">{t.name}</div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  <div
+                    className="mt-1 truncate text-xs text-muted-foreground"
+                    title={available ? t.description : undefined}
+                  >
                     {available ? t.description : 'Not installed'}
                   </div>
                 </button>

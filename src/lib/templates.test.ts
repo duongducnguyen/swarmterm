@@ -11,7 +11,15 @@ describe('TEMPLATES catalog', () => {
   it('lists the AI agents first and the plain terminal last', () => {
     const ids = TEMPLATES.map((t) => t.id)
     expect(ids[ids.length - 1]).toBe('terminal')
-    expect(ids).toEqual(['claude-code', 'codex', 'terminal'])
+    expect(ids).toEqual([
+      'claude-code',
+      'codex',
+      'opencode',
+      'aider',
+      'cursor',
+      'gemini',
+      'terminal'
+    ])
   })
 
   it('gives every agent a non-empty launch command except the plain terminal', () => {
@@ -31,6 +39,13 @@ describe('TEMPLATES catalog', () => {
 
   it('runs a plain codex command for codex', () => {
     expect(templateById('codex').command).toBe('codex')
+  })
+
+  it('runs the bare CLI command for the other agents', () => {
+    expect(templateById('opencode').command).toBe('opencode')
+    expect(templateById('aider').command).toBe('aider')
+    expect(templateById('cursor').command).toBe('cursor-agent')
+    expect(templateById('gemini').command).toBe('gemini')
   })
 })
 
@@ -64,6 +79,10 @@ describe('isTemplateAvailable', () => {
   it('marks the AI agents with their executable names, terminal with none', () => {
     expect(templateById('claude-code').executable).toBe('claude')
     expect(templateById('codex').executable).toBe('codex')
+    expect(templateById('opencode').executable).toBe('opencode')
+    expect(templateById('aider').executable).toBe('aider')
+    expect(templateById('cursor').executable).toBe('cursor-agent')
+    expect(templateById('gemini').executable).toBe('gemini')
     expect(templateById('terminal').executable).toBeUndefined()
   })
 
