@@ -26,8 +26,8 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "https://*/**" },
-        { "url": "http://127.0.0.1:54321/**" }
+        { "url": "http://*" },
+        { "url": "https://*" }
       ]
     }
   ]

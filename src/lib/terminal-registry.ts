@@ -11,6 +11,8 @@ import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
+import { shouldFollowLink } from '@/lib/terminal-links'
+import { openUrl } from '@/tauri/opener'
 
 export type { TerminalStatus }
 
@@ -136,7 +138,6 @@ function getOrCreate(id: string): Entry {
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
-  term.loadAddon(new WebLinksAddon())
   // Fan out to the broadcast group when this terminal is an armed member;
   // otherwise this is the only target, so behaviour is unchanged. onData fires
   // only for the terminal the user is typing in, so `id` is the source. Paste
@@ -159,6 +160,17 @@ function getOrCreate(id: string): Entry {
   // handled action also calls preventDefault(). Ctrl+C with no selection
   // returns true so the shell still receives SIGINT.
   const isMac = isMacPlatform()
+  // Make http/https URLs clickable. Mirror VS Code: only follow on Cmd+click
+  // (mac) / Ctrl+click (win/linux) so a plain click still selects text. Route to
+  // the OS default browser via the opener plugin; WebLinksAddon's regex only
+  // matches well-formed http(s), so openUrl always gets a valid URL. Loaded here
+  // (not beside FitAddon above) so the handler closure can capture `isMac`.
+  term.loadAddon(
+    new WebLinksAddon((event, uri) => {
+      if (!shouldFollowLink(event, isMac)) return
+      openUrl(uri).catch(console.warn)
+    })
+  )
   term.attachCustomKeyEventHandler((event) => {
     const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
     if (action === 'copy') {

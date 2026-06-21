@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { openUrl } from '@/tauri/opener'
 export { onAuthCallback } from '@/tauri/deeplink'
 
 export { openUrl }
