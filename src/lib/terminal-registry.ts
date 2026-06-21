@@ -163,7 +163,8 @@ function getOrCreate(id: string): Entry {
   // Make http/https URLs clickable. Mirror VS Code: only follow on Cmd+click
   // (mac) / Ctrl+click (win/linux) so a plain click still selects text. Route to
   // the OS default browser via the opener plugin; WebLinksAddon's regex only
-  // matches well-formed http(s), so openUrl always gets a valid URL.
+  // matches well-formed http(s), so openUrl always gets a valid URL. Loaded here
+  // (not beside FitAddon above) so the handler closure can capture `isMac`.
   term.loadAddon(
     new WebLinksAddon((event, uri) => {
       if (!shouldFollowLink(event, isMac)) return
