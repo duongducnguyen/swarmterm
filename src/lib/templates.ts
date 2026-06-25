@@ -6,9 +6,6 @@
 import claudeIcon from '@/assets/agents/claude-code.svg'
 import codexIcon from '@/assets/agents/codex.svg'
 import opencodeIcon from '@/assets/agents/opencode.svg'
-import aiderIcon from '@/assets/agents/aider.png'
-import cursorIcon from '@/assets/agents/cursor.svg'
-import geminiIcon from '@/assets/agents/gemini.svg'
 
 export interface WorkspaceTemplate {
   id: string
@@ -46,31 +43,6 @@ export const TEMPLATES: WorkspaceTemplate[] = [
     command: 'opencode',
     executable: 'opencode',
     icon: opencodeIcon
-  },
-  {
-    id: 'aider',
-    name: 'Aider',
-    description: 'AI pair programming in your terminal.',
-    command: 'aider',
-    executable: 'aider',
-    icon: aiderIcon
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor',
-    description: "Cursor's CLI coding agent.",
-    // The editor ships the agent as `cursor-agent`; plain `cursor` opens the GUI.
-    command: 'cursor-agent',
-    executable: 'cursor-agent',
-    icon: cursorIcon
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini CLI',
-    description: "Google's Gemini coding agent.",
-    command: 'gemini',
-    executable: 'gemini',
-    icon: geminiIcon
   },
   {
     id: 'terminal',

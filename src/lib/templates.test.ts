@@ -15,9 +15,6 @@ describe('TEMPLATES catalog', () => {
       'claude-code',
       'codex',
       'opencode',
-      'aider',
-      'cursor',
-      'gemini',
       'terminal'
     ])
   })
@@ -41,11 +38,8 @@ describe('TEMPLATES catalog', () => {
     expect(templateById('codex').command).toBe('codex')
   })
 
-  it('runs the bare CLI command for the other agents', () => {
+  it('runs the bare opencode CLI command', () => {
     expect(templateById('opencode').command).toBe('opencode')
-    expect(templateById('aider').command).toBe('aider')
-    expect(templateById('cursor').command).toBe('cursor-agent')
-    expect(templateById('gemini').command).toBe('gemini')
   })
 })
 
@@ -80,9 +74,6 @@ describe('isTemplateAvailable', () => {
     expect(templateById('claude-code').executable).toBe('claude')
     expect(templateById('codex').executable).toBe('codex')
     expect(templateById('opencode').executable).toBe('opencode')
-    expect(templateById('aider').executable).toBe('aider')
-    expect(templateById('cursor').executable).toBe('cursor-agent')
-    expect(templateById('gemini').executable).toBe('gemini')
     expect(templateById('terminal').executable).toBeUndefined()
   })
 
