@@ -10,7 +10,6 @@ export function GitPanel(): ReactElement {
   const loading = useGitStore((s) => s.loading)
   const error = useGitStore((s) => s.error)
   const commitInfo = useGitStore((s) => s.commitInfo)
-  const refresh = useGitStore((s) => s.refresh)
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees)
 
   // Subscribe to the focused terminal's CWD and re-fetch when it changes.
@@ -36,19 +35,7 @@ export function GitPanel(): ReactElement {
   }, [fetchWorktrees])
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-0.5">
-        <button
-          onClick={refresh}
-          className="rounded p-1 text-xs text-muted-foreground hover:text-foreground"
-          aria-label="Refresh"
-          title="Refresh"
-        >
-          ↺
-        </button>
-      </div>
-
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
       <WorktreeSelector />
 
       {loading && (

@@ -1,9 +1,23 @@
 // src/components/RightPanel/RightPanel.tsx
 import type { ReactElement } from 'react'
-import { useBrowserStore } from '@/store/browser-store'
+import { Eye, GitBranch, RotateCw, X } from 'lucide-react'
 import { useGitStore } from '@/store/git-store'
 import { BrowserColumn } from '@/components/Browser/BrowserColumn'
 import { GitPanel } from '@/components/Git/GitPanel'
+
+function RefreshButton(): ReactElement {
+  const refresh = useGitStore((s) => s.refresh)
+  return (
+    <button
+      onClick={refresh}
+      className="ml-auto flex items-center px-2 text-muted-foreground hover:text-foreground"
+      aria-label="Refresh"
+      title="Refresh git"
+    >
+      <RotateCw className="h-3.5 w-3.5" />
+    </button>
+  )
+}
 
 interface RightPanelProps {
   terminalIndexOf: (terminalId: string) => number
@@ -13,21 +27,13 @@ export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
   const mode = useGitStore((s) => s.mode)
   const setMode = useGitStore((s) => s.setMode)
   const setPanelOpen = useGitStore((s) => s.setPanelOpen)
-  const setVisible = useBrowserStore((s) => s.setVisible)
-  const browserTabs = useBrowserStore((s) => s.tabs)
-  const browserVisible = useBrowserStore((s) => s.visible)
 
   function handleClose(): void {
-    setVisible(false)
     setPanelOpen(false)
   }
 
   function handleBrowserTab(): void {
     setMode('browser')
-    // Re-show browser panel if it was hidden but still has tabs.
-    if (!browserVisible && browserTabs.length > 0) {
-      setVisible(true)
-    }
   }
 
   function handleGitTab(): void {
@@ -47,7 +53,8 @@ export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
               : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
-          🌐 Browser
+          <Eye className="h-3.5 w-3.5" />
+          Preview
         </button>
         <button
           onClick={handleGitTab}
@@ -58,14 +65,16 @@ export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
               : 'text-muted-foreground hover:text-foreground',
           ].join(' ')}
         >
-          🌿 Git
+          <GitBranch className="h-3.5 w-3.5" />
+          Git
         </button>
+        {mode === 'git' && <RefreshButton />}
         <button
           onClick={handleClose}
-          className="ml-auto px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="flex items-center px-2 text-muted-foreground hover:text-foreground"
           aria-label="Close panel"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 

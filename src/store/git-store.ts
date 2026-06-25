@@ -18,6 +18,8 @@ interface GitStore {
   currentCwd: string
   worktrees: WorktreeInfo[]
   selectedWorktreePath: string
+  /** Changed-file count per worktree path. Undefined while still loading that worktree. */
+  worktreeCounts: Map<string, number>
   changedFiles: ChangedFile[]
   commitInfo: CommitInfo | null
   expandedFiles: Set<string>
@@ -27,6 +29,7 @@ interface GitStore {
 
   setMode: (mode: 'browser' | 'git') => void
   setPanelOpen: (open: boolean) => void
+  togglePanel: () => void
   selectWorktree: (path: string) => void
   toggleFileExpand: (filePath: string) => void
   fetchWorktrees: (cwd: string) => Promise<void>
@@ -40,6 +43,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
   currentCwd: '',
   worktrees: [],
   selectedWorktreePath: '',
+  worktreeCounts: new Map(),
   changedFiles: [],
   commitInfo: null,
   expandedFiles: new Set(),
@@ -48,15 +52,25 @@ export const useGitStore = create<GitStore>((set, get) => ({
   error: null,
 
   setMode: (mode) => {
-    set({ mode })
+    // Picking a tab always reveals the panel (the tabs live inside it).
+    set({ mode, panelOpen: true })
     if (mode === 'git') {
-      set({ panelOpen: true })
       const { currentCwd } = get()
       if (currentCwd) void get().fetchWorktrees(currentCwd)
     }
   },
 
   setPanelOpen: (open) => set({ panelOpen: open }),
+
+  togglePanel: () => {
+    const open = !get().panelOpen
+    set({ panelOpen: open })
+    // Opening into Git mode triggers a fresh fetch for the focused terminal.
+    if (open && get().mode === 'git') {
+      const { currentCwd } = get()
+      if (currentCwd) void get().fetchWorktrees(currentCwd)
+    }
+  },
 
   selectWorktree: (path) => {
     set({
@@ -103,6 +117,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
       error: null,
       currentCwd: cwd,
       worktrees: [],
+      worktreeCounts: new Map(),
       changedFiles: [],
       commitInfo: null,
       expandedFiles: new Set(),
@@ -119,6 +134,18 @@ export const useGitStore = create<GitStore>((set, get) => ({
       const match = trees.find(t => cwd.startsWith(t.path)) ?? trees[0]
       set({ worktrees: trees, loading: false })
       get().selectWorktree(match.path)
+      // Fill per-worktree change counts in parallel (best-effort, non-blocking).
+      // Each result is merged as it arrives so the list updates progressively.
+      for (const wt of trees) {
+        void getChangedFiles(wt.path)
+          .then((files) => {
+            if (get().currentCwd !== cwd) return  // stale — a newer fetch is in flight
+            const next = new Map(get().worktreeCounts)
+            next.set(wt.path, files.length)
+            set({ worktreeCounts: next })
+          })
+          .catch(() => { /* leave count undefined on failure */ })
+      }
     } catch (e) {
       set({ error: String(e), loading: false })
     }

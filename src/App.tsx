@@ -45,14 +45,9 @@ export default function App(): ReactElement {
     setSettingsOpen(true)
   }, [])
 
-  const browserVisible = useBrowserStore((s) => s.visible)
-  const browserFullscreen = useBrowserStore((s) => s.fullscreen)
   const gitPanelOpen = useGitStore((s) => s.panelOpen)
-  const gitMode = useGitStore((s) => s.mode)
 
-  const rightPanelVisible = browserVisible || gitPanelOpen
-  // Only fullscreen when in browser mode (git mode has no fullscreen state).
-  const rightPanelFullscreen = browserFullscreen && gitMode === 'browser'
+  const rightPanelVisible = gitPanelOpen
 
   const noWorkspaces = workspaces.length === 0
   // Welcome shows when explicitly focused, or forced (uncloseable) when none exist.
@@ -79,13 +74,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     const isMac = isMacPlatform()
     const onKeyDown = (e: KeyboardEvent): void => {
-      // Esc exits browser fullscreen first — before any other handler.
-      if (e.key === 'Escape' && useBrowserStore.getState().fullscreen) {
-        e.preventDefault()
-        useBrowserStore.getState().setFullscreen(false)
-        return
-      }
-      // Esc also exits broadcast mode (which clears the group).
+      // Esc exits broadcast mode (which clears the group).
       if (e.key === 'Escape') {
         const st = useAppStore.getState()
         const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
@@ -129,7 +118,11 @@ export default function App(): ReactElement {
   // Wire deep-link preview:open events to browser tabs.
   useEffect(() => {
     const open = useBrowserStore.getState().openTab
-    const unlisten = onPreviewOpen((e) => open({ terminalId: e.terminalId, url: e.url }))
+    const unlisten = onPreviewOpen((e) => {
+      open({ terminalId: e.terminalId, url: e.url })
+      // Reveal the right panel in Preview mode so the new tab is actually seen.
+      useGitStore.getState().setMode('browser')
+    })
     return () => {
       void unlisten.then((fn) => fn())
     }
@@ -178,43 +171,36 @@ export default function App(): ReactElement {
             <WorkspaceTabs onNewWorkspace={openWelcome} />
 
             <div className="relative min-h-0 flex-1 bg-canvas">
-              {rightPanelFullscreen ? (
-                /* Fullscreen: RightPanel fills the entire content area. */
-                <div className="absolute inset-0">
-                  <RightPanel terminalIndexOf={terminalIndexOf} />
-                </div>
-              ) : (
-                /* Normal split: workspace(s) left, right panel (when visible). */
-                <Group
-                  key={rightPanelVisible ? 'split' : 'solo'}
-                  orientation="horizontal"
-                  className="h-full w-full"
-                  defaultLayout={rightPanelVisible ? { 'app-workspace': 58, 'app-browser': 42 } : { 'app-workspace': 100 }}
-                >
-                  <Panel id="app-workspace" minSize="20%" className="relative h-full w-full overflow-hidden">
-                    {workspaces.map((ws) => (
-                      <div
-                        key={ws.id}
-                        className="absolute inset-0"
-                        style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
-                      >
-                        <Workspace workspace={ws} />
-                      </div>
-                    ))}
-                  </Panel>
+              {/* Workspace(s) left, right panel (Preview/Git) when toggled on. */}
+              <Group
+                key={rightPanelVisible ? 'split' : 'solo'}
+                orientation="horizontal"
+                className="h-full w-full"
+                defaultLayout={rightPanelVisible ? { 'app-workspace': 70, 'app-browser': 30 } : { 'app-workspace': 100 }}
+              >
+                <Panel id="app-workspace" minSize="30%" className="relative h-full w-full overflow-hidden">
+                  {workspaces.map((ws) => (
+                    <div
+                      key={ws.id}
+                      className="absolute inset-0"
+                      style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
+                    >
+                      <Workspace workspace={ws} />
+                    </div>
+                  ))}
+                </Panel>
 
-                  {rightPanelVisible && (
-                    <>
-                      <Separator
-                        className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
-                      />
-                      <Panel id="app-browser" minSize="20%" className="h-full w-full overflow-hidden">
-                        <RightPanel terminalIndexOf={terminalIndexOf} />
-                      </Panel>
-                    </>
-                  )}
-                </Group>
-              )}
+                {rightPanelVisible && (
+                  <>
+                    <Separator
+                      className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
+                    />
+                    <Panel id="app-browser" minSize="20%" maxSize="50%" className="h-full w-full overflow-hidden">
+                      <RightPanel terminalIndexOf={terminalIndexOf} />
+                    </Panel>
+                  </>
+                )}
+              </Group>
 
               {showWelcome && (
                 <div className="absolute inset-0 z-20 overflow-y-auto bg-canvas">

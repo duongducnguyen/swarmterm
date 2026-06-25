@@ -40,7 +40,7 @@ export function TabStrip({ terminalIndexOf }: TabStripProps): ReactElement {
           <span>{tabLabel(tab, terminalIndexOf(tab.terminalId))}</span>
           <button
             type="button"
-            aria-label="Đóng tab"
+            aria-label="Close tab"
             onClick={(e) => {
               e.stopPropagation()
               closeTab(tab.id)
