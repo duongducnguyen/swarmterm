@@ -128,6 +128,54 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
     files
 }
 
+/// Parse the output of `git status --porcelain=v2 --branch` for commit metadata.
+pub fn parse_commit_info(output: &str) -> CommitInfo {
+    let mut head_sha = String::new();
+    let mut branch = String::new();
+    let mut ahead: Option<i32> = None;
+    let mut behind: Option<i32> = None;
+
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("# branch.oid ") {
+            head_sha = rest.chars().take(7).collect();
+        } else if let Some(rest) = line.strip_prefix("# branch.head ") {
+            branch = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
+            // format: "+N -M"
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            if parts.len() == 2 {
+                ahead = parts[0].trim_start_matches('+').parse().ok();
+                behind = parts[1].trim_start_matches('-').parse().ok();
+            }
+        }
+    }
+    CommitInfo { head_sha, branch, ahead, behind }
+}
+
+pub fn get_file_diff(worktree_path: &Path, file: &str) -> Result<String, String> {
+    let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
+    let out = Command::new("git")
+        .args(["-C", p, "diff", "HEAD", "--", file])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+pub fn get_commit_info(worktree_path: &Path) -> Result<CommitInfo, String> {
+    let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
+    let out = Command::new("git")
+        .args(["-C", p, "status", "--porcelain=v2", "--branch"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(parse_commit_info(&String::from_utf8_lossy(&out.stdout)))
+}
+
 pub fn get_changed_files(worktree_path: &Path) -> Result<Vec<ChangedFile>, String> {
     let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
 
@@ -222,5 +270,31 @@ detached
     #[test]
     fn test_parse_changed_files_empty() {
         assert_eq!(parse_changed_files("", "").len(), 0);
+    }
+
+    #[test]
+    fn test_parse_commit_info_with_upstream() {
+        let input = "\
+# branch.oid abc1234567890abcdef
+# branch.head feat/login
+# branch.upstream origin/feat/login
+# branch.ab +2 -0
+";
+        let result = parse_commit_info(input);
+        assert_eq!(result.head_sha, "abc1234");
+        assert_eq!(result.branch, "feat/login");
+        assert_eq!(result.ahead, Some(2));
+        assert_eq!(result.behind, Some(0));
+    }
+
+    #[test]
+    fn test_parse_commit_info_no_upstream() {
+        let input = "\
+# branch.oid abc1234567890abcdef
+# branch.head main
+";
+        let result = parse_commit_info(input);
+        assert_eq!(result.ahead, None);
+        assert_eq!(result.behind, None);
     }
 }
