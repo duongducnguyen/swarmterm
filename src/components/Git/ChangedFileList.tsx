@@ -51,9 +51,27 @@ function FileRow({ file }: { file: ChangedFile }): ReactElement {
 
 export function ChangedFileList(): ReactElement {
   const changedFiles = useGitStore((s) => s.changedFiles)
+  const loading = useGitStore((s) => s.loading)
+  const error = useGitStore((s) => s.error)
 
   const tracked = changedFiles.filter((f) => f.status !== '?')
   const untracked = changedFiles.filter((f) => f.status === '?')
+
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-8 text-xs text-muted-foreground">
+        Loading…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-3 py-4 text-xs text-destructive">
+        {error}
+      </div>
+    )
+  }
 
   if (changedFiles.length === 0) {
     return (
