@@ -6,7 +6,7 @@ import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
-import { BrowserColumn } from '@/components/Browser/BrowserColumn'
+import { RightPanel } from '@/components/RightPanel/RightPanel'
 import { Navbar } from '@/components/Navbar/Navbar'
 import { SettingsView } from '@/components/Settings/SettingsView'
 import { TitleBar } from '@/components/TitleBar/TitleBar'
@@ -14,6 +14,7 @@ import { Workspace } from '@/components/Workspace/Workspace'
 import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
+import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
@@ -46,6 +47,12 @@ export default function App(): ReactElement {
 
   const browserVisible = useBrowserStore((s) => s.visible)
   const browserFullscreen = useBrowserStore((s) => s.fullscreen)
+  const gitPanelOpen = useGitStore((s) => s.panelOpen)
+  const gitMode = useGitStore((s) => s.mode)
+
+  const rightPanelVisible = browserVisible || gitPanelOpen
+  // Only fullscreen when in browser mode (git mode has no fullscreen state).
+  const rightPanelFullscreen = browserFullscreen && gitMode === 'browser'
 
   const noWorkspaces = workspaces.length === 0
   // Welcome shows when explicitly focused, or forced (uncloseable) when none exist.
@@ -171,18 +178,18 @@ export default function App(): ReactElement {
             <WorkspaceTabs onNewWorkspace={openWelcome} />
 
             <div className="relative min-h-0 flex-1 bg-canvas">
-              {browserFullscreen ? (
-                /* Fullscreen: BrowserColumn fills the entire content area. */
+              {rightPanelFullscreen ? (
+                /* Fullscreen: RightPanel fills the entire content area. */
                 <div className="absolute inset-0">
-                  <BrowserColumn terminalIndexOf={terminalIndexOf} />
+                  <RightPanel terminalIndexOf={terminalIndexOf} />
                 </div>
               ) : (
-                /* Normal split: workspace(s) left, browser column right (when visible). */
+                /* Normal split: workspace(s) left, right panel (when visible). */
                 <Group
-                  key={browserVisible ? 'split' : 'solo'}
+                  key={rightPanelVisible ? 'split' : 'solo'}
                   orientation="horizontal"
                   className="h-full w-full"
-                  defaultLayout={browserVisible ? { 'app-workspace': 58, 'app-browser': 42 } : { 'app-workspace': 100 }}
+                  defaultLayout={rightPanelVisible ? { 'app-workspace': 58, 'app-browser': 42 } : { 'app-workspace': 100 }}
                 >
                   <Panel id="app-workspace" minSize="20%" className="relative h-full w-full overflow-hidden">
                     {workspaces.map((ws) => (
@@ -196,13 +203,13 @@ export default function App(): ReactElement {
                     ))}
                   </Panel>
 
-                  {browserVisible && (
+                  {rightPanelVisible && (
                     <>
                       <Separator
                         className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
                       />
                       <Panel id="app-browser" minSize="20%" className="h-full w-full overflow-hidden">
-                        <BrowserColumn terminalIndexOf={terminalIndexOf} />
+                        <RightPanel terminalIndexOf={terminalIndexOf} />
                       </Panel>
                     </>
                   )}
