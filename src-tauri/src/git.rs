@@ -74,8 +74,9 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 }
 
 pub fn list_worktrees(cwd: &Path) -> Result<Vec<WorktreeInfo>, String> {
+    let p = cwd.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
     let out = Command::new("git")
-        .args(["-C", cwd.to_str().unwrap_or("."), "worktree", "list", "--porcelain"])
+        .args(["-C", p, "worktree", "list", "--porcelain"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
     if !out.status.success() {
