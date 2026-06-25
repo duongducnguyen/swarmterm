@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { AccountIcon } from '@/components/Account/AccountIcon'
+import { getAppVersion } from '@/tauri/app'
 
 interface NavbarProps {
   /** Open the setup wizard to create a new workspace. */
@@ -57,6 +58,21 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
   const moveWorkspace = useAppStore((s) => s.moveWorkspace)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    // A missing version label must never break the navbar — swallow failures.
+    getAppVersion()
+      .then((v) => {
+        if (active) setVersion(v)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   const sensors = useSensors(
     useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } }),
@@ -158,6 +174,11 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
             <Settings className="h-4 w-4" />
             Settings
           </Button>
+          {version && (
+            <p className="px-2 py-1 text-[11px] text-muted-foreground">
+              v{version}
+            </p>
+          )}
         </div>
       </div>
     </nav>
