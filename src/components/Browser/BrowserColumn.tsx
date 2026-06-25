@@ -20,7 +20,7 @@ export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactEle
   const active = tabs.find((t) => t.id === activeTabId) ?? null
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background">
       <TabStrip terminalIndexOf={terminalIndexOf} />
       <AddressBar onReload={() => setReloadNonce((n) => n + 1)} />
       <div className="flex min-h-0 flex-1 flex-col">
