@@ -96,6 +96,32 @@ index abc..def 100644
     ])
   })
 
+  it('skips the "no newline at end of file" marker without shifting line numbers', () => {
+    const raw = `@@ -1,2 +1,2 @@
+-old
+\\ No newline at end of file
++new
+\\ No newline at end of file
+ after`
+    const lines = parseDiff(raw)
+    expect(lines).toEqual<DiffLine[]>([
+      { type: 'hunk', content: '@@ -1,2 +1,2 @@' },
+      { type: 'removed', content: 'old', oldLineNo: 1 },
+      { type: 'added', content: 'new', newLineNo: 1 },
+      { type: 'context', content: 'after', oldLineNo: 2, newLineNo: 2 },
+    ])
+  })
+
+  it('carries counters forward (does not throw) on an unmatched hunk header', () => {
+    const raw = `@@ garbage @@
++x`
+    const lines = parseDiff(raw)
+    expect(lines).toEqual<DiffLine[]>([
+      { type: 'hunk', content: '@@ garbage @@' },
+      { type: 'added', content: 'x', newLineNo: 0 },
+    ])
+  })
+
   it('handles the count-less hunk form (@@ -1 +1 @@)', () => {
     const raw = `@@ -1 +1 @@
 -old

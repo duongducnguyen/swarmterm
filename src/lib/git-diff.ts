@@ -23,6 +23,9 @@ export function parseDiff(raw: string): DiffLine[] {
   let newNo = 0
   for (const line of raw.split('\n')) {
     if (META_PREFIXES.some(p => line.startsWith(p))) continue
+    // "\ No newline at end of file" — a git marker, never real file content.
+    // Dropping it keeps the line counters from drifting on the lines that follow.
+    if (line.startsWith('\\')) continue
     if (line.startsWith('@@')) {
       const m = HUNK_RE.exec(line)
       if (m) {
