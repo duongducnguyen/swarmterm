@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
-import { useBrowserStore } from '@/store/browser-store'
+import { useGitStore } from '@/store/git-store'
 import { minimize, toggleMaximize, closeWindow, onMaximizedChanged } from '@/tauri/window'
 import { isMacPlatform } from '@/lib/platform'
 import { HeaderRecentSearch } from './HeaderRecentSearch'
@@ -39,9 +39,8 @@ export function TitleBar(): ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
   const visible = useNavbarVisibilityStore((s) => s.visible)
   const toggleNavbar = useNavbarVisibilityStore((s) => s.toggle)
-  const browserTabs = useBrowserStore((s) => s.tabs)
-  const browserVisible = useBrowserStore((s) => s.visible)
-  const toggleBrowser = useBrowserStore((s) => s.toggleVisible)
+  const rightPanelOpen = useGitStore((s) => s.panelOpen)
+  const toggleRightPanel = useGitStore((s) => s.togglePanel)
   const activeWorkspaceName = useAppStore((s) => {
     const active = s.workspaces.find((w) => w.id === s.activeWorkspaceId)
     return active?.name
@@ -116,17 +115,17 @@ export function TitleBar(): ReactElement {
             <Radio className="h-4 w-4" />
           </button>
         )}
-        {browserTabs.length > 0 && (
+        {!onHome && (
           <button
             type="button"
             data-tauri-drag-region="false"
-            aria-label="Bật/tắt cột Browser"
-            aria-pressed={browserVisible}
-            title="Bật/tắt cột Browser"
-            onClick={toggleBrowser}
+            aria-label="Toggle Preview / Git panel"
+            aria-pressed={rightPanelOpen}
+            title="Toggle Preview / Git panel"
+            onClick={toggleRightPanel}
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground mr-1"
           >
-            {browserVisible ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+            {rightPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
         )}
         {!isMac && (

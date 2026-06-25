@@ -20,8 +20,10 @@ export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactEle
   const active = tabs.find((t) => t.id === activeTabId) ?? null
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
-      <TabStrip terminalIndexOf={terminalIndexOf} />
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background">
+      {/* Tab strip only earns its row when there's more than one preview to switch
+          between — a single tab just duplicates the address bar below it. */}
+      {tabs.length > 1 && <TabStrip terminalIndexOf={terminalIndexOf} />}
       <AddressBar onReload={() => setReloadNonce((n) => n + 1)} />
       <div className="flex min-h-0 flex-1 flex-col">
         {active ? (
@@ -34,7 +36,7 @@ export function BrowserColumn({ terminalIndexOf }: BrowserColumnProps): ReactEle
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-            Không có tab nào đang mở
+            No tabs open
           </div>
         )}
       </div>

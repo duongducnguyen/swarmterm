@@ -63,3 +63,23 @@ pub fn list_available_shells() -> Vec<crate::shell::ShellEntry> {
 pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
     crate::agents::list_agents()
 }
+
+#[tauri::command]
+pub fn git_list_worktrees(cwd: String) -> Result<Vec<crate::git::WorktreeInfo>, String> {
+    crate::git::list_worktrees(std::path::Path::new(&cwd))
+}
+
+#[tauri::command]
+pub fn git_get_changed_files(worktree_path: String) -> Result<Vec<crate::git::ChangedFile>, String> {
+    crate::git::get_changed_files(std::path::Path::new(&worktree_path))
+}
+
+#[tauri::command]
+pub fn git_get_file_diff(worktree_path: String, file: String) -> Result<String, String> {
+    crate::git::get_file_diff(std::path::Path::new(&worktree_path), &file)
+}
+
+#[tauri::command]
+pub fn git_get_commit_info(worktree_path: String) -> Result<crate::git::CommitInfo, String> {
+    crate::git::get_commit_info(std::path::Path::new(&worktree_path))
+}

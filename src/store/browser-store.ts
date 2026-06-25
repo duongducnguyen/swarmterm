@@ -21,6 +21,7 @@ export interface BrowserStore {
   navigate: (tabId: string, url: string) => void
   setTitle: (tabId: string, title: string) => void
   toggleVisible: () => void
+  setVisible: (visible: boolean) => void
   setFullscreen: (fullscreen: boolean) => void
   goBack: (tabId: string) => void
   goForward: (tabId: string) => void
@@ -84,6 +85,7 @@ export const useBrowserStore = create<BrowserStore>((set) => ({
     set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)) })),
 
   toggleVisible: () => set((s) => ({ visible: !s.visible })),
+  setVisible: (visible) => set({ visible }),
 
   setFullscreen: (fullscreen) => set({ fullscreen }),
 
