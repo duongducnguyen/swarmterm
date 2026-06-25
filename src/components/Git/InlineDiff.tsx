@@ -32,7 +32,7 @@ export function InlineDiff({ raw }: InlineDiffProps): ReactElement {
   }
 
   return (
-    <div className="border-l-2 border-[#4ec994] bg-canvas py-1 font-mono text-xs">
+    <div className="overflow-x-auto border-l-2 border-[#4ec994] bg-canvas py-1 font-mono text-xs">
       {lines.map((line, i) => {
         if (line.type === 'hunk') {
           // Hunk header spans the full width — no gutter cells.
@@ -44,7 +44,7 @@ export function InlineDiff({ raw }: InlineDiffProps): ReactElement {
         }
         if (line.type === 'added') {
           return (
-            <div key={i} className="flex bg-[rgba(78,201,78,0.1)] text-[#4ec94e]">
+            <div key={i} className="flex w-max min-w-full bg-[rgba(78,201,78,0.1)] text-[#4ec94e]">
               <Gutter n={line.oldLineNo} />
               <Gutter n={line.newLineNo} />
               <span className="whitespace-pre">+{line.content}</span>
@@ -53,7 +53,7 @@ export function InlineDiff({ raw }: InlineDiffProps): ReactElement {
         }
         if (line.type === 'removed') {
           return (
-            <div key={i} className="flex bg-[rgba(241,76,76,0.1)] text-[#f14c4c]">
+            <div key={i} className="flex w-max min-w-full bg-[rgba(241,76,76,0.1)] text-[#f14c4c]">
               <Gutter n={line.oldLineNo} />
               <Gutter n={line.newLineNo} />
               <span className="whitespace-pre">-{line.content}</span>
@@ -62,7 +62,7 @@ export function InlineDiff({ raw }: InlineDiffProps): ReactElement {
         }
         // context
         return (
-          <div key={i} className="flex text-muted-foreground">
+          <div key={i} className="flex w-max min-w-full text-muted-foreground">
             <Gutter n={line.oldLineNo} />
             <Gutter n={line.newLineNo} />
             <span className="whitespace-pre">{line.content || ' '}</span>
