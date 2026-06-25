@@ -24,7 +24,6 @@ export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
 
   function handleBrowserTab(): void {
     setMode('browser')
-    setPanelOpen(false)
     // Re-show browser panel if it was hidden but still has tabs.
     if (!browserVisible && browserTabs.length > 0) {
       setVisible(true)

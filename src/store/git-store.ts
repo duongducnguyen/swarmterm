@@ -74,6 +74,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
           getChangedFiles(path),
           getCommitInfo(path),
         ])
+        if (get().selectedWorktreePath !== path) return  // selection changed — discard stale results
         set({ changedFiles: files, commitInfo: info, loading: false })
       } catch (e) {
         set({ error: String(e), loading: false })
@@ -109,6 +110,7 @@ export const useGitStore = create<GitStore>((set, get) => ({
     })
     try {
       const trees = await listWorktrees(cwd)
+      if (get().currentCwd !== cwd) return  // another fetch started — discard stale results
       if (trees.length === 0) {
         set({ worktrees: [], loading: false })
         return

@@ -122,8 +122,10 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
             ch.to_string()
         };
 
-        let (added, removed) = counts.get(&path).copied().unwrap_or((0, 0));
-        files.push(ChangedFile { path, status, added, removed });
+        // Renames are emitted as "new-path\told-path"; take the new path only.
+        let display_path = path.split('\t').next().unwrap_or(&path).to_string();
+        let (added, removed) = counts.get(&display_path).copied().unwrap_or((0, 0));
+        files.push(ChangedFile { path: display_path, status, added, removed });
     }
     files
 }
@@ -296,5 +298,21 @@ detached
         let result = parse_commit_info(input);
         assert_eq!(result.ahead, None);
         assert_eq!(result.behind, None);
+    }
+
+    #[test]
+    fn test_parse_changed_files_renamed() {
+        // git status --porcelain=v1 emits renames as "R  new-path\told-path"
+        let status = "R  src/new-name.ts\tsrc/old-name.ts\n";
+        // numstat lists only the new path for renames (splitn(3) gives parts[2] = "src/new-name.ts")
+        let numstat = "2\t1\tsrc/new-name.ts\n";
+        let result = parse_changed_files(status, numstat);
+        assert_eq!(result.len(), 1);
+        // Only the new (destination) path should be stored
+        assert_eq!(result[0].path, "src/new-name.ts");
+        assert_eq!(result[0].status, "R");
+        // Line counts should be associated with the new path
+        assert_eq!(result[0].added, 2);
+        assert_eq!(result[0].removed, 1);
     }
 }
