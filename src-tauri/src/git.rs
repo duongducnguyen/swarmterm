@@ -1,5 +1,6 @@
 // src-tauri/src/git.rs
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -87,8 +88,13 @@ pub fn list_worktrees(cwd: &Path) -> Result<Vec<WorktreeInfo>, String> {
 
 /// Parse `git status --porcelain=v1` + `git diff HEAD --numstat` output.
 /// Merges by file path: status letter from `status_out`, line counts from `numstat_out`.
+///
+/// Limitations:
+/// - Binary files produce `added = 0, removed = 0` (numstat emits `-\t-\tpath` for binaries).
+/// - Staged-new files (`A`) also produce `added = 0` because `git diff HEAD` omits files not
+///   yet in HEAD; only `git diff --cached` would capture their line counts.
 pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFile> {
-    let mut counts: std::collections::HashMap<String, (u32, u32)> = std::collections::HashMap::new();
+    let mut counts: HashMap<String, (u32, u32)> = HashMap::new();
     for line in numstat_out.lines() {
         let parts: Vec<&str> = line.splitn(3, '\t').collect();
         if parts.len() == 3 {
@@ -107,6 +113,7 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
         let status = if xy == "??" {
             "?".to_string()
         } else {
+            // X (index) takes priority over Y (working-tree); a file appears at most once per path.
             let ch = if xy.chars().next() != Some(' ') {
                 xy.chars().next().unwrap_or(' ')
             } else {
