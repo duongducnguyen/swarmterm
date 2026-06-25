@@ -175,7 +175,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
             Settings
           </Button>
           {version && (
-            <p className="px-2 py-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 border-t border-border pt-2 text-center text-[11px] tracking-wider text-muted-foreground/70">
               v{version}
             </p>
           )}
