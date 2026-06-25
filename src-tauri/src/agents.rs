@@ -1,9 +1,8 @@
-//! AI-agent CLI catalog + probing (`claude`, `codex`, `opencode`, `aider`,
-//! `cursor-agent`, `gemini`). Unlike `shell.rs`, the
-//! result is intentionally NOT cached: the renderer re-asks whenever it shows
-//! agent options (Welcome opens, pane agent dropdown opens), so a CLI
-//! installed while the app is running lights up without a restart. A probe is
-//! just a directory scan — a few ms at worst.
+//! AI-agent CLI catalog + probing (`claude`, `codex`, `opencode`). Unlike
+//! `shell.rs`, the result is intentionally NOT cached: the renderer re-asks
+//! whenever it shows agent options (Welcome opens, pane agent dropdown opens),
+//! so a CLI installed while the app is running lights up without a restart. A
+//! probe is just a directory scan — a few ms at worst.
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -25,10 +24,6 @@ const AGENTS: &[(&str, &str)] = &[
     ("claude-code", "claude"),
     ("codex", "codex"),
     ("opencode", "opencode"),
-    ("aider", "aider"),
-    // Cursor's terminal agent installs as `cursor-agent`; `cursor` is the GUI.
-    ("cursor", "cursor-agent"),
-    ("gemini", "gemini"),
 ];
 
 /// Probe every known agent CLI. Fresh scan on every call (no cache) — see
@@ -185,9 +180,6 @@ mod tests {
                 "claude-code",
                 "codex",
                 "opencode",
-                "aider",
-                "cursor",
-                "gemini"
             ]
         );
     }
