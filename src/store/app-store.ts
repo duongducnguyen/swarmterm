@@ -12,6 +12,7 @@ import {
   type LeafNode
 } from '@/lib/layout-tree'
 import type { ShellId } from '@/lib/terminal-pref'
+import { DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 
 /** A workspace: a named binary split-tree of terminal panes. */
 export interface Workspace {
@@ -31,7 +32,8 @@ export interface Workspace {
 export interface CreateWorkspaceConfig {
   cwd: string
   terminalCount: number
-  templateId: string
+  /** One agent id per pane, in build order. Shorter arrays pad with the plain terminal. */
+  agentIds: string[]
 }
 
 export interface AppState {
@@ -125,12 +127,15 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
   createWorkspace: (config) =>
     set((s) => {
-      // Every wizard-created leaf records the chosen agent; split-created ones don't.
+      // Stamp each pane with its agent id in build order; a short list (or one
+      // padded with no entry) falls back to the plain terminal. buildGridLayout
+      // calls makeWizardLeaf row-major, matching the allocateAgents fill order.
+      let paneIndex = 0
       const makeWizardLeaf = (): LeafNode => ({
         type: 'leaf',
         id: uid(),
         terminalId: uid(),
-        agentId: config.templateId
+        agentId: config.agentIds[paneIndex++] ?? DEFAULT_TEMPLATE_ID
       })
       const layout = buildGridLayout(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
