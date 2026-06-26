@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { Folder, FolderSearch, X } from 'lucide-react'
+import { Folder, FolderSearch, Minus, Plus, X } from 'lucide-react'
 import { gridFor, TERMINAL_COUNTS } from '@/lib/layout-tree'
-import { DEFAULT_TEMPLATE_ID, TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
+import { TEMPLATES, isTemplateAvailable } from '@/lib/templates'
+import { allocateAgents, clampCounts } from '@/lib/agent-allocation'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useAppStore } from '@/store/app-store'
 import { AgentIcon } from '@/components/AgentIcon'
@@ -26,7 +27,7 @@ export function Welcome(): ReactElement {
   const folder = useAppStore((s) => s.welcomeFolder)
   const setFolder = useAppStore((s) => s.setWelcomeFolder)
   const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
-  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID)
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [paletteOpen, setPaletteOpen] = useState(false)
   const recents = useRecentsStore((s) => s.recents)
   const addRecentFolder = useRecentsStore((s) => s.add)
@@ -48,18 +49,49 @@ export function Welcome(): ReactElement {
     void useAgentAvailabilityStore.getState().refresh()
   }, [])
 
-  // If the chosen template turns out to be uninstalled (probe resolved after
-  // the user clicked it), fall back to the always-available plain terminal.
-  useEffect(() => {
-    if (!isTemplateAvailable(templateById(templateId), availability)) {
-      setTemplateId(DEFAULT_TEMPLATE_ID)
-    }
-  }, [availability, templateId])
-
   const trimmedFolder = folder.trim()
   const { rows, cols } = gridFor(terminalCount)
   const hasMoreRecents = recents.length > RECENTS_COLLAPSED_COUNT
   const visibleRecents = recents.slice(0, RECENTS_COLLAPSED_COUNT)
+
+  const assigned = Object.values(counts).reduce((sum, n) => sum + n, 0)
+  const remaining = terminalCount - assigned
+
+  // Shrinking the terminal count can leave more allocated than fit — clamp down.
+  useEffect(() => {
+    setCounts((prev) => clampCounts(prev, terminalCount))
+  }, [terminalCount])
+
+  // Drop any allocation for an agent whose CLI turns out to be uninstalled
+  // (the probe can resolve after the user clicked +), mirroring the old reset.
+  useEffect(() => {
+    setCounts((prev) => {
+      const next: Record<string, number> = {}
+      for (const [id, n] of Object.entries(prev)) {
+        const t = TEMPLATES.find((x) => x.id === id)
+        if (t && isTemplateAvailable(t, availability)) next[id] = n
+      }
+      return next
+    })
+  }, [availability])
+
+  const adjust = (id: string, delta: number): void => {
+    setCounts((prev) => {
+      const current = prev[id] ?? 0
+      const next = current + delta
+      if (next <= 0) {
+        const { [id]: _drop, ...rest } = prev
+        return rest
+      }
+      // Derive the running total from `prev` (not the render-time `assigned`)
+      // so batched +clicks can't push the sum past the chosen terminal count.
+      if (delta > 0) {
+        const total = Object.values(prev).reduce((s, n) => s + n, 0)
+        if (total >= terminalCount) return prev
+      }
+      return { ...prev, [id]: next }
+    })
+  }
 
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
@@ -69,7 +101,11 @@ export function Welcome(): ReactElement {
   const submit = (): void => {
     if (trimmedFolder === '') return
     addRecentFolder(trimmedFolder)
-    createWorkspace({ cwd: trimmedFolder, terminalCount, templateId })
+    createWorkspace({
+      cwd: trimmedFolder,
+      terminalCount,
+      agentIds: allocateAgents(terminalCount, counts)
+    })
   }
 
   return (
@@ -152,41 +188,68 @@ export function Welcome(): ReactElement {
           </div>
         </Section>
 
-        <Section title="Template" hint="What each terminal runs on start">
-          {/* 4 columns on wide windows keeps the 7 templates to two rows, so the
-              whole form fits a 1080p window without scrolling. */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+        <Section
+          title="Agents"
+          hint="Pick how many of each to launch — any spare panes run a plain Terminal"
+          aside={`Assigned ${assigned} / ${terminalCount}`}
+        >
+          <>
+            {/* A card per template (the plain Terminal included), mirroring the
+                terminal-count tiles above so the form reads as one set of choices.
+                A card lights up once its count is non-zero, like a selected tile. */}
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {TEMPLATES.map((t) => {
               const available = isTemplateAvailable(t, availability)
+              const n = counts[t.id] ?? 0
               return (
-                <button
+                <div
                   key={t.id}
-                  type="button"
-                  disabled={!available}
-                  onClick={() => setTemplateId(t.id)}
                   className={cn(
-                    'min-w-0 rounded-lg border p-3 text-left transition-colors',
-                    !available && 'cursor-not-allowed border-border opacity-50',
-                    available &&
-                      (t.id === templateId
-                        ? 'border-ring bg-accent'
-                        : 'border-border hover:border-ring/50 hover:bg-accent/40')
+                    'flex flex-col gap-3 rounded-lg border p-3 transition-colors',
+                    n > 0 ? 'border-ring bg-accent' : 'border-border',
+                    !available && 'opacity-50'
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <AgentIcon template={t} className="h-5 w-5 shrink-0" />
-                    <div className="text-sm font-medium text-foreground">{t.name}</div>
+                    <span className="truncate text-sm font-medium text-foreground">{t.name}</span>
                   </div>
-                  <div
-                    className="mt-1 truncate text-xs text-muted-foreground"
-                    title={available ? t.description : undefined}
-                  >
-                    {available ? t.description : 'Not installed'}
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={!available || n === 0}
+                      onClick={() => adjust(t.id, -1)}
+                      aria-label={`Fewer ${t.name}`}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-[2ch] text-center text-base font-semibold tabular-nums">
+                      {available ? n : '—'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={!available || assigned >= terminalCount}
+                      onClick={() => adjust(t.id, 1)}
+                      aria-label={`More ${t.name}`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
-                </button>
+                  {!available && (
+                    <span className="text-center text-xs text-muted-foreground">Not installed</span>
+                  )}
+                </div>
               )
             })}
-          </div>
+            </div>
+            {remaining > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {remaining} spare {remaining === 1 ? 'pane runs' : 'panes run'} a plain Terminal.
+              </p>
+            )}
+          </>
         </Section>
 
         <div className="flex justify-end pt-2">

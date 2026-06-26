@@ -16,7 +16,7 @@ function freshStore(): StoreApi<AppStore> {
 const SINGLE_TERMINAL: CreateWorkspaceConfig = {
   cwd: 'C:/work',
   terminalCount: 1,
-  templateId: 'terminal'
+  agentIds: ['terminal']
 }
 
 /** A fresh store with one workspace already created from `config`. */
@@ -81,11 +81,31 @@ describe('createWorkspace', () => {
     expect(ws.focusedLeafId).toBe(collectLeaves(ws.layout)[0].id)
   })
 
-  it('puts the chosen agent id on every leaf for the Claude Code template', () => {
-    const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 4, templateId: 'claude-code' })
+  it('stamps each leaf with its agent id from the agentIds list', () => {
+    const store = storeWithWorkspace({
+      cwd: 'C:/work',
+      terminalCount: 4,
+      agentIds: ['claude-code', 'claude-code', 'codex', 'terminal']
+    })
     const leaves = collectLeaves(activeWorkspace(store).layout)
     expect(leaves).toHaveLength(4)
-    expect(leaves.every((l) => l.agentId === 'claude-code')).toBe(true)
+    expect(leaves.map((l) => l.agentId)).toEqual([
+      'claude-code',
+      'claude-code',
+      'codex',
+      'terminal'
+    ])
+  })
+
+  it('falls back to terminal when agentIds is shorter than the pane count', () => {
+    const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 4, agentIds: ['claude-code'] })
+    const leaves = collectLeaves(activeWorkspace(store).layout)
+    expect(leaves.map((l) => l.agentId)).toEqual([
+      'claude-code',
+      'terminal',
+      'terminal',
+      'terminal'
+    ])
   })
 
   it('sets the agent id to terminal for the Terminal template', () => {
@@ -261,7 +281,7 @@ describe('splitPane', () => {
   })
 
   it('creates the split pane with no agent override (plain shell)', () => {
-    const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 1, templateId: 'claude-code' })
+    const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 1, agentIds: ['claude-code'] })
     const original = activeWorkspace(store).focusedLeafId
     store.getState().splitPane(original, 'horizontal')
     const created = collectLeaves(activeWorkspace(store).layout).find((l) => l.id !== original)
