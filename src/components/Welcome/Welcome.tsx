@@ -54,8 +54,6 @@ export function Welcome(): ReactElement {
   const hasMoreRecents = recents.length > RECENTS_COLLAPSED_COUNT
   const visibleRecents = recents.slice(0, RECENTS_COLLAPSED_COUNT)
 
-  // Only templates with a CLI are allocatable; the plain Terminal is the filler.
-  const agentTemplates = TEMPLATES.filter((t) => t.executable)
   const assigned = Object.values(counts).reduce((sum, n) => sum + n, 0)
   const remaining = terminalCount - assigned
 
@@ -192,57 +190,66 @@ export function Welcome(): ReactElement {
 
         <Section
           title="Agents"
-          hint="Chọn số lượng mỗi agent — phần còn lại là Terminal thường"
-          aside={`Đã gán ${assigned} / ${terminalCount}`}
+          hint="Pick how many of each to launch — any spare panes run a plain Terminal"
+          aside={`Assigned ${assigned} / ${terminalCount}`}
         >
-          <div className="space-y-2">
-            {agentTemplates.map((t) => {
+          <>
+            {/* A card per template (the plain Terminal included), mirroring the
+                terminal-count tiles above so the form reads as one set of choices.
+                A card lights up once its count is non-zero, like a selected tile. */}
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {TEMPLATES.map((t) => {
               const available = isTemplateAvailable(t, availability)
               const n = counts[t.id] ?? 0
               return (
                 <div
                   key={t.id}
-                  aria-disabled={!available}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg border border-border p-3',
+                    'flex flex-col gap-3 rounded-lg border p-3 transition-colors',
+                    n > 0 ? 'border-ring bg-accent' : 'border-border',
                     !available && 'opacity-50'
                   )}
                 >
-                  <AgentIcon template={t} className="h-5 w-5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-foreground">{t.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {available ? t.description : 'Chưa cài'}
-                    </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <AgentIcon template={t} className="h-5 w-5 shrink-0" />
+                    <span className="truncate text-sm font-medium text-foreground">{t.name}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between">
                     <Button
                       variant="ghost"
                       size="icon"
                       disabled={!available || n === 0}
                       onClick={() => adjust(t.id, -1)}
-                      aria-label={`Giảm ${t.name}`}
+                      aria-label={`Fewer ${t.name}`}
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
-                    <span aria-live="polite" className="w-6 text-center text-sm font-medium tabular-nums">{n}</span>
+                    <span className="min-w-[2ch] text-center text-base font-semibold tabular-nums">
+                      {available ? n : '—'}
+                    </span>
                     <Button
                       variant="ghost"
                       size="icon"
                       disabled={!available || assigned >= terminalCount}
                       onClick={() => adjust(t.id, 1)}
-                      aria-label={`Tăng ${t.name}`}
+                      aria-label={`More ${t.name}`}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+                  {!available && (
+                    <span className="text-center text-xs text-muted-foreground">Not installed</span>
+                  )}
                 </div>
               )
             })}
-            <div className="px-1 text-xs text-muted-foreground">
-              Terminal (phần còn lại): <span className="tabular-nums">{Math.max(0, remaining)}</span>
             </div>
-          </div>
+            {remaining > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {remaining} spare {remaining === 1 ? 'pane runs' : 'panes run'} a plain Terminal.
+              </p>
+            )}
+          </>
         </Section>
 
         <div className="flex justify-end pt-2">

@@ -37,10 +37,11 @@ describe('allocateAgents', () => {
     expect(out).toEqual(['claude-code', 'claude-code'])
   })
 
-  it('ignores the plain terminal template in counts (it is only filler)', () => {
-    // A stray count for the non-executable terminal template must not be emitted twice.
-    expect(allocateAgents(2, { 'claude-code': 1, terminal: 5 })).toEqual([
+  it('counts the plain terminal template explicitly, then pads with terminal', () => {
+    // total 3: 1 claude + 1 explicit terminal, plus 1 terminal of padding.
+    expect(allocateAgents(3, { 'claude-code': 1, terminal: 1 })).toEqual([
       'claude-code',
+      'terminal',
       'terminal'
     ])
   })
@@ -64,5 +65,13 @@ describe('clampCounts', () => {
 
   it('drops negative or zero entries', () => {
     expect(clampCounts({ 'claude-code': -1, codex: 0 }, 4)).toEqual({})
+  })
+
+  it('includes the plain terminal in the running sum', () => {
+    // total 4: claude takes 2, terminal may only take the remaining 2.
+    expect(clampCounts({ 'claude-code': 2, terminal: 3 }, 4)).toEqual({
+      'claude-code': 2,
+      terminal: 2
+    })
   })
 })

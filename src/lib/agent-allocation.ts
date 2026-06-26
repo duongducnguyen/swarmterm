@@ -1,19 +1,17 @@
 /**
- * Turns a per-agent count map plus a terminal total into the ordered list of
+ * Turns a per-template count map plus a terminal total into the ordered list of
  * agent ids the Welcome form hands to `createWorkspace` — one id per pane.
  *
- * The plain Terminal template is never *allocated*; it is the filler that pads
- * any panes the user didn't assign to an agent. So callers pass counts only for
- * the installed agents (templates with an `executable`), and the remainder
- * comes back as `DEFAULT_TEMPLATE_ID`.
+ * Every template can be allocated explicitly, the plain Terminal included. Any
+ * panes the user left unassigned are padded with `DEFAULT_TEMPLATE_ID` (the
+ * plain Terminal), so the result is always exactly `total` ids long.
  */
 import { TEMPLATES, DEFAULT_TEMPLATE_ID } from './templates'
 
-/** Ordered agent ids of length `total`: agents in TEMPLATES order, then Terminal padding. */
+/** Ordered agent ids of length `total`: templates in TEMPLATES order, then Terminal padding. */
 export function allocateAgents(total: number, counts: Record<string, number>): string[] {
   const ids: string[] = []
   for (const t of TEMPLATES) {
-    if (!t.executable) continue // plain Terminal is filler, not an allocatable agent
     const n = Math.max(0, counts[t.id] ?? 0)
     for (let i = 0; i < n && ids.length < total; i++) ids.push(t.id)
   }
@@ -33,7 +31,6 @@ export function clampCounts(
   const out: Record<string, number> = {}
   let used = 0
   for (const t of TEMPLATES) {
-    if (!t.executable) continue
     const want = Math.max(0, counts[t.id] ?? 0)
     const allowed = Math.min(want, Math.max(0, total - used))
     if (allowed > 0) {
