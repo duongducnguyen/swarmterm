@@ -1,7 +1,7 @@
 use portable_pty::PtySize;
 use std::io::Write;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::pty::{AppState, CreateTerminalOptions, CreateTerminalResult, PtyOut};
 
@@ -65,21 +65,48 @@ pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
 }
 
 #[tauri::command]
-pub fn git_list_worktrees(cwd: String) -> Result<Vec<crate::git::WorktreeInfo>, String> {
-    crate::git::list_worktrees(std::path::Path::new(&cwd))
+pub async fn git_list_worktrees(
+    app: AppHandle,
+    cwd: String,
+) -> Result<Vec<crate::git::WorktreeInfo>, String> {
+    let home = app.path().home_dir().map_err(|e| format!("no home dir: {e}"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::list_worktrees(std::path::Path::new(&cwd), &home)
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
 }
 
 #[tauri::command]
-pub fn git_get_changed_files(worktree_path: String) -> Result<Vec<crate::git::ChangedFile>, String> {
-    crate::git::get_changed_files(std::path::Path::new(&worktree_path))
+pub async fn git_get_changed_files(
+    worktree_path: String,
+) -> Result<Vec<crate::git::ChangedFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::get_changed_files(std::path::Path::new(&worktree_path))
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
 }
 
 #[tauri::command]
-pub fn git_get_file_diff(worktree_path: String, file: String) -> Result<String, String> {
-    crate::git::get_file_diff(std::path::Path::new(&worktree_path), &file)
+pub async fn git_get_file_diff(
+    worktree_path: String,
+    file: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::get_file_diff(std::path::Path::new(&worktree_path), &file)
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
 }
 
 #[tauri::command]
-pub fn git_get_commit_info(worktree_path: String) -> Result<crate::git::CommitInfo, String> {
-    crate::git::get_commit_info(std::path::Path::new(&worktree_path))
+pub async fn git_get_commit_info(
+    worktree_path: String,
+) -> Result<crate::git::CommitInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::get_commit_info(std::path::Path::new(&worktree_path))
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
 }
