@@ -1,7 +1,7 @@
 use portable_pty::PtySize;
 use std::io::Write;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::pty::{AppState, CreateTerminalOptions, CreateTerminalResult, PtyOut};
 
@@ -65,8 +65,12 @@ pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
 }
 
 #[tauri::command]
-pub fn git_list_worktrees(cwd: String) -> Result<Vec<crate::git::WorktreeInfo>, String> {
-    crate::git::list_worktrees(std::path::Path::new(&cwd))
+pub fn git_list_worktrees(
+    app: AppHandle,
+    cwd: String,
+) -> Result<Vec<crate::git::WorktreeInfo>, String> {
+    let home = app.path().home_dir().map_err(|e| format!("no home dir: {e}"))?;
+    crate::git::list_worktrees(std::path::Path::new(&cwd), &home)
 }
 
 #[tauri::command]

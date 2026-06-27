@@ -86,16 +86,33 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
     results
 }
 
-pub fn list_worktrees(cwd: &Path) -> Result<Vec<WorktreeInfo>, String> {
+pub fn list_worktrees(cwd: &Path, home: &Path) -> Result<Vec<WorktreeInfo>, String> {
     let p = cwd.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
     let out = Command::new("git")
         .args(["-C", p, "worktree", "list", "--porcelain"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
+    // Non-zero exit means cwd is not inside any git repo — treat as "no git
+    // here" (empty list drives the panel's empty state) rather than surfacing
+    // a raw "fatal: not a git repository" error.
     if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        return Ok(Vec::new());
     }
-    Ok(parse_worktree_list(&String::from_utf8_lossy(&out.stdout)))
+    let trees = parse_worktree_list(&String::from_utf8_lossy(&out.stdout));
+    // The main worktree's path is the repo root. If that root is the home
+    // directory or an ancestor of it, the project folder merely sits inside an
+    // unrelated repo (e.g. home is itself a repo); return empty instead of
+    // attaching — this also avoids the heavy `git status`/`diff` calls that
+    // would otherwise run against the entire home tree downstream.
+    if let Some(main) = trees.iter().find(|w| w.is_main) {
+        let root = Path::new(&main.path);
+        let root_norm = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+        let home_norm = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+        if should_ignore_repo_root(&root_norm, &home_norm) {
+            return Ok(Vec::new());
+        }
+    }
+    Ok(trees)
 }
 
 /// Parse `git status --porcelain=v1` + `git diff HEAD --numstat` output.
