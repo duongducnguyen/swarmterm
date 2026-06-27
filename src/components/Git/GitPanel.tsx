@@ -10,6 +10,7 @@ export function GitPanel(): ReactElement {
   const loading = useGitStore((s) => s.loading)
   const error = useGitStore((s) => s.error)
   const worktrees = useGitStore((s) => s.worktrees)
+  const currentCwd = useGitStore((s) => s.currentCwd)
   const commitInfo = useGitStore((s) => s.commitInfo)
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees)
 
@@ -51,7 +52,10 @@ export function GitPanel(): ReactElement {
         </div>
       )}
 
-      {!loading && !error && worktrees.length === 0 && (
+      {/* `currentCwd` is empty only before the first fetch — gate on it so the
+          panel doesn't flash "Not a git repository" for one frame on mount
+          (initial state is loading:false, worktrees:[]) before the effect runs. */}
+      {!loading && !error && currentCwd !== '' && worktrees.length === 0 && (
         <div className="flex flex-1 items-center justify-center px-3 text-center text-xs text-muted-foreground">
           Not a git repository
         </div>
