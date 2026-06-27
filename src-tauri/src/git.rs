@@ -4,6 +4,19 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
+/// Build a `git` Command. On Windows, set CREATE_NO_WINDOW (0x08000000) so
+/// spawning git from the GUI (no-console) release binary doesn't flash a
+/// console window each call — same flag `shell.rs` uses for its wsl probe.
+fn git_command() -> Command {
+    let mut cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeInfo {
@@ -88,7 +101,7 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 
 pub fn list_worktrees(cwd: &Path, home: &Path) -> Result<Vec<WorktreeInfo>, String> {
     let p = cwd.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
-    let out = Command::new("git")
+    let out = git_command()
         .args(["-C", p, "worktree", "list", "--porcelain"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
@@ -185,7 +198,7 @@ pub fn parse_commit_info(output: &str) -> CommitInfo {
 
 pub fn get_file_diff(worktree_path: &Path, file: &str) -> Result<String, String> {
     let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
-    let out = Command::new("git")
+    let out = git_command()
         .args(["-C", p, "diff", "HEAD", "--", file])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
@@ -197,7 +210,7 @@ pub fn get_file_diff(worktree_path: &Path, file: &str) -> Result<String, String>
 
 pub fn get_commit_info(worktree_path: &Path) -> Result<CommitInfo, String> {
     let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
-    let out = Command::new("git")
+    let out = git_command()
         .args(["-C", p, "status", "--porcelain=v2", "--branch"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
@@ -210,7 +223,7 @@ pub fn get_commit_info(worktree_path: &Path) -> Result<CommitInfo, String> {
 pub fn get_changed_files(worktree_path: &Path) -> Result<Vec<ChangedFile>, String> {
     let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
 
-    let status_out = Command::new("git")
+    let status_out = git_command()
         .args(["-C", p, "status", "--porcelain=v1"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
@@ -219,7 +232,7 @@ pub fn get_changed_files(worktree_path: &Path) -> Result<Vec<ChangedFile>, Strin
     }
 
     // numstat may fail on a fresh repo with no commits — treat as empty
-    let numstat_out = Command::new("git")
+    let numstat_out = git_command()
         .args(["-C", p, "diff", "HEAD", "--numstat"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
