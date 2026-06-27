@@ -9,6 +9,7 @@ import { ChangedFileList } from './ChangedFileList'
 export function GitPanel(): ReactElement {
   const loading = useGitStore((s) => s.loading)
   const error = useGitStore((s) => s.error)
+  const worktrees = useGitStore((s) => s.worktrees)
   const commitInfo = useGitStore((s) => s.commitInfo)
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees)
 
@@ -50,7 +51,13 @@ export function GitPanel(): ReactElement {
         </div>
       )}
 
-      {!loading && !error && <ChangedFileList />}
+      {!loading && !error && worktrees.length === 0 && (
+        <div className="flex flex-1 items-center justify-center px-3 text-center text-xs text-muted-foreground">
+          Not a git repository
+        </div>
+      )}
+
+      {!loading && !error && worktrees.length > 0 && <ChangedFileList />}
 
       {commitInfo && (
         <div className="flex shrink-0 items-center gap-2 border-t border-border bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground">
