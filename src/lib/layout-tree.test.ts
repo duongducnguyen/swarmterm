@@ -9,6 +9,7 @@ import {
   closeLeaf,
   resizeSplit,
   updateLeaf,
+  swapLeaves,
   gridFor,
   buildBalancedTree,
   buildGridLayout
@@ -310,5 +311,58 @@ describe('updateLeaf', () => {
     updateLeaf(tree, 'B', { agentId: 'codex' })
     const s2 = tree.children[1] as SplitNode
     expect((s2.children[0] as LeafNode).agentId).toBeUndefined()
+  })
+})
+
+// --- swapLeaves ------------------------------------------------------------
+
+describe('swapLeaves', () => {
+  it('swaps two leaves under the same parent', () => {
+    const tree = split('S', 'horizontal', [leaf('A'), leaf('B')])
+    const result = swapLeaves(tree, 'A', 'B') as SplitNode
+    expect(result.children[0]).toEqual(leaf('B'))
+    expect(result.children[1]).toEqual(leaf('A'))
+  })
+
+  it('swaps leaves across different parents in a deep tree', () => {
+    // nestedTree: S1[ A, S2[ B, C ] ] — swap A (slot 0) and C (deep right)
+    const result = swapLeaves(nestedTree(), 'A', 'C') as SplitNode
+    expect(result.children[0]).toEqual(leaf('C'))
+    const s2 = result.children[1] as SplitNode
+    expect(s2.children[0]).toEqual(leaf('B')) // untouched sibling
+    expect(s2.children[1]).toEqual(leaf('A'))
+  })
+
+  it('carries the whole leaf node (terminalId and overrides) to the new slot', () => {
+    const a: LeafNode = { type: 'leaf', id: 'A', terminalId: 'term-A', agentId: 'claude-code', cwd: '/a' }
+    const b: LeafNode = { type: 'leaf', id: 'B', terminalId: 'term-B' }
+    const tree = split('S', 'horizontal', [a, b])
+    const result = swapLeaves(tree, 'A', 'B') as SplitNode
+    expect(result.children[0]).toEqual(b)
+    expect(result.children[1]).toEqual(a)
+  })
+
+  it('returns the same tree reference when both ids are equal', () => {
+    const tree = nestedTree()
+    expect(swapLeaves(tree, 'A', 'A')).toBe(tree)
+  })
+
+  it('returns the same tree reference when a leaf is missing', () => {
+    const tree = nestedTree()
+    expect(swapLeaves(tree, 'A', 'Z')).toBe(tree)
+  })
+
+  it('preserves split directions and sizes', () => {
+    const result = swapLeaves(nestedTree(), 'A', 'C') as SplitNode
+    expect(result.direction).toBe('horizontal')
+    expect(result.sizes).toEqual([50, 50])
+    expect((result.children[1] as SplitNode).sizes).toEqual([60, 40])
+  })
+
+  it('does not mutate its input', () => {
+    const tree = nestedTree()
+    const snapshot = structuredClone(tree)
+    swapLeaves(tree, 'A', 'C')
+    expect(tree).toEqual(snapshot)
   })
 })

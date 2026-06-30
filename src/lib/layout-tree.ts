@@ -74,6 +74,31 @@ export function collectLeaves(tree: LayoutNode): LeafNode[] {
 }
 
 /**
+ * Return a new tree with the two leaves `idA` and `idB` exchanged in place —
+ * each *whole* leaf node (its id, terminalId, and per-pane overrides) moves to
+ * the other's slot. Swapping whole nodes (not just payloads) means anything
+ * keyed by leaf id — focus, broadcast membership — follows the terminal for
+ * free, and the live xterm (keyed by terminalId in the registry) is only
+ * re-parented, never killed. Returns the input unchanged when `idA === idB` or
+ * either leaf is absent; never mutates its input.
+ */
+export function swapLeaves(tree: LayoutNode, idA: string, idB: string): LayoutNode {
+  if (idA === idB) return tree
+  const a = findLeaf(tree, idA)
+  const b = findLeaf(tree, idB)
+  if (!a || !b) return tree
+  function replace(node: LayoutNode): LayoutNode {
+    if (node.type === 'leaf') {
+      if (node.id === idA) return b!
+      if (node.id === idB) return a!
+      return node
+    }
+    return { ...node, children: [replace(node.children[0]), replace(node.children[1])] }
+  }
+  return replace(tree)
+}
+
+/**
  * Replace the leaf `leafId` with a new split node (`splitId`) holding the
  * original leaf and `newLeaf`, divided along `direction` at 50/50.
  * Returns the tree unchanged if `leafId` is not found.
