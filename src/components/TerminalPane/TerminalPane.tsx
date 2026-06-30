@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { LeafNode } from '@/lib/layout-tree'
 import { useAppStore } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
@@ -56,6 +57,18 @@ export function TerminalPane({
   const globalShellId = useTerminalPrefStore((s) => s.shellId)
 
   const { id: leafId, terminalId } = leaf
+
+  // Swap-DnD: the whole pane is a drop target; its header (below) is the drag
+  // handle. Both are keyed by leafId — dnd-kit keeps draggable and droppable
+  // namespaces separate, so the shared id is fine. The live terminal is keyed
+  // by terminalId in the registry, so a swap only re-parents this pane's DOM.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: leafId })
+  const {
+    setNodeRef: setDragRef,
+    listeners: dragListeners,
+    attributes: dragAttributes,
+    isDragging
+  } = useDraggable({ id: leafId })
 
   // Resolve each per-pane value against its default.
   const resolvedCwd = leaf.cwd ?? cwd
@@ -126,6 +139,7 @@ export function TerminalPane({
 
   return (
     <div
+      ref={setDropRef}
       onMouseDown={(e) => {
         // Alt+Click adds/removes this pane from the broadcast group instead of
         // focusing it. Ctrl/Cmd is avoided — xterm's WebLinks addon uses it.
@@ -144,7 +158,11 @@ export function TerminalPane({
             ? 'border-broadcast'
             : 'border-pane-border',
         // Dim non-members while the mode is on, so the group reads at a glance.
-        broadcastActive && !isBroadcastMember && 'opacity-60'
+        broadcastActive && !isBroadcastMember && 'opacity-60',
+        // Drop-target ring while another pane is dragged over this one.
+        isOver && !isDragging && 'ring-2 ring-inset ring-ring',
+        // Dim the pane being dragged, so the lifted ghost reads as the "real" one.
+        isDragging && 'opacity-40'
       )}
     >
       <PaneHeader
@@ -162,6 +180,9 @@ export function TerminalPane({
         broadcastActive={broadcastActive}
         isBroadcastMember={isBroadcastMember}
         onToggleBroadcast={() => toggleBroadcastMember(leafId)}
+        dragHandleRef={setDragRef}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
       />
 
       <div className="relative flex-1 overflow-hidden">

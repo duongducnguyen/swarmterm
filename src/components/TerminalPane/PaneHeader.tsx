@@ -1,4 +1,5 @@
 import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, Radio, X } from 'lucide-react'
+import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core'
 import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,6 +35,10 @@ interface PaneHeaderProps {
   isBroadcastMember: boolean
   /** Toggle this pane's membership in the broadcast group. */
   onToggleBroadcast: () => void
+  /** dnd-kit draggable wiring — makes the header bar the grab handle for swap-DnD. */
+  dragHandleRef: (element: HTMLElement | null) => void
+  dragListeners: DraggableSyntheticListeners
+  dragAttributes: DraggableAttributes
 }
 
 /** The per-pane header: agent / path / shell dropdowns plus split & close. */
@@ -45,8 +50,13 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
   const availability = useAgentAvailabilityStore((s) => s.availability)
 
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between border-b border-border bg-card px-1.5">
-      <div className="flex items-center gap-0.5">
+    <div
+      ref={props.dragHandleRef}
+      {...props.dragAttributes}
+      {...props.dragListeners}
+      className="flex h-7 shrink-0 cursor-grab items-center justify-between border-b border-border bg-card px-1.5 active:cursor-grabbing"
+    >
+      <div className="flex items-center gap-0.5" data-no-dnd>
         {/* Agent */}
         <DropdownMenu
           onOpenChange={(open) => {
@@ -112,7 +122,7 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         </DropdownMenu>
       </div>
 
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5" data-no-dnd>
         {props.broadcastActive && (
           <Button
             variant="ghost"
