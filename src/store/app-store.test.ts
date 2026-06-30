@@ -539,3 +539,58 @@ describe('selectWorkspaceByTerminalId', () => {
   })
 })
 
+// --- swapPanes ------------------------------------------------------------
+
+const TWO_PANES: CreateWorkspaceConfig = {
+  cwd: 'C:/w',
+  terminalCount: 2,
+  agentIds: ['claude-code', 'terminal']
+}
+
+describe('swapPanes', () => {
+  it('swaps the positions of two panes in the active workspace', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const [a, b] = collectLeaves(activeWorkspace(store).layout)
+    store.getState().swapPanes(a.id, b.id)
+    const after = collectLeaves(activeWorkspace(store).layout)
+    expect(after[0].id).toBe(b.id)
+    expect(after[1].id).toBe(a.id)
+    // The agent override travels with the node to its new slot.
+    expect(after[0].agentId).toBe(b.agentId)
+    expect(after[1].agentId).toBe(a.agentId)
+  })
+
+  it('keeps focusedLeafId on the dragged pane after the swap', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const [a, b] = collectLeaves(activeWorkspace(store).layout)
+    store.getState().setFocusedLeaf(a.id)
+    store.getState().swapPanes(a.id, b.id)
+    expect(activeWorkspace(store).focusedLeafId).toBe(a.id)
+  })
+
+  it('keeps broadcast membership with the moved pane', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const [a, b] = collectLeaves(activeWorkspace(store).layout)
+    store.getState().toggleBroadcastMember(a.id)
+    store.getState().swapPanes(a.id, b.id)
+    expect(activeWorkspace(store).broadcastLeafIds).toContain(a.id)
+    expect(collectLeaves(activeWorkspace(store).layout).some((l) => l.id === a.id)).toBe(true)
+  })
+
+  it('no-ops when the two ids are the same', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const before = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().swapPanes(before[0], before[0])
+    const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    expect(after).toEqual(before)
+  })
+
+  it('no-ops when a leaf id does not exist', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const before = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().swapPanes(before[0], 'nonexistent')
+    const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    expect(after).toEqual(before)
+  })
+})
+
