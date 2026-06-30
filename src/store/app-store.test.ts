@@ -539,3 +539,86 @@ describe('selectWorkspaceByTerminalId', () => {
   })
 })
 
+// --- reorderPane ----------------------------------------------------------
+
+const TWO_PANES: CreateWorkspaceConfig = {
+  cwd: 'C:/w',
+  terminalCount: 2,
+  agentIds: ['claude-code', 'terminal']
+}
+
+const FOUR_PANES: CreateWorkspaceConfig = {
+  cwd: 'C:/w',
+  terminalCount: 4,
+  agentIds: ['claude-code', 'terminal', 'codex', 'opencode']
+}
+
+describe('reorderPane', () => {
+  it('moves a pane to the target slot, reflowing the rest, in the active workspace', () => {
+    const store = storeWithWorkspace(FOUR_PANES)
+    const ids = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    // Drag pane 0 onto pane 2: [0,1,2,3] -> [1,2,0,3]
+    store.getState().reorderPane(ids[0], ids[2])
+    const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    expect(after).toEqual([ids[1], ids[2], ids[0], ids[3]])
+  })
+
+  it('swaps two panes when there are only two slots', () => {
+    const store = storeWithWorkspace(TWO_PANES)
+    const [a, b] = collectLeaves(activeWorkspace(store).layout)
+    store.getState().reorderPane(a.id, b.id)
+    const after = collectLeaves(activeWorkspace(store).layout)
+    expect(after[0].id).toBe(b.id)
+    expect(after[1].id).toBe(a.id)
+    // The agent override travels with the node to its new slot.
+    expect(after[0].agentId).toBe(b.agentId)
+    expect(after[1].agentId).toBe(a.agentId)
+  })
+
+  it('keeps focusedLeafId on the dragged pane after the reorder', () => {
+    const store = storeWithWorkspace(FOUR_PANES)
+    const ids = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().setFocusedLeaf(ids[0])
+    store.getState().reorderPane(ids[0], ids[2])
+    expect(activeWorkspace(store).focusedLeafId).toBe(ids[0])
+  })
+
+  it('keeps broadcast membership with the moved pane', () => {
+    const store = storeWithWorkspace(FOUR_PANES)
+    const ids = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().toggleBroadcastMember(ids[0])
+    store.getState().reorderPane(ids[0], ids[2])
+    expect(activeWorkspace(store).broadcastLeafIds).toContain(ids[0])
+    expect(collectLeaves(activeWorkspace(store).layout).some((l) => l.id === ids[0])).toBe(true)
+  })
+
+  it('no-ops when the two ids are the same', () => {
+    const store = storeWithWorkspace(FOUR_PANES)
+    const before = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().reorderPane(before[0], before[0])
+    const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    expect(after).toEqual(before)
+  })
+
+  it('no-ops when a leaf id does not exist', () => {
+    const store = storeWithWorkspace(FOUR_PANES)
+    const before = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().reorderPane(before[0], 'nonexistent')
+    const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    expect(after).toEqual(before)
+  })
+
+  it('leaves other (inactive) workspaces untouched', () => {
+    const store = storeWithWorkspace(FOUR_PANES) // workspace 1
+    const firstWsId = store.getState().activeWorkspaceId
+    const firstLayoutBefore = store.getState().workspaces.find((w) => w.id === firstWsId)!.layout
+    store.getState().createWorkspace(FOUR_PANES) // workspace 2 — now the active one
+    const ids = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
+    store.getState().reorderPane(ids[0], ids[2])
+    const firstLayoutAfter = store.getState().workspaces.find((w) => w.id === firstWsId)!.layout
+    // mapActive maps only the active workspace, so the inactive one's layout
+    // object is returned untouched — same reference, not just deep-equal.
+    expect(firstLayoutAfter).toBe(firstLayoutBefore)
+  })
+})
+

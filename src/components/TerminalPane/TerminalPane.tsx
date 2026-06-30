@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { LeafNode } from '@/lib/layout-tree'
 import { useAppStore } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
@@ -56,6 +57,27 @@ export function TerminalPane({
   const globalShellId = useTerminalPrefStore((s) => s.shellId)
 
   const { id: leafId, terminalId } = leaf
+
+  // Reorder-DnD: the whole pane root is both the drop target AND the draggable
+  // node (so the drag overlay assumes the pane's size); the header (below) is the
+  // grab handle via setActivatorNodeRef. Both keyed by leafId — dnd-kit keeps the
+  // draggable and droppable namespaces separate, so the shared id is fine. The
+  // live terminal is keyed by terminalId in the registry, so a reorder only
+  // re-parents this pane's DOM, never killing the shell.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: leafId })
+  const {
+    setNodeRef: setDragRef,
+    setActivatorNodeRef,
+    listeners: dragListeners,
+    attributes: dragAttributes,
+    isDragging
+  } = useDraggable({ id: leafId })
+
+  // The pane root carries both refs (drop target + draggable node).
+  const setPaneRef = (el: HTMLDivElement | null): void => {
+    setDropRef(el)
+    setDragRef(el)
+  }
 
   // Resolve each per-pane value against its default.
   const resolvedCwd = leaf.cwd ?? cwd
@@ -126,6 +148,7 @@ export function TerminalPane({
 
   return (
     <div
+      ref={setPaneRef}
       onMouseDown={(e) => {
         // Alt+Click adds/removes this pane from the broadcast group instead of
         // focusing it. Ctrl/Cmd is avoided — xterm's WebLinks addon uses it.
@@ -144,7 +167,11 @@ export function TerminalPane({
             ? 'border-broadcast'
             : 'border-pane-border',
         // Dim non-members while the mode is on, so the group reads at a glance.
-        broadcastActive && !isBroadcastMember && 'opacity-60'
+        broadcastActive && !isBroadcastMember && 'opacity-60',
+        // Drop-target ring while another pane is dragged over this one.
+        isOver && !isDragging && 'ring-2 ring-inset ring-ring',
+        // Dim the pane being dragged, so the lifted ghost reads as the "real" one.
+        isDragging && 'opacity-40'
       )}
     >
       <PaneHeader
@@ -162,6 +189,9 @@ export function TerminalPane({
         broadcastActive={broadcastActive}
         isBroadcastMember={isBroadcastMember}
         onToggleBroadcast={() => toggleBroadcastMember(leafId)}
+        dragHandleRef={setActivatorNodeRef}
+        dragListeners={dragListeners}
+        dragAttributes={dragAttributes}
       />
 
       <div className="relative flex-1 overflow-hidden">

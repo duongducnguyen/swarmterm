@@ -9,6 +9,7 @@ import {
   closeLeaf,
   resizeSplit,
   updateLeaf,
+  reorderLeaves,
   gridFor,
   buildBalancedTree,
   buildGridLayout
@@ -310,5 +311,78 @@ describe('updateLeaf', () => {
     updateLeaf(tree, 'B', { agentId: 'codex' })
     const s2 = tree.children[1] as SplitNode
     expect((s2.children[0] as LeafNode).agentId).toBeUndefined()
+  })
+})
+
+// --- reorderLeaves ---------------------------------------------------------
+
+// 2x2 grid fixture, leaves in depth-first order [A, B, C, D]:
+//   R  (vertical)   [30,70]
+//   ├─ T  (horizontal) [50,50] ├─ A └─ B
+//   └─ B2 (horizontal) [40,60] ├─ C └─ D
+function gridTree(): SplitNode {
+  return split(
+    'R',
+    'vertical',
+    [
+      split('T', 'horizontal', [leaf('A'), leaf('B')], [50, 50]),
+      split('B2', 'horizontal', [leaf('C'), leaf('D')], [40, 60])
+    ],
+    [30, 70]
+  )
+}
+
+describe('reorderLeaves', () => {
+  it('moves a leaf to the target slot, shifting the panes in between (reflow)', () => {
+    // Drag A (slot 0) onto C (slot 2): [A,B,C,D] -> [B,C,A,D]
+    const result = reorderLeaves(gridTree(), 'A', 'C')
+    expect(collectLeaves(result).map((l) => l.id)).toEqual(['B', 'C', 'A', 'D'])
+  })
+
+  it('reorders two leaves under the same parent', () => {
+    const result = reorderLeaves(gridTree(), 'A', 'B')
+    expect(collectLeaves(result).map((l) => l.id)).toEqual(['B', 'A', 'C', 'D'])
+  })
+
+  it('moves a later leaf earlier, shifting the rest right', () => {
+    // Drag D (slot 3) onto A (slot 0): [A,B,C,D] -> [D,A,B,C]
+    const result = reorderLeaves(gridTree(), 'D', 'A')
+    expect(collectLeaves(result).map((l) => l.id)).toEqual(['D', 'A', 'B', 'C'])
+  })
+
+  it('carries the whole leaf node (terminalId and overrides) to its new slot', () => {
+    const a: LeafNode = { type: 'leaf', id: 'A', terminalId: 'term-A', agentId: 'claude-code', cwd: '/a' }
+    const tree = split('S', 'horizontal', [a, leaf('B')])
+    const result = reorderLeaves(tree, 'A', 'B') as SplitNode
+    expect(result.children[1]).toEqual(a) // moved intact, overrides preserved
+  })
+
+  it('preserves the split skeleton (ids, directions, sizes)', () => {
+    const result = reorderLeaves(gridTree(), 'A', 'C') as SplitNode
+    expect(result.id).toBe('R')
+    expect(result.direction).toBe('vertical')
+    expect(result.sizes).toEqual([30, 70])
+    const top = result.children[0] as SplitNode
+    expect(top.id).toBe('T')
+    expect(top.direction).toBe('horizontal')
+    expect(top.sizes).toEqual([50, 50])
+    expect((result.children[1] as SplitNode).sizes).toEqual([40, 60])
+  })
+
+  it('returns the same tree reference when both ids are equal', () => {
+    const tree = gridTree()
+    expect(reorderLeaves(tree, 'A', 'A')).toBe(tree)
+  })
+
+  it('returns the same tree reference when a leaf is missing', () => {
+    const tree = gridTree()
+    expect(reorderLeaves(tree, 'A', 'Z')).toBe(tree)
+  })
+
+  it('does not mutate its input', () => {
+    const tree = gridTree()
+    const snapshot = structuredClone(tree)
+    reorderLeaves(tree, 'A', 'C')
+    expect(tree).toEqual(snapshot)
   })
 })
