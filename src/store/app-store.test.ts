@@ -592,5 +592,18 @@ describe('swapPanes', () => {
     const after = collectLeaves(activeWorkspace(store).layout).map((l) => l.id)
     expect(after).toEqual(before)
   })
+
+  it('leaves other (inactive) workspaces untouched', () => {
+    const store = storeWithWorkspace(TWO_PANES) // workspace 1
+    const firstWsId = store.getState().activeWorkspaceId
+    const firstLayoutBefore = store.getState().workspaces.find((w) => w.id === firstWsId)!.layout
+    store.getState().createWorkspace(TWO_PANES) // workspace 2 — now the active one
+    const [a, b] = collectLeaves(activeWorkspace(store).layout)
+    store.getState().swapPanes(a.id, b.id)
+    const firstLayoutAfter = store.getState().workspaces.find((w) => w.id === firstWsId)!.layout
+    // mapActive maps only the active workspace, so the inactive one's layout
+    // object is returned untouched — same reference, not just deep-equal.
+    expect(firstLayoutAfter).toBe(firstLayoutBefore)
+  })
 })
 
