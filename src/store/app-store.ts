@@ -6,7 +6,7 @@ import {
   findLeaf,
   resizeSplit,
   splitLeaf,
-  swapLeaves,
+  reorderLeaves,
   updateLeaf,
   type Direction,
   type LayoutNode,
@@ -63,7 +63,7 @@ export interface AppActions {
   setFocusedLeaf: (leafId: string) => void
   splitPane: (leafId: string, direction: Direction) => void
   closePane: (leafId: string) => void
-  swapPanes: (fromLeafId: string, toLeafId: string) => void
+  reorderPane: (fromLeafId: string, toLeafId: string) => void
   resizeSplitNode: (splitId: string, sizes: [number, number]) => void
   setPaneAgent: (leafId: string, agentId: string) => void
   setPaneCwd: (leafId: string, cwd: string | undefined) => void
@@ -249,15 +249,16 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     )
   },
 
-  // Swap two panes' positions in the active workspace. swapLeaves moves whole
-  // leaf nodes, so focusedLeafId and broadcastLeafIds (which point at leaf ids)
-  // stay valid and follow the terminals — no extra bookkeeping needed.
-  swapPanes: (fromLeafId, toLeafId) =>
+  // Reorder panes in the active workspace: move `fromLeafId` to `toLeafId`'s
+  // slot, reflowing the rest. reorderLeaves moves whole leaf nodes, so
+  // focusedLeafId and broadcastLeafIds (which point at leaf ids) stay valid and
+  // follow the terminals — no extra bookkeeping needed.
+  reorderPane: (fromLeafId, toLeafId) =>
     set((s) =>
       mapActive(s, (w) => {
         if (fromLeafId === toLeafId) return w
         if (!findLeaf(w.layout, fromLeafId) || !findLeaf(w.layout, toLeafId)) return w
-        return { ...w, layout: swapLeaves(w.layout, fromLeafId, toLeafId) }
+        return { ...w, layout: reorderLeaves(w.layout, fromLeafId, toLeafId) }
       })
     ),
 

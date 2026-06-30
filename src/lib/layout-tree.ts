@@ -74,28 +74,46 @@ export function collectLeaves(tree: LayoutNode): LeafNode[] {
 }
 
 /**
- * Return a new tree with the two leaves `idA` and `idB` exchanged in place —
- * each *whole* leaf node (its id, terminalId, and per-pane overrides) moves to
- * the other's slot. Swapping whole nodes (not just payloads) means anything
- * keyed by leaf id — focus, broadcast membership — follows the terminal for
- * free, and the live xterm (keyed by terminalId in the registry) is only
- * re-parented, never killed. Returns the input unchanged when `idA === idB` or
- * either leaf is absent; never mutates its input.
+ * Re-place `leaves` into the slots of `tree` in depth-first order — the split
+ * skeleton (every split's id, direction, and `sizes`) is preserved exactly;
+ * only which leaf sits in each slot changes. `leaves` must hold exactly one
+ * entry per leaf slot, in the order the slots are visited. `cursor` threads the
+ * read position through the recursion; callers pass `{ i: 0 }`.
  */
-export function swapLeaves(tree: LayoutNode, idA: string, idB: string): LayoutNode {
-  if (idA === idB) return tree
-  const a = findLeaf(tree, idA)
-  const b = findLeaf(tree, idB)
-  if (!a || !b) return tree
-  function replace(node: LayoutNode): LayoutNode {
-    if (node.type === 'leaf') {
-      if (node.id === idA) return b!
-      if (node.id === idB) return a!
-      return node
-    }
-    return { ...node, children: [replace(node.children[0]), replace(node.children[1])] }
+function placeLeaves(tree: LayoutNode, leaves: LeafNode[], cursor: { i: number }): LayoutNode {
+  if (tree.type === 'leaf') return leaves[cursor.i++]
+  return {
+    ...tree,
+    children: [
+      placeLeaves(tree.children[0], leaves, cursor),
+      placeLeaves(tree.children[1], leaves, cursor)
+    ]
   }
-  return replace(tree)
+}
+
+/**
+ * Move the leaf `fromId` to the slot currently held by `toId`, shifting the
+ * panes in between to fill (array-move over the depth-first leaf order), then
+ * re-place every leaf into the *unchanged* slot skeleton in the new order. This
+ * is reorder-with-reflow, not a 1:1 swap: dragging A onto C in `[A,B,C,D]`
+ * yields `[B,C,A,D]`, not `[C,B,A,D]`.
+ *
+ * Moving whole leaf nodes (with their `terminalId` and per-pane overrides) means
+ * anything keyed by leaf id — focus, broadcast membership — follows the terminal
+ * for free, and the live xterm (keyed by terminalId in the registry) is only
+ * re-parented between slots, never killed. Returns the input unchanged (same
+ * reference) when `fromId === toId` or either leaf is absent; never mutates it.
+ */
+export function reorderLeaves(tree: LayoutNode, fromId: string, toId: string): LayoutNode {
+  if (fromId === toId) return tree
+  const leaves = collectLeaves(tree)
+  const from = leaves.findIndex((l) => l.id === fromId)
+  const to = leaves.findIndex((l) => l.id === toId)
+  if (from === -1 || to === -1) return tree
+  const reordered = leaves.slice()
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+  return placeLeaves(tree, reordered, { i: 0 })
 }
 
 /**
