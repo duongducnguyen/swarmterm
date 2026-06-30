@@ -195,7 +195,7 @@ export interface GridShape {
   cols: number
 }
 
-/** Terminal counts the setup wizard offers, each mapped to a grid by `gridFor`. */
+/** The supported explicit terminal counts for the workspace composer tile selector. */
 export const TERMINAL_COUNTS = [1, 2, 4, 6, 8, 10, 12] as const
 
 const GRID_BY_COUNT: Record<number, GridShape> = {
@@ -259,4 +259,45 @@ export function buildGridLayout(
     rowNodes.push(buildBalancedTree(leaves, 'horizontal', makeSplitId))
   }
   return buildBalancedTree(rowNodes, 'vertical', makeSplitId)
+}
+
+/**
+ * Layout tree for `count` panes, derived from the squad size. Supported grid
+ * counts ({1,2,4,6,8,10,12}) get the uniform `buildGridLayout` grid; any other
+ * count is laid out as a roughly-square ragged grid (rows of ~⌈√count⌉, last
+ * row short), so 3/5/7/9/11 panes still read as a balanced 2-D arrangement
+ * rather than a thin single row. `makeLeaf` is called exactly `count` times,
+ * row-major, so the caller's agent order maps onto leaves in order.
+ */
+export function paneLayoutFor(
+  count: number,
+  makeLeaf: () => LeafNode,
+  makeSplitId: () => string
+): LayoutNode {
+  if (count < 1) throw new Error(`paneLayoutFor: count must be >= 1, got ${count}`)
+  if (GRID_BY_COUNT[count]) return buildGridLayout(count, makeLeaf, makeSplitId)
+
+  const cols = Math.ceil(Math.sqrt(count))
+  const rowNodes: LayoutNode[] = []
+  let made = 0
+  while (made < count) {
+    const inThisRow = Math.min(cols, count - made)
+    const leaves: LayoutNode[] = []
+    for (let c = 0; c < inThisRow; c++) {
+      leaves.push(makeLeaf())
+      made++
+    }
+    rowNodes.push(buildBalancedTree(leaves, 'horizontal', makeSplitId))
+  }
+  return buildBalancedTree(rowNodes, 'vertical', makeSplitId)
+}
+
+/**
+ * Human caption for a derived layout: `"1 pane"`, `"4 panes · 2×2"` for grid
+ * counts, or `"3 panes"` for ragged-grid counts (no clean R×C to name).
+ */
+export function layoutSummary(count: number): string {
+  const noun = count === 1 ? 'pane' : 'panes'
+  const grid = count === 1 ? undefined : GRID_BY_COUNT[count]
+  return grid ? `${count} ${noun} · ${grid.rows}×${grid.cols}` : `${count} ${noun}`
 }

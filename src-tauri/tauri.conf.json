@@ -14,9 +14,10 @@
       {
         "title": "Swarmterm",
         "width": 1280,
-        "height": 820,
+        "height": 920,
         "minWidth": 860,
         "minHeight": 560,
+        "center": true,
         "resizable": true,
         "decorations": false,
         "visible": false,
