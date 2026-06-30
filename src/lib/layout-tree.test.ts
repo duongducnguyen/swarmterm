@@ -12,7 +12,9 @@ import {
   reorderLeaves,
   gridFor,
   buildBalancedTree,
-  buildGridLayout
+  buildGridLayout,
+  paneLayoutFor,
+  layoutSummary
 } from './layout-tree'
 
 // --- helpers ---------------------------------------------------------------
@@ -384,5 +386,68 @@ describe('reorderLeaves', () => {
     const snapshot = structuredClone(tree)
     reorderLeaves(tree, 'A', 'C')
     expect(tree).toEqual(snapshot)
+  })
+})
+
+// --- paneLayoutFor -----------------------------------------------------------
+
+describe('paneLayoutFor', () => {
+  function makeLeafFactory(): () => LeafNode {
+    let n = 0
+    return () => ({ type: 'leaf', id: `L${n}`, terminalId: `T${n++}` })
+  }
+  function splitIds(): () => string {
+    let n = 0
+    return () => `s${n++}`
+  }
+
+  it('produces exactly `count` leaves for every count 1..12', () => {
+    for (let count = 1; count <= 12; count++) {
+      const tree = paneLayoutFor(count, makeLeafFactory(), splitIds())
+      expect(collectLeaves(tree)).toHaveLength(count)
+    }
+  })
+
+  it('matches buildGridLayout for supported grid counts', () => {
+    for (const count of [1, 2, 4, 6, 8, 10, 12]) {
+      const grid = buildGridLayout(count, makeLeafFactory(), splitIds())
+      const viaPane = paneLayoutFor(count, makeLeafFactory(), splitIds())
+      expect(viaPane).toEqual(grid)
+    }
+  })
+
+  it('builds a valid tree with the right leaf count for odd counts', () => {
+    for (const count of [3, 5, 7, 9, 11]) {
+      const tree = paneLayoutFor(count, makeLeafFactory(), splitIds())
+      expect(collectLeaves(tree)).toHaveLength(count)
+    }
+  })
+
+  it('calls makeLeaf row-major so leaves come out in build order', () => {
+    const tree = paneLayoutFor(5, makeLeafFactory(), splitIds())
+    expect(collectLeaves(tree).map((l) => l.terminalId)).toEqual(['T0', 'T1', 'T2', 'T3', 'T4'])
+  })
+
+  it('throws on a count below 1', () => {
+    expect(() => paneLayoutFor(0, makeLeafFactory(), splitIds())).toThrow()
+  })
+})
+
+// --- layoutSummary -----------------------------------------------------------
+
+describe('layoutSummary', () => {
+  it('captions a single pane without a grid shape', () => {
+    expect(layoutSummary(1)).toBe('1 pane')
+  })
+
+  it('captions grid counts with their grid shape', () => {
+    expect(layoutSummary(2)).toBe('2 panes · 1×2')
+    expect(layoutSummary(4)).toBe('4 panes · 2×2')
+    expect(layoutSummary(12)).toBe('12 panes · 3×4')
+  })
+
+  it('omits the grid shape for non-grid counts', () => {
+    expect(layoutSummary(3)).toBe('3 panes')
+    expect(layoutSummary(5)).toBe('5 panes')
   })
 })

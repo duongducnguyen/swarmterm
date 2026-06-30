@@ -19,6 +19,11 @@ const SINGLE_TERMINAL: CreateWorkspaceConfig = {
   agentIds: ['terminal']
 }
 
+/** N plain-terminal panes — the agentIds a "create N panes" test wants. */
+function panes(n: number): string[] {
+  return Array.from({ length: n }, () => 'terminal')
+}
+
 /** A fresh store with one workspace already created from `config`. */
 function storeWithWorkspace(config: CreateWorkspaceConfig = SINGLE_TERMINAL): StoreApi<AppStore> {
   const store = freshStore()
@@ -71,12 +76,12 @@ describe('createWorkspace', () => {
   })
 
   it('builds the requested number of terminal panes', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 6 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 6, agentIds: panes(6) })
     expect(collectLeaves(activeWorkspace(store).layout)).toHaveLength(6)
   })
 
   it('focuses the first pane', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     const ws = activeWorkspace(store)
     expect(ws.focusedLeafId).toBe(collectLeaves(ws.layout)[0].id)
   })
@@ -97,25 +102,28 @@ describe('createWorkspace', () => {
     ])
   })
 
-  it('falls back to terminal when agentIds is shorter than the pane count', () => {
-    const store = storeWithWorkspace({ cwd: 'C:/work', terminalCount: 4, agentIds: ['claude-code'] })
-    const leaves = collectLeaves(activeWorkspace(store).layout)
-    expect(leaves.map((l) => l.agentId)).toEqual([
-      'claude-code',
-      'terminal',
-      'terminal',
-      'terminal'
-    ])
-  })
-
   it('sets the agent id to terminal for the Terminal template', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2, agentIds: panes(2) })
     const leaves = collectLeaves(activeWorkspace(store).layout)
     expect(leaves.every((l) => l.agentId === 'terminal')).toBe(true)
   })
 
+  it('falls back to terminal when agentIds shorter than pane count', () => {
+    const store = storeWithWorkspace({
+      cwd: 'C:/work',
+      terminalCount: 4,
+      agentIds: ['claude-code', 'claude-code']
+    })
+    const leaves = collectLeaves(activeWorkspace(store).layout)
+    expect(leaves).toHaveLength(4)
+    expect(leaves[0].agentId).toBe('claude-code')
+    expect(leaves[1].agentId).toBe('claude-code')
+    expect(leaves[2].agentId).toBe('terminal')
+    expect(leaves[3].agentId).toBe('terminal')
+  })
+
   it('gives each pane a distinct terminalId', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 8 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 8, agentIds: panes(8) })
     const ids = collectLeaves(activeWorkspace(store).layout).map((l) => l.terminalId)
     expect(new Set(ids).size).toBe(8)
   })
@@ -434,14 +442,14 @@ describe('welcome state', () => {
 
 describe('broadcast group', () => {
   it('a new workspace starts with broadcast off and an empty group', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     const ws = activeWorkspace(store)
     expect(ws.broadcastActive).toBe(false)
     expect(ws.broadcastLeafIds).toEqual([])
   })
 
   it('toggleBroadcast turns on and selects every pane', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast()
     const ws = activeWorkspace(store)
     const all = collectLeaves(ws.layout).map((l) => l.id)
@@ -450,7 +458,7 @@ describe('broadcast group', () => {
   })
 
   it('toggleBroadcast again turns off and clears the group', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast()
     store.getState().toggleBroadcast()
     const ws = activeWorkspace(store)
@@ -459,7 +467,7 @@ describe('broadcast group', () => {
   })
 
   it('toggleBroadcastMember removes a member that is present', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast() // selects all
     const target = collectLeaves(activeWorkspace(store).layout)[0].id
     store.getState().toggleBroadcastMember(target)
@@ -467,7 +475,7 @@ describe('broadcast group', () => {
   })
 
   it('toggleBroadcastMember adds a member that is absent', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast()
     const target = collectLeaves(activeWorkspace(store).layout)[0].id
     store.getState().toggleBroadcastMember(target) // remove
@@ -476,7 +484,7 @@ describe('broadcast group', () => {
   })
 
   it('toggleBroadcastMember adds a member even while broadcast mode is off', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     const target = collectLeaves(activeWorkspace(store).layout)[0].id
     // Mode is off (never toggled on). Editing the group is still allowed.
     store.getState().toggleBroadcastMember(target)
@@ -485,7 +493,7 @@ describe('broadcast group', () => {
   })
 
   it('toggleBroadcastMember ignores an unknown leaf id', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2, agentIds: panes(2) })
     store.getState().toggleBroadcast()
     const before = activeWorkspace(store).broadcastLeafIds.length
     store.getState().toggleBroadcastMember('nope')
@@ -493,7 +501,7 @@ describe('broadcast group', () => {
   })
 
   it('selectAllBroadcast sets the group to every pane', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast()
     store.getState().clearBroadcast()
     store.getState().selectAllBroadcast()
@@ -504,7 +512,7 @@ describe('broadcast group', () => {
   })
 
   it('clearBroadcast empties the group and leaves the mode flag unchanged', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 4, agentIds: panes(4) })
     store.getState().toggleBroadcast()
     const activeBefore = activeWorkspace(store).broadcastActive
     store.getState().clearBroadcast()
@@ -527,7 +535,7 @@ describe('broadcast group', () => {
 
 describe('selectWorkspaceByTerminalId', () => {
   it('finds the workspace whose layout contains the terminalId', () => {
-    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2 })
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2, agentIds: panes(2) })
     const ws = activeWorkspace(store)
     const termId = collectLeaves(ws.layout)[0].terminalId
     expect(selectWorkspaceByTerminalId(store.getState(), termId)?.id).toBe(ws.id)

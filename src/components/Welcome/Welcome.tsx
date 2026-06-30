@@ -1,7 +1,12 @@
-import { useEffect, useState, type ReactElement } from 'react'
-import { Folder, FolderSearch, Minus, Plus, X } from 'lucide-react'
-import { gridFor, TERMINAL_COUNTS } from '@/lib/layout-tree'
-import { TEMPLATES, isTemplateAvailable } from '@/lib/templates'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { Folder, FolderSearch, X, Minus, Plus } from 'lucide-react'
+import {
+  TEMPLATES,
+  DEFAULT_TEMPLATE_ID,
+  isTemplateAvailable,
+  templateById
+} from '@/lib/templates'
+import { TERMINAL_COUNTS, layoutSummary } from '@/lib/layout-tree'
 import { allocateAgents, clampCounts } from '@/lib/agent-allocation'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useAppStore } from '@/store/app-store'
@@ -11,87 +16,77 @@ import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
-import { RecentFoldersPalette } from './RecentFoldersPalette'
+import { LayoutPreview } from './LayoutPreview'
 
-/** How many recents show before the "More…" toggle reveals the rest. */
-const RECENTS_COLLAPSED_COUNT = 5
+const DEFAULT_TERMINAL_COUNT = 2
+/** Cap for recent folder rows kept in the list; the list area scrolls if they
+ *  exceed the column height, so this is generous (fills the left column). */
+const MAX_RECENTS = 50
+
+/** Templates that run an AI agent CLI. Plain Terminal (command: null) is
+ *  excluded here because it fills the remainder automatically via allocateAgents. */
+const CODING_TEMPLATES = TEMPLATES.filter((t) => t.command !== null)
 
 /**
- * Welcome page shown in place of a workspace while creating one (or when none
- * exist yet). A branded header plus an inline "Start a workspace" form: pick a
- * working folder, a terminal-grid size, and a template. Replaces the old modal
- * setup wizard; creating a workspace closes Welcome via the store.
+ * Welcome page shown while creating a workspace (or when none exist). A
+ * two-panel composer: left column picks a working folder and shows recent
+ * folders; right column sets the terminal count via tiles, lets the user
+ * assign AI agent quantities via steppers, shows a live layout preview, and
+ * has the Create button. Creating a workspace closes Welcome via the store.
  */
 export function Welcome(): ReactElement {
   const createWorkspace = useAppStore((s) => s.createWorkspace)
   const folder = useAppStore((s) => s.welcomeFolder)
   const setFolder = useAppStore((s) => s.setWelcomeFolder)
-  const [terminalCount, setTerminalCount] = useState<number>(TERMINAL_COUNTS[0])
-  const [counts, setCounts] = useState<Record<string, number>>({})
-  const [paletteOpen, setPaletteOpen] = useState(false)
   const recents = useRecentsStore((s) => s.recents)
   const addRecentFolder = useRecentsStore((s) => s.add)
   const removeRecentFolder = useRecentsStore((s) => s.remove)
   const availability = useAgentAvailabilityStore((s) => s.availability)
 
-  // Pre-fill the home directory on mount, unless a folder is already chosen
-  // (e.g. picked from the title-bar search before Welcome mounted).
+  const [terminalCount, setTerminalCount] = useState<number>(DEFAULT_TERMINAL_COUNT)
+  // Optimistic seed: 1 Claude Code assigned until the probe says it's not installed.
+  const [counts, setCounts] = useState<Record<string, number>>({ 'claude-code': 1 })
+  const seededRef = useRef(false)
+
+  // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
     void getHomeDir().then((home) => {
       if (useAppStore.getState().welcomeFolder === '') setFolder(home)
     })
   }, [setFolder])
 
-  // Re-probe installed agent CLIs every time Welcome is shown (it mounts
-  // fresh each time), so a CLI installed while the app runs is picked up
-  // without a restart.
+  // Re-probe installed agent CLIs every time Welcome mounts so a CLI installed
+  // while the app runs is picked up without a restart.
   useEffect(() => {
     void useAgentAvailabilityStore.getState().refresh()
   }, [])
 
-  const trimmedFolder = folder.trim()
-  const { rows, cols } = gridFor(terminalCount)
-  const hasMoreRecents = recents.length > RECENTS_COLLAPSED_COUNT
-  const visibleRecents = recents.slice(0, RECENTS_COLLAPSED_COUNT)
-
-  const assigned = Object.values(counts).reduce((sum, n) => sum + n, 0)
-  const remaining = terminalCount - assigned
-
-  // Shrinking the terminal count can leave more allocated than fit — clamp down.
+  // Correct the seed once the availability probe resolves: if claude-code
+  // is not installed, clear the optimistic assignment. Runs once only — the
+  // seededRef guard prevents fighting the user's subsequent edits.
   useEffect(() => {
-    setCounts((prev) => clampCounts(prev, terminalCount))
-  }, [terminalCount])
-
-  // Drop any allocation for an agent whose CLI turns out to be uninstalled
-  // (the probe can resolve after the user clicked +), mirroring the old reset.
-  useEffect(() => {
-    setCounts((prev) => {
-      const next: Record<string, number> = {}
-      for (const [id, n] of Object.entries(prev)) {
-        const t = TEMPLATES.find((x) => x.id === id)
-        if (t && isTemplateAvailable(t, availability)) next[id] = n
-      }
-      return next
-    })
+    if (seededRef.current) return
+    seededRef.current = true
+    const claude = TEMPLATES.find((t) => t.id === 'claude-code')
+    if (claude && !isTemplateAvailable(claude, availability)) {
+      setCounts({})
+    }
   }, [availability])
 
-  const adjust = (id: string, delta: number): void => {
-    setCounts((prev) => {
-      const current = prev[id] ?? 0
-      const next = current + delta
-      if (next <= 0) {
-        const { [id]: _drop, ...rest } = prev
-        return rest
-      }
-      // Derive the running total from `prev` (not the render-time `assigned`)
-      // so batched +clicks can't push the sum past the chosen terminal count.
-      if (delta > 0) {
-        const total = Object.values(prev).reduce((s, n) => s + n, 0)
-        if (total >= terminalCount) return prev
-      }
-      return { ...prev, [id]: next }
-    })
+  const totalAssigned = Object.values(counts).reduce((a, b) => a + b, 0)
+
+  const changeTerminalCount = (next: number): void => {
+    setTerminalCount(next)
+    // Clamp assigned counts so they never exceed the new terminal total.
+    setCounts((c) => clampCounts(c, next))
   }
+
+  // Ordered agent ids — drives both the layout preview and createWorkspace.
+  // Templates appear in TEMPLATES order, unassigned slots fill with 'terminal'.
+  const agentIds = allocateAgents(terminalCount, counts)
+
+  const trimmedFolder = folder.trim()
+  const canCreate = trimmedFolder !== ''
 
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
@@ -99,29 +94,58 @@ export function Welcome(): ReactElement {
   }
 
   const submit = (): void => {
-    if (trimmedFolder === '') return
+    if (!canCreate) return
     addRecentFolder(trimmedFolder)
-    createWorkspace({
-      cwd: trimmedFolder,
-      terminalCount,
-      agentIds: allocateAgents(terminalCount, counts)
-    })
+    createWorkspace({ cwd: trimmedFolder, terminalCount, agentIds })
   }
 
+  // Document-level Ctrl/⌘+Enter shortcut — fires even when nothing in the
+  // composer has focus (nothing is focused on first mount). Re-registered
+  // whenever inputs change to avoid stale-closure bugs.
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        submit()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [trimmedFolder, terminalCount, counts]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build caption: "4 panes · 2×2 · 2 AI agents · 2 Terminals"
+  const aiCount = agentIds.filter((id) => id !== DEFAULT_TEMPLATE_ID).length
+  const termCount = agentIds.length - aiCount
+  const aiClause =
+    aiCount > 0 ? ` · ${aiCount} ${aiCount === 1 ? 'AI agent' : 'AI agents'}` : ''
+  const termClause = ` · ${termCount} ${termCount === 1 ? 'Terminal' : 'Terminals'}`
+  const caption = `${layoutSummary(terminalCount)}${aiClause}${termClause}`
+
+  // Unique agent types present in the layout, in first-appearance order —
+  // so the legend exactly matches what the preview shows.
+  const legendIds = [...new Set(agentIds)]
+
+  const visibleRecents = recents.slice(0, MAX_RECENTS)
+
   return (
-    <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-10 py-8">
-      <header>
-        <h1 className="text-4xl font-semibold tracking-tight text-foreground">Swarmterm</h1>
+    <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center px-10 py-6">
+      <header className="mb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Swarmterm</h1>
         <p className="mt-1 text-base text-muted-foreground">Run many terminals, side by side.</p>
       </header>
 
-      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Start a workspace
-      </h2>
+      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)]">
+        {/* LEFT: COMPOSE — working folder + recent folders */}
+        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-4">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Compose
+          </h2>
 
-      <div className="mt-4 space-y-5">
-        <Section title="Working folder" hint="Where your terminals will start">
-          <>
+          {/* Working folder */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Working folder
+            </label>
             <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-ring">
               <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
               <input
@@ -136,214 +160,216 @@ export function Welcome(): ReactElement {
                 Browse
               </Button>
             </div>
-            {recents.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-1 text-xs font-medium text-muted-foreground">Recent</div>
-                <div className="space-y-px">
-                  {visibleRecents.map((path) => (
-                    <RecentRow
-                      key={path}
-                      path={path}
-                      onUse={() => setFolder(path)}
-                      onRemove={() => removeRecentFolder(path)}
-                    />
-                  ))}
-                </div>
-                {hasMoreRecents && (
-                  <button
-                    type="button"
-                    onClick={() => setPaletteOpen(true)}
-                    className="mt-1 px-2 py-1 text-xs font-medium text-primary hover:underline"
-                  >
-                    More…
-                  </button>
-                )}
-              </div>
-            )}
-          </>
-        </Section>
-
-        <Section
-          title="How many terminals?"
-          hint="Tap a tile to choose a layout"
-          aside={`${terminalCount} terminal${terminalCount > 1 ? 's' : ''} · ${rows}×${cols} grid`}
-        >
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-2">
-            {TERMINAL_COUNTS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setTerminalCount(n)}
-                className={cn(
-                  'flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors',
-                  n === terminalCount
-                    ? 'border-ring bg-accent text-foreground'
-                    : 'border-border text-muted-foreground hover:border-ring/50 hover:bg-accent/40'
-                )}
-              >
-                <GridPreview count={n} />
-                <span className="text-xs font-medium tabular-nums">{n}</span>
-              </button>
-            ))}
           </div>
-        </Section>
 
-        <Section
-          title="Agents"
-          hint="Pick how many of each to launch — any spare panes run a plain Terminal"
-          aside={`Assigned ${assigned} / ${terminalCount}`}
-        >
-          <>
-            {/* A card per template (the plain Terminal included), mirroring the
-                terminal-count tiles above so the form reads as one set of choices.
-                A card lights up once its count is non-zero, like a selected tile. */}
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {TEMPLATES.map((t) => {
-              const available = isTemplateAvailable(t, availability)
-              const n = counts[t.id] ?? 0
-              return (
-                <div
-                  key={t.id}
-                  className={cn(
-                    'flex flex-col gap-3 rounded-lg border p-3 transition-colors',
-                    n > 0 ? 'border-ring bg-accent' : 'border-border',
-                    !available && 'opacity-50'
-                  )}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <AgentIcon template={t} className="h-5 w-5 shrink-0" />
-                    <span className="truncate text-sm font-medium text-foreground">{t.name}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={!available || n === 0}
-                      onClick={() => adjust(t.id, -1)}
-                      aria-label={`Fewer ${t.name}`}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <span className="min-w-[2ch] text-center text-base font-semibold tabular-nums">
-                      {available ? n : '—'}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={!available || assigned >= terminalCount}
-                      onClick={() => adjust(t.id, 1)}
-                      aria-label={`More ${t.name}`}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {!available && (
-                    <span className="text-center text-xs text-muted-foreground">Not installed</span>
-                  )}
-                </div>
-              )
-            })}
-            </div>
-            {remaining > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {remaining} spare {remaining === 1 ? 'pane runs' : 'panes run'} a plain Terminal.
+          {/* Recent folders — inline list, capped at MAX_RECENTS rows */}
+          {visibleRecents.length > 0 && (
+            <div className="mt-5 flex min-h-0 flex-1 flex-col">
+              <p className="mb-2 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Recent
               </p>
-            )}
-          </>
-        </Section>
+              <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+                {visibleRecents.map((path) => (
+                  <div
+                    key={path}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setFolder(path)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setFolder(path)
+                      }
+                    }}
+                    className="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+                  >
+                    <span className="max-w-[45%] shrink-0 truncate text-sm font-medium text-foreground">
+                      {folderName(path)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                      {path}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeRecentFolder(path)
+                      }}
+                      aria-label={`Remove ${folderName(path)} from recents`}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
-        <div className="flex justify-end pt-2">
-          <Button onClick={submit} disabled={trimmedFolder === ''}>
-            Create workspace
-          </Button>
-        </div>
+        {/* RIGHT: TERMINALS — tile count selector + AI agent steppers + live preview + create */}
+        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-4">
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Terminals
+          </h2>
+
+          {/* How many terminals? */}
+          <div className="mb-4">
+            <p className="mb-2 text-sm font-medium text-foreground">How many terminals?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {TERMINAL_COUNTS.map((count) => {
+                const selected = count === terminalCount
+                return (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => changeTerminalCount(count)}
+                    aria-pressed={selected}
+                    className={cn(
+                      'flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors',
+                      selected
+                        ? 'border-ring bg-accent text-foreground ring-1 ring-ring'
+                        : 'border-border text-muted-foreground hover:border-ring/50 hover:bg-accent/40 hover:text-foreground'
+                    )}
+                  >
+                    {count}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* AI agents — one stepper row per coding template; plain Terminal
+              fills the remaining slots automatically via allocateAgents. */}
+          <div className="mb-4">
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">AI agents</p>
+              <span className="text-xs text-muted-foreground">
+                used {totalAssigned} / {terminalCount}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {CODING_TEMPLATES.map((t) => {
+                const available = isTemplateAvailable(t, availability)
+                const count = counts[t.id] ?? 0
+                // Full when every slot is allocated; block adding more until
+                // the user either increases the terminal count or reduces another agent.
+                const atCapacity = totalAssigned >= terminalCount
+                return (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <AgentIcon template={t} className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-sm text-foreground">{t.name}</span>
+                    {available ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Remove one ${t.name}`}
+                          disabled={count === 0}
+                          onClick={() =>
+                            setCounts((prev) => {
+                              const next = { ...prev }
+                              const n = (next[t.id] ?? 0) - 1
+                              if (n <= 0) delete next[t.id]
+                              else next[t.id] = n
+                              return next
+                            })
+                          }
+                          className={cn(
+                            'flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground transition-colors',
+                            count === 0
+                              ? 'cursor-not-allowed opacity-40'
+                              : 'hover:border-ring/50 hover:bg-accent/40 hover:text-foreground'
+                          )}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={count}
+                          min={0}
+                          aria-label={`${t.name} count`}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value, 10)
+                            const newVal = isNaN(parsed) ? 0 : parsed
+                            const remaining = terminalCount - totalAssigned
+                            const maxForThis = count + Math.max(0, remaining)
+                            const clamped = Math.max(0, Math.min(newVal, maxForThis))
+                            setCounts((prev) => {
+                              const next = { ...prev }
+                              if (clamped <= 0) delete next[t.id]
+                              else next[t.id] = clamped
+                              return next
+                            })
+                          }}
+                          className="w-[3ch] rounded border border-input bg-background px-1 text-center text-sm tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Add one ${t.name}`}
+                          disabled={atCapacity}
+                          onClick={() =>
+                            setCounts((prev) => ({ ...prev, [t.id]: (prev[t.id] ?? 0) + 1 }))
+                          }
+                          className={cn(
+                            'flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground transition-colors',
+                            atCapacity
+                              ? 'cursor-not-allowed opacity-40'
+                              : 'hover:border-ring/50 hover:bg-accent/40 hover:text-foreground'
+                          )}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Not installed</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Live preview — fixed, bounded height so the panel stays compact and
+              the whole Welcome fits the window without scrolling; the grid scales
+              down within this box at high pane counts. */}
+          <div className="mb-3">
+            <p className="mb-1.5 text-xs text-muted-foreground">Preview</p>
+            <div className="h-[175px]">
+              <LayoutPreview terminalCount={terminalCount} agents={agentIds} />
+            </div>
+          </div>
+
+          {/* Caption */}
+          <p className="mb-4 text-center text-xs tabular-nums text-muted-foreground">{caption}</p>
+
+          {/* Agent legend — only shown when more than one agent type is used,
+              so an all-Terminal layout (no AI agents) hides the redundant legend. */}
+          {legendIds.length > 1 && (
+            <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {legendIds.map((id) => {
+                const t = templateById(id)
+                return (
+                  <span key={id} className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <AgentIcon template={t} className="h-3.5 w-3.5" />
+                    {t.name}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Create workspace button */}
+          <div className="mt-auto">
+            <Button className="w-full" onClick={submit} disabled={!canCreate}>
+              Create workspace
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {canCreate ? 'Press ⌘↵ / Ctrl+↵ to create' : 'Choose a working folder to continue'}
+            </p>
+          </div>
+        </section>
       </div>
-
-      {paletteOpen && (
-        <RecentFoldersPalette
-          recents={recents}
-          onSelect={setFolder}
-          onRemove={removeRecentFolder}
-          onClose={() => setPaletteOpen(false)}
-        />
-      )}
-    </div>
-  )
-}
-
-interface SectionProps {
-  title: string
-  hint: string
-  aside?: string
-  children: ReactElement
-}
-
-/** A labelled form section: bold title, muted hint, optional right-aligned aside. */
-function Section({ title, hint, aside, children }: SectionProps): ReactElement {
-  return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-foreground">{title}</span>
-          <span className="text-xs text-muted-foreground">{hint}</span>
-        </div>
-        {aside && (
-          <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-            {aside}
-          </span>
-        )}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-interface RecentRowProps {
-  path: string
-  onUse: () => void
-  onRemove: () => void
-}
-
-/** One recent-folder row: click the name/path to reuse it; a hover/focus ✕ removes it. */
-function RecentRow({ path, onUse, onRemove }: RecentRowProps): ReactElement {
-  const name = folderName(path)
-  return (
-    <div className="group flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent/40">
-      <button
-        type="button"
-        onClick={onUse}
-        title={path}
-        className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
-      >
-        <span className="shrink-0 text-sm text-primary">{name}</span>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">{path}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${name} from recents`}
-        className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus:opacity-100 group-hover:opacity-100"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  )
-}
-
-/** A miniature grid icon showing the layout `count` terminals will produce. */
-function GridPreview({ count }: { count: number }): ReactElement {
-  const { rows, cols } = gridFor(count)
-  return (
-    <div
-      className="grid h-6 w-8 gap-[2px]"
-      style={{
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`
-      }}
-    >
-      {Array.from({ length: rows * cols }, (_, i) => (
-        <div key={i} className="rounded-[1px] bg-current opacity-70" />
-      ))}
     </div>
   )
 }

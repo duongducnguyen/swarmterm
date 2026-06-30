@@ -1,6 +1,6 @@
 import { create, type StateCreator } from 'zustand'
 import {
-  buildGridLayout,
+  paneLayoutFor,
   collectLeaves,
   closeLeaf,
   findLeaf,
@@ -32,8 +32,11 @@ export interface Workspace {
 /** What the setup wizard collects to build a new workspace. */
 export interface CreateWorkspaceConfig {
   cwd: string
+  /** Number of terminal panes; must be a value from TERMINAL_COUNTS. */
   terminalCount: number
-  /** One agent id per pane, in build order. Shorter arrays pad with the plain terminal. */
+  /** One agent id per pane, in build order. Short arrays are padded with
+   *  DEFAULT_TEMPLATE_ID so `agentIds.length` need not equal `terminalCount`,
+   *  but the caller should keep them in sync. */
   agentIds: string[]
 }
 
@@ -129,9 +132,10 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
 
   createWorkspace: (config) =>
     set((s) => {
-      // Stamp each pane with its agent id in build order; a short list (or one
-      // padded with no entry) falls back to the plain terminal. buildGridLayout
-      // calls makeWizardLeaf row-major, matching the allocateAgents fill order.
+      // Pane count = squad size (one agent id per pane); paneLayoutFor derives
+      // the grid/split shape. makeWizardLeaf is called row-major, matching the
+      // agentIds order. The ?? fallback is defensive — agentIds.length panes
+      // always have a matching id.
       let paneIndex = 0
       const makeWizardLeaf = (): LeafNode => ({
         type: 'leaf',
@@ -139,7 +143,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         terminalId: uid(),
         agentId: config.agentIds[paneIndex++] ?? DEFAULT_TEMPLATE_ID
       })
-      const layout = buildGridLayout(config.terminalCount, makeWizardLeaf, uid)
+      const layout = paneLayoutFor(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
         id: uid(),
         name: `Workspace ${s.nextWorkspaceNumber}`,
