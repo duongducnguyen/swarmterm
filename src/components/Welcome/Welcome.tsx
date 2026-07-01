@@ -134,9 +134,9 @@ export function Welcome(): ReactElement {
         <p className="mt-1 text-base text-muted-foreground">Run many terminals, side by side.</p>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         {/* LEFT: COMPOSE — working folder + recent folders */}
-        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-4">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Compose
           </h2>
@@ -183,10 +183,16 @@ export function Welcome(): ReactElement {
                     }}
                     className="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
                   >
-                    <span className="max-w-[45%] shrink-0 truncate text-sm font-medium text-foreground">
+                    <span
+                      title={folderName(path)}
+                      className="min-w-0 max-w-[50%] shrink-0 truncate text-sm font-medium text-foreground"
+                    >
                       {folderName(path)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    <span
+                      title={path}
+                      className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                    >
                       {path}
                     </span>
                     <button
@@ -208,7 +214,7 @@ export function Welcome(): ReactElement {
         </section>
 
         {/* RIGHT: TERMINALS — tile count selector + AI agent steppers + live preview + create */}
-        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-4">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4">
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Terminals
           </h2>
