@@ -266,11 +266,17 @@ pub fn spawn_terminal(
     }
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM", "xterm-256color");
-    // Identify this session to in-terminal processes so they can open a web
-    // preview via `swarmterm://preview?session=&url=`. `id` is the terminalId, a
-    // random UUID only this shell's env sees — it doubles as the unguessable
-    // secret authorising the deep link (no separate token needed).
+    // Identify this session to in-terminal processes so an in-terminal agent
+    // can call Swarmterm's MCP server. `id` is the terminalId — a random UUID
+    // that only this shell's env sees — and doubles as the unguessable bearer
+    // token authorising the MCP call. `SWARMTERM_MCP_URL` points at the
+    // Streamable-HTTP endpoint bound at app boot; if the server failed to
+    // bind, we skip the URL var (agents just won't have the swarmterm server
+    // available) but still set the session so future subsystems can use it.
     cmd.env("SWARMTERM_SESSION", &id);
+    if let Some(url) = state.mcp_url.get() {
+        cmd.env("SWARMTERM_MCP_URL", url.as_ref());
+    }
     let cwd = options.cwd.clone().unwrap_or_else(|| {
         app.path()
             .home_dir()
