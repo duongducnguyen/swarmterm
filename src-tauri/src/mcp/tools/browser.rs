@@ -94,6 +94,9 @@ mod tests {
 // server's single `tool_router` field via `ToolRouter::+`.
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
+// NOTE: `tool` / `tool_router` MUST be imported bare — fully-qualified paths
+// (e.g. `#[rmcp::tool_router]`) silently produce no router. See the module
+// doc of `mcp/server.rs` for the full rationale.
 use rmcp::{schemars, tool, tool_router};
 use serde::Deserialize;
 use tauri::Emitter;

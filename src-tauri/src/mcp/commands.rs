@@ -20,7 +20,13 @@ pub async fn write_mcp_config(cwd: String) -> Result<(), String> {
         Err(e) => return Err(format!("read: {e}")),
     };
     let merged = merge_mcp_config(existing.as_deref())?;
-    fs::write(&path, merged).map_err(|e| format!("write: {e}"))?;
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, merged).map_err(|e| format!("write tmp: {e}"))?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        // Best-effort tmp cleanup on rename failure so we don't leave litter.
+        let _ = fs::remove_file(&tmp);
+        format!("rename: {e}")
+    })?;
     Ok(())
 }
 
