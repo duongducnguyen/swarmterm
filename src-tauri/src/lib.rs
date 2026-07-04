@@ -63,6 +63,16 @@ pub fn run() {
                 }
             }
             tray::setup_tray(app)?;
+            // Boot the MCP server. Any failure is logged and swallowed: browser
+            // preview via MCP just won't work for this run, but Swarmterm as a
+            // whole still functions.
+            let handle_for_mcp = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match crate::mcp::start(handle_for_mcp).await {
+                    Ok(url) => eprintln!("mcp: listening on {url}"),
+                    Err(e) => eprintln!("mcp: {e}"),
+                }
+            });
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 let uris: Vec<String> = event.urls().iter().map(|u| u.to_string()).collect();
