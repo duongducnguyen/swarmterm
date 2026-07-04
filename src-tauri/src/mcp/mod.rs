@@ -3,3 +3,4 @@
 //! docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md.
 
 pub mod auth;
+pub mod tools;
