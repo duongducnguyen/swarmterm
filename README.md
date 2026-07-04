@@ -111,19 +111,13 @@ src-tauri/                    # Backend Rust
     pty.rs                    # PtyOut enum, AppState, spawn_terminal, read_loop, UTF-8 helpers
     commands.rs               # #[tauri::command]: create/write/resize/kill_terminal
     tray.rs                   # TrayIconBuilder, menu Show/Quit, runtime-generated icon
-    deeplink.rs               # Parse/validate deep link swarmterm://, emit preview:open
+    deeplink.rs               # Parse/validate deep link swarmterm://auth/callback (OAuth PKCE)
+    mcp/                      # Embedded MCP server (browser.open_preview tool + framework)
     preview.rs                # #[tauri::command]: điều khiển webview preview docked
   Cargo.toml                  # portable-pty, tauri-plugin-single-instance, tauri-plugin-dialog,
-                              #   tauri-plugin-deep-link, url, serde
+                              #   tauri-plugin-deep-link, rmcp, axum, tokio, url, serde
   tauri.conf.json             # App config: frameless window, productName, identifier
   capabilities/default.json  # ACL: core:default + window/event/dialog permissions
-
-scripts/
-  swarmterm-preview.sh        # Helper mở deep link swarmterm://preview (shell/macOS/Linux)
-  swarmterm-preview.ps1       # Helper mở deep link swarmterm://preview (PowerShell/Windows)
-
-docs/
-  swarmterm-preview-skill.md  # Sample skill cho agent dùng web browser preview
 ```
 
 ## Kiến trúc
