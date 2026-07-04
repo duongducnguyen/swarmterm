@@ -118,10 +118,18 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 - **Truecolor.** The shell is spawned with `COLORTERM=truecolor` /
   `TERM=xterm-256color`; ConPTY forwards 24-bit color and xterm renders it
   verbatim. Don't downscale.
-- **Deep-link preview.** `SWARMTERM_SESSION` (the terminalId, a random UUID) is
-  injected into each shell's env and doubles as the unguessable secret for
-  `swarmterm://preview?session=&url=`. On Windows/Linux a deep link to a running
-  instance arrives as a CLI arg via single-instance; on macOS via `on_open_url`.
+- **MCP server & session token.** On boot the Rust process binds a random
+  loopback port and runs an `rmcp` Streamable-HTTP MCP server. Each PTY is
+  spawned with `SWARMTERM_MCP_URL=http://127.0.0.1:<port>/mcp` and
+  `SWARMTERM_SESSION=<terminalId>`. The session UUID doubles as the bearer
+  token — the terminal's env is the only place it appears, and it stops
+  authorising the moment the PTY is killed (auth resolver checks the live
+  terminal map). To add a tool: drop it into `src-tauri/src/mcp/tools/` and
+  add one `mod` line — see the spec at
+  `docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`.
+- **`swarmterm://auth/callback` deeplink stays** for OAuth PKCE only. Anything
+  else that arrives on the scheme is now logged and dropped — the browser
+  preview flow moved to MCP.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 

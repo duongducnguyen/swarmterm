@@ -24,10 +24,12 @@ tính năng iteration 1 được giữ nguyên.
 - **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
   theo.
 - **Web browser preview** — cột thứ 3 kiểu Chrome hiển thị web gắn theo từng
-  terminal; mở bằng deep link `swarmterm://preview?session=&url=` (helper đọc
-  env `SWARMTERM_SESSION`); webview native docked (Tauri multiwebview); tab
-  strip + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột;
-  fullscreen + Esc thoát.
+  terminal. Trigger từ trong terminal qua MCP: mỗi PTY có sẵn env
+  `SWARMTERM_MCP_URL` + `SWARMTERM_SESSION`, và Swarmterm tự viết `.mcp.json`
+  vào workspace khi tạo, nên Claude Code (hoặc bất kỳ MCP client nào) gọi
+  tool `browser.open_preview(url)` là tab hiện. Iframe DOM docked, tab strip
+  + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột; fullscreen
+  + Esc thoát.
 
 Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
