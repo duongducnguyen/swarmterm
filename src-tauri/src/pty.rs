@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -158,11 +158,21 @@ pub struct AppState {
     pub terminals: Mutex<HashMap<String, ManagedTerminal>>,
     /// Set when the user picks Quit from the tray, so close-to-tray is bypassed.
     pub quitting: AtomicBool,
+    /// The MCP server's Streamable-HTTP endpoint URL. Set once by `mcp::start`
+    /// at app boot; read by `spawn_terminal` to seed each shell's env, and by
+    /// nothing else. `OnceLock` is used so the read side needs no lock; if the
+    /// server failed to bind the cell stays empty and `spawn_terminal` skips
+    /// the env injection (browser preview via MCP just won't work).
+    pub mcp_url: OnceLock<Arc<str>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { terminals: Mutex::new(HashMap::new()), quitting: AtomicBool::new(false) }
+        Self {
+            terminals: Mutex::new(HashMap::new()),
+            quitting: AtomicBool::new(false),
+            mcp_url: OnceLock::new(),
+        }
     }
 }
 
