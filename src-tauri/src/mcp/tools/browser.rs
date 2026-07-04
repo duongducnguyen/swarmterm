@@ -83,3 +83,69 @@ mod tests {
         assert_eq!(json["url"], "https://a");
     }
 }
+
+// --- tool method on the shared server struct ---
+//
+// Kept in this file (not in server.rs) so future tool groups follow the same
+// shape: one file per group carrying both its helpers and its rmcp `#[tool]`
+// methods. This impl block gets its own `#[tool_router]` (named
+// `tool_router_browser` — rmcp's default `tool_router` name would collide if
+// every tool-group file used it) whose output `server.rs` merges into the
+// server's single `tool_router` field via `ToolRouter::+`.
+
+use rmcp::handler::server::wrapper::{Json, Parameters};
+use rmcp::{schemars, tool, tool_router};
+use serde::Deserialize;
+use tauri::Emitter;
+
+use crate::mcp::server::SwarmtermMcpServer;
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct OpenPreviewArgs {
+    /// Absolute http:// or https:// URL of the page to preview.
+    pub url: String,
+}
+
+/// Tool result payload for `browser.open_preview`. `Json<T>` (rmcp's
+/// structured-content wrapper) requires `Serialize + JsonSchema`, hence the
+/// dedicated type rather than a bare `serde_json::Value` (which implements
+/// neither trait rmcp needs to place it in `CallToolResult::structured`).
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct OpenPreviewResult {
+    pub ok: bool,
+    #[serde(rename = "terminalId")]
+    pub terminal_id: String,
+}
+
+#[tool_router(router = tool_router_browser, vis = "pub")]
+impl SwarmtermMcpServer {
+    #[tool(
+        name = "browser.open_preview",
+        description = "Open a web preview tab bound to the calling terminal."
+    )]
+    pub async fn open_preview(
+        &self,
+        rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
+            http::request::Parts,
+        >,
+        Parameters(args): Parameters<OpenPreviewArgs>,
+    ) -> Result<Json<OpenPreviewResult>, rmcp::ErrorData> {
+        let terminal = self.caller(&parts)?;
+        let url = validate_preview_url(&args.url).map_err(|e| match e {
+            ToolError::InvalidArgs(m) => rmcp::ErrorData::invalid_params(m, None),
+        })?;
+        self.app
+            .emit(
+                "preview:open",
+                PreviewOpenEvent {
+                    terminal_id: terminal.0.clone(),
+                    url,
+                },
+            )
+            .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?;
+        Ok(Json(OpenPreviewResult {
+            ok: true,
+            terminal_id: terminal.0,
+        }))
+    }
+}
