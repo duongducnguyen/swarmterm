@@ -2,6 +2,7 @@ mod agents;
 mod auth;
 mod commands;
 mod deeplink;
+mod mcp;
 mod git;
 mod pty;
 mod shell;
