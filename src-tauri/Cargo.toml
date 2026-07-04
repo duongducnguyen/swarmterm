@@ -32,10 +32,6 @@ tauri-plugin-opener = "2"
 rmcp = { version = "2.1", features = ["server", "transport-streamable-http-server"] }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
-# Direct dep (not just transitive via axum/rmcp) so `mcp/server.rs` and
-# `mcp/tools/browser.rs` can name `http::request::Parts` / `http::header::*`
-# to read the Authorization header out of the raw HTTP request rmcp exposes.
-http = "1"
 
 [target.'cfg(windows)'.dependencies]
 # Job Objects so killing a terminal tears down the shell's whole process tree

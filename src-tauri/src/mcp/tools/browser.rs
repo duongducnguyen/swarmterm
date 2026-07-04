@@ -126,7 +126,7 @@ impl SwarmtermMcpServer {
     pub async fn open_preview(
         &self,
         rmcp::handler::server::tool::Extension(parts): rmcp::handler::server::tool::Extension<
-            http::request::Parts,
+            axum::http::request::Parts,
         >,
         Parameters(args): Parameters<OpenPreviewArgs>,
     ) -> Result<Json<OpenPreviewResult>, rmcp::ErrorData> {

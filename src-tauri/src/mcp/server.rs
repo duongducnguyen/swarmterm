@@ -78,11 +78,11 @@ impl SwarmtermMcpServer {
     /// protocol error (surfaced to the caller roughly as a 401) on failure.
     pub(crate) fn caller(
         &self,
-        parts: &http::request::Parts,
+        parts: &axum::http::request::Parts,
     ) -> Result<TerminalId, rmcp::ErrorData> {
         let header = parts
             .headers
-            .get(http::header::AUTHORIZATION)
+            .get(axum::http::header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
             .unwrap_or("");
         let token = header.strip_prefix("Bearer ").unwrap_or(header);
