@@ -296,6 +296,18 @@ pub fn worktrees_dir_for(main_root: &Path) -> Option<PathBuf> {
 /// True only for paths strictly inside the swarmterm-managed container —
 /// the removal guard that makes deleting the main worktree unrepresentable.
 pub fn is_inside_worktrees_dir(path: &Path, main_root: &Path) -> bool {
+    use std::path::Component;
+    // `Path::starts_with` is a lexical prefix check: it does not resolve
+    // `..`, so "…/myapp.worktrees/../../other" would pass a bare prefix
+    // test while resolving outside the container. Rejecting ParentDir /
+    // CurDir components keeps the guard sound without canonicalize(),
+    // which fails on already-deleted paths.
+    if path
+        .components()
+        .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    {
+        return false;
+    }
     match worktrees_dir_for(main_root) {
         Some(dir) => path.starts_with(&dir) && path != dir,
         None => false,
@@ -550,5 +562,14 @@ detached
         assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp.worktrees"), main));
         assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp"), main));
         assert!(!is_inside_worktrees_dir(Path::new("/dev/other"), main));
+        // Lexical `..`/`.` tricks must not defeat the guard.
+        assert!(!is_inside_worktrees_dir(
+            Path::new("/dev/myapp.worktrees/../../etc/passwd"),
+            main
+        ));
+        assert!(!is_inside_worktrees_dir(
+            Path::new("/dev/myapp.worktrees/./feat-login/.."),
+            main
+        ));
     }
 }
