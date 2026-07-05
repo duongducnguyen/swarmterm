@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -158,11 +158,21 @@ pub struct AppState {
     pub terminals: Mutex<HashMap<String, ManagedTerminal>>,
     /// Set when the user picks Quit from the tray, so close-to-tray is bypassed.
     pub quitting: AtomicBool,
+    /// The MCP server's Streamable-HTTP endpoint URL. Set once by `mcp::start`
+    /// at app boot; read by `spawn_terminal` to seed each shell's env, and by
+    /// nothing else. `OnceLock` is used so the read side needs no lock; if the
+    /// server failed to bind the cell stays empty and `spawn_terminal` skips
+    /// the env injection (browser preview via MCP just won't work).
+    pub mcp_url: OnceLock<Arc<str>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { terminals: Mutex::new(HashMap::new()), quitting: AtomicBool::new(false) }
+        Self {
+            terminals: Mutex::new(HashMap::new()),
+            quitting: AtomicBool::new(false),
+            mcp_url: OnceLock::new(),
+        }
     }
 }
 
@@ -256,11 +266,17 @@ pub fn spawn_terminal(
     }
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM", "xterm-256color");
-    // Identify this session to in-terminal processes so they can open a web
-    // preview via `swarmterm://preview?session=&url=`. `id` is the terminalId, a
-    // random UUID only this shell's env sees — it doubles as the unguessable
-    // secret authorising the deep link (no separate token needed).
+    // Identify this session to in-terminal processes so an in-terminal agent
+    // can call Swarmterm's MCP server. `id` is the terminalId — a random UUID
+    // that only this shell's env sees — and doubles as the unguessable bearer
+    // token authorising the MCP call. `SWARMTERM_MCP_URL` points at the
+    // Streamable-HTTP endpoint bound at app boot; if the server failed to
+    // bind, we skip the URL var (agents just won't have the swarmterm server
+    // available) but still set the session so future subsystems can use it.
     cmd.env("SWARMTERM_SESSION", &id);
+    if let Some(url) = state.mcp_url.get() {
+        cmd.env("SWARMTERM_MCP_URL", url.as_ref());
+    }
     let cwd = options.cwd.clone().unwrap_or_else(|| {
         app.path()
             .home_dir()

@@ -14,6 +14,7 @@ import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
+import { writeMcpConfig } from '@/tauri/mcp'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
 import { LayoutPreview } from './LayoutPreview'
@@ -97,6 +98,11 @@ export function Welcome(): ReactElement {
     if (!canCreate) return
     addRecentFolder(trimmedFolder)
     createWorkspace({ cwd: trimmedFolder, terminalCount, agentIds })
+    // Fire-and-forget: the workspace is usable even if the MCP config write
+    // fails (bad permissions, malformed existing .mcp.json). Log-only.
+    void writeMcpConfig(trimmedFolder).catch((e) =>
+      console.warn('failed to write .mcp.json:', e)
+    )
   }
 
   // Document-level Ctrl/⌘+Enter shortcut — fires even when nothing in the
