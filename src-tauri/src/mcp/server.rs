@@ -66,11 +66,11 @@ pub struct SwarmtermMcpServer {
 
 impl SwarmtermMcpServer {
     fn new(app: AppHandle) -> Self {
-        // Merge every tool group's router. Today there's just `browser`'s;
-        // future groups add `+ crate::mcp::tools::<group>::tool_router_<group>()`.
+        // Merge every tool group's router. `+` combines `ToolRouter`s so
+        // `#[tool_handler]` sees the union of both groups' `#[tool]` methods.
         Self {
             app,
-            tool_router: Self::tool_router_browser(),
+            tool_router: Self::tool_router_browser() + Self::tool_router_worktree(),
         }
     }
 
@@ -91,6 +91,30 @@ impl SwarmtermMcpServer {
         auth::resolve(token, |id| terminals.contains_key(id)).map_err(|e| match e {
             AuthError::Missing => rmcp::ErrorData::invalid_request("missing bearer token", None),
             AuthError::Unknown => rmcp::ErrorData::invalid_request("unknown session", None),
+        })
+    }
+
+    /// Gate + context for worktree tools: the calling terminal must belong to
+    /// a workspace created with worktree isolation on. Returns the workspace's
+    /// repo folder recorded at spawn time.
+    pub(crate) fn worktree_ctx(
+        &self,
+        terminal: &TerminalId,
+    ) -> Result<String, rmcp::ErrorData> {
+        let state = self.app.state::<AppState>();
+        let terminals = state.terminals.lock().unwrap();
+        let t = terminals
+            .get(&terminal.0)
+            .ok_or_else(|| rmcp::ErrorData::invalid_request("unknown session", None))?;
+        if !t.worktree_mode {
+            return Err(rmcp::ErrorData::invalid_request(
+                "worktree isolation is not enabled for this workspace — enable \
+                 \"Isolate features in git worktrees\" when creating the workspace",
+                None,
+            ));
+        }
+        t.repo_root.clone().ok_or_else(|| {
+            rmcp::ErrorData::invalid_request("no repository folder recorded for this terminal", None)
         })
     }
 }

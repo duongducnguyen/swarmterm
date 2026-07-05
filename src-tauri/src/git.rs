@@ -1,4 +1,5 @@
 // src-tauri/src/git.rs
+use rmcp::schemars;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +18,7 @@ fn git_command() -> Command {
     cmd
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeInfo {
     pub path: String,
