@@ -630,3 +630,91 @@ describe('reorderPane', () => {
   })
 })
 
+// --- worktree panes ---------------------------------------------------------
+
+describe('worktree panes', () => {
+  function workspaceWithWorktrees(): StoreApi<AppStore> {
+    const store = freshStore()
+    store.getState().createWorkspace({
+      cwd: 'C:/dev/myapp',
+      terminalCount: 1,
+      agentIds: ['claude-code'],
+      worktreeMode: true
+    })
+    return store
+  }
+
+  it('createWorkspace records worktreeMode (default false)', () => {
+    const store = workspaceWithWorktrees()
+    expect(store.getState().workspaces[0].worktreeMode).toBe(true)
+    store.getState().createWorkspace({ cwd: 'x', terminalCount: 1, agentIds: [] })
+    expect(store.getState().workspaces[1].worktreeMode).toBe(false)
+  })
+
+  it('spawnWorktreePane splits the requester leaf with binding fields and focuses it', () => {
+    const store = workspaceWithWorktrees()
+    const ws = store.getState().workspaces[0]
+    const requester = collectLeaves(ws.layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'C:/dev/myapp.worktrees/feat-login',
+      branch: 'feat/login',
+      prompt: 'Implement login'
+    })
+    const after = store.getState().workspaces[0]
+    const leaves = collectLeaves(after.layout)
+    expect(leaves).toHaveLength(2)
+    const worker = leaves.find((l) => l.worktreeBranch === 'feat/login')!
+    expect(worker.cwd).toBe('C:/dev/myapp.worktrees/feat-login')
+    expect(worker.agentId).toBe('claude-code') // inherited from requester
+    expect(worker.initialPrompt).toBe('Implement login')
+    expect(after.focusedLeafId).toBe(worker.id)
+  })
+
+  it('spawnWorktreePane is a no-op when worktreeMode is off or requester unknown', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({ cwd: 'x', terminalCount: 1, agentIds: ['claude-code'] })
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'p',
+      branch: 'b',
+      prompt: 'q'
+    })
+    expect(collectLeaves(store.getState().workspaces[0].layout)).toHaveLength(1)
+  })
+
+  it('clearWorktreeBinding clears the badge field on the matching leaf', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'C:/dev/myapp.worktrees/feat-login',
+      branch: 'feat/login',
+      prompt: 'x'
+    })
+    store.getState().clearWorktreeBinding('C:/dev/myapp.worktrees/feat-login')
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves.every((l) => l.worktreeBranch === undefined)).toBe(true)
+  })
+
+  it('setPaneAgent clears a pending initialPrompt', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'p',
+      branch: 'b',
+      prompt: 'the brief'
+    })
+    const worker = collectLeaves(store.getState().workspaces[0].layout).find(
+      (l) => l.worktreeBranch === 'b'
+    )!
+    store.getState().setPaneAgent(worker.id, 'codex')
+    const updated = collectLeaves(store.getState().workspaces[0].layout).find(
+      (l) => l.id === worker.id
+    )!
+    expect(updated.initialPrompt).toBeUndefined()
+  })
+})
+

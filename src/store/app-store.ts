@@ -27,6 +27,8 @@ export interface Workspace {
   broadcastActive: boolean
   /** Leaf ids that receive broadcast keystrokes while `broadcastActive`. */
   broadcastLeafIds: string[]
+  /** Enable MCP worktree tools for every terminal in this workspace. */
+  worktreeMode: boolean
 }
 
 /** What the setup wizard collects to build a new workspace. */
@@ -38,6 +40,8 @@ export interface CreateWorkspaceConfig {
    *  DEFAULT_TEMPLATE_ID so `agentIds.length` need not equal `terminalCount`,
    *  but the caller should keep them in sync. */
   agentIds: string[]
+  /** Enable MCP worktree tools for every terminal in this workspace. */
+  worktreeMode?: boolean
 }
 
 export interface AppState {
@@ -71,6 +75,14 @@ export interface AppActions {
   setPaneAgent: (leafId: string, agentId: string) => void
   setPaneCwd: (leafId: string, cwd: string | undefined) => void
   setPaneShell: (leafId: string, shellId: ShellId) => void
+  spawnWorktreePane: (p: {
+    requesterTerminalId: string
+    path: string
+    branch: string
+    agentId?: string
+    prompt: string
+  }) => void
+  clearWorktreeBinding: (path: string) => void
   toggleBroadcast: () => void
   toggleBroadcastMember: (leafId: string) => void
   selectAllBroadcast: () => void
@@ -151,7 +163,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         layout,
         focusedLeafId: collectLeaves(layout)[0].id,
         broadcastActive: false,
-        broadcastLeafIds: []
+        broadcastLeafIds: [],
+        worktreeMode: config.worktreeMode ?? false
       }
       return {
         workspaces: [...s.workspaces, ws],
@@ -269,14 +282,70 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   resizeSplitNode: (splitId, sizes) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: resizeSplit(w.layout, splitId, sizes) }))),
 
+  // An agent switch respawns the pty; replaying a brief written for another
+  // agent would be wrong, so a pending prompt is dropped along with it.
   setPaneAgent: (leafId, agentId) =>
-    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { agentId }) }))),
+    set((s) =>
+      mapActive(s, (w) => ({
+        ...w,
+        layout: updateLeaf(w.layout, leafId, { agentId, initialPrompt: undefined })
+      }))
+    ),
 
   setPaneCwd: (leafId, cwd) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { cwd }) }))),
 
   setPaneShell: (leafId, shellId) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) }))),
+
+  // Worker panes are spawned by the backend's worktree.spawn MCP tool: split
+  // the *requester's* leaf (which may live in a non-active workspace, so this
+  // deliberately avoids mapActive) and let the normal pane-mount path spawn
+  // the pty inside the worktree with the task brief.
+  spawnWorktreePane: (p) =>
+    set((s) => {
+      const ws = selectWorkspaceByTerminalId(s, p.requesterTerminalId)
+      if (!ws || !ws.worktreeMode) return {}
+      const requester = collectLeaves(ws.layout).find(
+        (l) => l.terminalId === p.requesterTerminalId
+      )
+      if (!requester) return {}
+      const newLeaf: LeafNode = {
+        type: 'leaf',
+        id: uid(),
+        terminalId: uid(),
+        // Fall back to the requester's agent; a plain-shell requester yields a
+        // plain shell in the worktree — visible, never a silent drop.
+        agentId: p.agentId ?? requester.agentId,
+        cwd: p.path,
+        worktreeBranch: p.branch,
+        initialPrompt: p.prompt
+      }
+      return {
+        workspaces: s.workspaces.map((w) =>
+          w.id === ws.id
+            ? {
+                ...w,
+                layout: splitLeaf(w.layout, requester.id, 'horizontal', newLeaf, uid()),
+                focusedLeafId: newLeaf.id
+              }
+            : w
+        )
+      }
+    }),
+
+  clearWorktreeBinding: (path) =>
+    set((s) => ({
+      workspaces: s.workspaces.map((w) => {
+        const bound = collectLeaves(w.layout).filter((l) => l.cwd === path)
+        if (bound.length === 0) return w
+        let layout = w.layout
+        for (const leaf of bound) {
+          layout = updateLeaf(layout, leaf.id, { worktreeBranch: undefined })
+        }
+        return { ...w, layout }
+      })
+    })),
 
   toggleBroadcast: () =>
     set((s) =>
