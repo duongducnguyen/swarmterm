@@ -1,7 +1,7 @@
 // src-tauri/src/git.rs
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Build a `git` Command. On Windows, set CREATE_NO_WINDOW (0x08000000) so
@@ -248,6 +248,131 @@ pub fn get_changed_files(worktree_path: &Path) -> Result<Vec<ChangedFile>, Strin
     ))
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedWorktree {
+    pub path: String,
+    pub branch: String,
+}
+
+/// Conservative subset of git's ref rules. Stricter than git so a name that
+/// passes here can never smuggle path traversal into the directory slug.
+pub fn validate_branch_name(branch: &str) -> Result<(), String> {
+    if branch.is_empty() || branch.len() > 100 {
+        return Err("branch name must be 1-100 characters".into());
+    }
+    if !branch
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'))
+    {
+        return Err("branch name may only contain letters, digits, '-', '_', '.', '/'".into());
+    }
+    if branch.starts_with(['/', '-', '.']) || branch.ends_with(['/', '.']) {
+        return Err("branch name may not start or end with '/', '-', '.'".into());
+    }
+    if branch.contains("..") || branch.contains("//") || branch.ends_with(".lock") {
+        return Err("branch name may not contain '..', '//' or end with '.lock'".into());
+    }
+    Ok(())
+}
+
+/// Directory name for a branch's worktree. Callers validate first, so the only
+/// transforms left are flattening '/' and capping length (Windows MAX_PATH).
+pub fn branch_slug(branch: &str) -> String {
+    branch
+        .chars()
+        .map(|c| if c == '/' { '-' } else { c })
+        .take(48)
+        .collect()
+}
+
+/// Sibling container next to the repo: C:\dev\myapp -> C:\dev\myapp.worktrees.
+/// Outside the repo so in-repo watchers/linters/agents never scan checkouts.
+pub fn worktrees_dir_for(main_root: &Path) -> Option<PathBuf> {
+    let name = main_root.file_name()?.to_str()?;
+    Some(main_root.parent()?.join(format!("{name}.worktrees")))
+}
+
+/// True only for paths strictly inside the swarmterm-managed container —
+/// the removal guard that makes deleting the main worktree unrepresentable.
+pub fn is_inside_worktrees_dir(path: &Path, main_root: &Path) -> bool {
+    match worktrees_dir_for(main_root) {
+        Some(dir) => path.starts_with(&dir) && path != dir,
+        None => false,
+    }
+}
+
+/// Main repo root, resolved via --git-common-dir so a call made from inside a
+/// linked worktree still lands on the main root — worktrees stay siblings,
+/// never nest (guard borrowed from the design-docs using-git-worktrees skill).
+pub fn resolve_main_root(cwd: &Path) -> Result<PathBuf, String> {
+    let p = cwd
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
+    let out = git_command()
+        .args(["-C", p, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        return Err("not a git repository".into());
+    }
+    let git_dir = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    git_dir
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "unexpected git dir layout".to_string())
+}
+
+pub fn create_worktree(repo_cwd: &Path, branch: &str) -> Result<CreatedWorktree, String> {
+    validate_branch_name(branch)?;
+    let main_root = resolve_main_root(repo_cwd)?;
+    let container = worktrees_dir_for(&main_root)
+        .ok_or_else(|| "cannot derive a worktrees directory for this repo".to_string())?;
+    let target = container.join(branch_slug(branch));
+    if target.exists() {
+        return Err(format!(
+            "worktree directory already exists: {} — pick another branch name",
+            target.display()
+        ));
+    }
+    let root = main_root.to_str().ok_or("non-UTF-8 repo root")?;
+    let target_s = target.to_str().ok_or("non-UTF-8 target path")?.to_string();
+    let out = git_command()
+        .args(["-C", root, "worktree", "add", &target_s, "-b", branch])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(CreatedWorktree { path: target_s, branch: branch.to_string() })
+}
+
+pub fn remove_worktree(repo_cwd: &Path, worktree_path: &Path) -> Result<(), String> {
+    let main_root = resolve_main_root(repo_cwd)?;
+    if !is_inside_worktrees_dir(worktree_path, &main_root) {
+        return Err("refusing: path is not a swarmterm-managed worktree".into());
+    }
+    if !get_changed_files(worktree_path)?.is_empty() {
+        return Err(
+            "refusing: worktree has uncommitted changes — commit or discard them first".into(),
+        );
+    }
+    let root = main_root.to_str().ok_or("non-UTF-8 repo root")?;
+    let target = worktree_path.to_str().ok_or("non-UTF-8 worktree path")?;
+    let out = git_command()
+        .args(["-C", root, "worktree", "remove", target])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        // Windows: open handles (a shell still cwd'd inside) block deletion.
+        return Err(format!(
+            "{err} (if files are locked, close the worktree's pane and retry)"
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -381,5 +506,49 @@ detached
     fn test_should_ignore_repo_root_sibling_kept() {
         let home = Path::new("/home/user");
         assert!(!should_ignore_repo_root(Path::new("/srv/repo"), home));
+    }
+
+    #[test]
+    fn validate_branch_accepts_typical_names() {
+        assert!(validate_branch_name("feat/login").is_ok());
+        assert!(validate_branch_name("fix-bug-42").is_ok());
+        assert!(validate_branch_name("refactor/auth_v2.1").is_ok());
+    }
+
+    #[test]
+    fn validate_branch_rejects_bad_names() {
+        assert!(validate_branch_name("").is_err());
+        assert!(validate_branch_name("feat/../escape").is_err());
+        assert!(validate_branch_name("/leading").is_err());
+        assert!(validate_branch_name("trailing/").is_err());
+        assert!(validate_branch_name("-leading-dash").is_err());
+        assert!(validate_branch_name("has space").is_err());
+        assert!(validate_branch_name("semi;colon").is_err());
+        assert!(validate_branch_name("double//slash").is_err());
+        assert!(validate_branch_name("ends.lock").is_err());
+        assert!(validate_branch_name(&"x".repeat(101)).is_err());
+    }
+
+    #[test]
+    fn branch_slug_flattens_slashes_and_caps_length() {
+        assert_eq!(branch_slug("feat/login"), "feat-login");
+        assert_eq!(branch_slug("a/b/c"), "a-b-c");
+        assert_eq!(branch_slug(&"y".repeat(80)).len(), 48);
+    }
+
+    #[test]
+    fn worktrees_dir_is_sibling_of_main_root() {
+        let dir = worktrees_dir_for(Path::new("/dev/myapp")).unwrap();
+        assert_eq!(dir, Path::new("/dev/myapp.worktrees"));
+    }
+
+    #[test]
+    fn inside_worktrees_dir_guards() {
+        let main = Path::new("/dev/myapp");
+        assert!(is_inside_worktrees_dir(Path::new("/dev/myapp.worktrees/feat-login"), main));
+        // The container itself, the main worktree, and arbitrary dirs are refused.
+        assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp.worktrees"), main));
+        assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp"), main));
+        assert!(!is_inside_worktrees_dir(Path::new("/dev/other"), main));
     }
 }
