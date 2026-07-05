@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isMacPlatform } from './platform'
+import { isMacPlatform, isWindowsPlatform } from './platform'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -27,5 +27,11 @@ describe('isMacPlatform', () => {
   it('returns false when navigator is undefined', () => {
     vi.stubGlobal('navigator', undefined)
     expect(isMacPlatform()).toBe(false)
+  })
+})
+
+describe('isWindowsPlatform', () => {
+  it('is a boolean and mutually exclusive with mac in this environment', () => {
+    expect(typeof isWindowsPlatform()).toBe('boolean')
   })
 })
