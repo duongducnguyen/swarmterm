@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { writeMcpConfig } from '@/tauri/mcp'
+import { listWorktrees } from '@/tauri/git'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
 import { LayoutPreview } from './LayoutPreview'
@@ -48,6 +49,9 @@ export function Welcome(): ReactElement {
   // Optimistic seed: 1 Claude Code assigned until the probe says it's not installed.
   const [counts, setCounts] = useState<Record<string, number>>({ 'claude-code': 1 })
   const seededRef = useRef(false)
+
+  const [isolateWorktrees, setIsolateWorktrees] = useState(false)
+  const [isGitRepo, setIsGitRepo] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -89,6 +93,27 @@ export function Welcome(): ReactElement {
   const trimmedFolder = folder.trim()
   const canCreate = trimmedFolder !== ''
 
+  // Probe whether the chosen folder is inside a git repo; the toggle is only
+  // meaningful (and only enabled) when it is. list returns [] for non-repos
+  // and for the home-dir guard, which is exactly the disable condition.
+  useEffect(() => {
+    if (trimmedFolder === '') {
+      setIsGitRepo(false)
+      return
+    }
+    let cancelled = false
+    void listWorktrees(trimmedFolder)
+      .then((trees) => {
+        if (!cancelled) setIsGitRepo(trees.length > 0)
+      })
+      .catch(() => {
+        if (!cancelled) setIsGitRepo(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [trimmedFolder])
+
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
     if (picked) setFolder(picked)
@@ -97,7 +122,12 @@ export function Welcome(): ReactElement {
   const submit = (): void => {
     if (!canCreate) return
     addRecentFolder(trimmedFolder)
-    createWorkspace({ cwd: trimmedFolder, terminalCount, agentIds })
+    createWorkspace({
+      cwd: trimmedFolder,
+      terminalCount,
+      agentIds,
+      worktreeMode: isolateWorktrees && isGitRepo
+    })
     // Fire-and-forget: the workspace is usable even if the MCP config write
     // fails (bad permissions, malformed existing .mcp.json). Log-only.
     void writeMcpConfig(trimmedFolder).catch((e) =>
@@ -117,7 +147,7 @@ export function Welcome(): ReactElement {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [trimmedFolder, terminalCount, counts]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trimmedFolder, terminalCount, counts, isolateWorktrees, isGitRepo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build caption: "4 panes · 2×2 · 2 AI agents · 2 Terminals"
   const aiCount = agentIds.filter((id) => id !== DEFAULT_TEMPLATE_ID).length
@@ -370,6 +400,31 @@ export function Welcome(): ReactElement {
               })}
             </div>
           )}
+
+          {/* Worktree isolation — enables the MCP worktree tools per workspace */}
+          <label
+            className={cn(
+              'mb-3 flex cursor-pointer items-start gap-2',
+              !isGitRepo && 'cursor-not-allowed opacity-50'
+            )}
+            title={isGitRepo ? undefined : 'Not a git repository'}
+          >
+            <input
+              type="checkbox"
+              disabled={!isGitRepo}
+              checked={isolateWorktrees && isGitRepo}
+              onChange={(e) => setIsolateWorktrees(e.target.checked)}
+              className="mt-0.5 accent-current"
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Isolate features in git worktrees
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Agents can spawn helper agents on isolated branches via MCP.
+              </span>
+            </span>
+          </label>
 
           {/* Create workspace button */}
           <div className="mt-auto">
