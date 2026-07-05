@@ -1,6 +1,8 @@
 // src/components/Git/WorktreeSelector.tsx
 import type { ReactElement } from 'react'
 import { useGitStore } from '@/store/git-store'
+import { AgentIcon } from '@/components/AgentIcon'
+import { templateById } from '@/lib/templates'
 
 /** Human-readable change badge: "clean" | "1 file" | "N files" | "" (still loading). */
 function countLabel(count: number | undefined): string {
@@ -10,7 +12,12 @@ function countLabel(count: number | undefined): string {
   return `${count} files`
 }
 
-export function WorktreeSelector(): ReactElement {
+interface WorktreeSelectorProps {
+  /** Branch -> agent id for panes currently bound to a worktree, keyed by branch name. */
+  agentByBranch?: Record<string, string>
+}
+
+export function WorktreeSelector({ agentByBranch }: WorktreeSelectorProps): ReactElement {
   const worktrees = useGitStore((s) => s.worktrees)
   const selected = useGitStore((s) => s.selectedWorktreePath)
   const counts = useGitStore((s) => s.worktreeCounts)
@@ -44,6 +51,9 @@ export function WorktreeSelector(): ReactElement {
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${isActive ? 'bg-[#4ec994]' : 'bg-muted-foreground/40'}`}
               />
+              {agentByBranch?.[wt.branch] && (
+                <AgentIcon template={templateById(agentByBranch[wt.branch])} className="h-3 w-3 shrink-0" />
+              )}
               <span className="min-w-0 flex-1 truncate">{wt.branch}</span>
               <span
                 className={`shrink-0 text-[10px] tabular-nums ${

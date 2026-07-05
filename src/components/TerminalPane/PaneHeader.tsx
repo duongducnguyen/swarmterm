@@ -1,4 +1,4 @@
-import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, Radio, X } from 'lucide-react'
+import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, Radio, X, GitBranch } from 'lucide-react'
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core'
 import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,8 @@ interface PaneHeaderProps {
   dragHandleRef: (element: HTMLElement | null) => void
   dragListeners: DraggableSyntheticListeners
   dragAttributes: DraggableAttributes
+  /** Branch of the bound git worktree, shown as a chip; absent for normal panes. */
+  worktreeBranch?: string
 }
 
 /** The per-pane header: agent / path / shell dropdowns plus split & close. */
@@ -84,6 +86,16 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {props.worktreeBranch && (
+          <span
+            title={`Worktree branch: ${props.worktreeBranch}`}
+            className="flex min-w-0 max-w-[10rem] items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground"
+          >
+            <GitBranch className="h-3 w-3 shrink-0" />
+            <span className="truncate">{props.worktreeBranch}</span>
+          </span>
+        )}
 
         {/* Path */}
         <DropdownMenu>

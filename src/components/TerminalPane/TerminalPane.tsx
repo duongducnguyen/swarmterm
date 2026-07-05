@@ -211,6 +211,7 @@ export function TerminalPane({
         dragHandleRef={setActivatorNodeRef}
         dragListeners={dragListeners}
         dragAttributes={dragAttributes}
+        worktreeBranch={leaf.worktreeBranch}
       />
 
       <div className="relative flex-1 overflow-hidden">

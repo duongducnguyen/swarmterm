@@ -1,7 +1,7 @@
 // src/components/Git/GitPanel.tsx
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useMemo, type ReactElement } from 'react'
 import { useAppStore, selectActiveWorkspace } from '@/store/app-store'
-import { findLeaf } from '@/lib/layout-tree'
+import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { useGitStore } from '@/store/git-store'
 import { WorktreeSelector } from './WorktreeSelector'
 import { ChangedFileList } from './ChangedFileList'
@@ -13,6 +13,19 @@ export function GitPanel(): ReactElement {
   const currentCwd = useGitStore((s) => s.currentCwd)
   const commitInfo = useGitStore((s) => s.commitInfo)
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees)
+
+  // Branch -> agent id for the panes currently bound to a worktree, so the
+  // selector can show which agent owns each worktree. Computed with useMemo
+  // over the raw `workspaces` array (not a store selector) — a selector that
+  // builds a fresh object every call would re-render this component forever.
+  const workspaces = useAppStore((s) => s.workspaces)
+  const agentByBranch = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const w of workspaces)
+      for (const l of collectLeaves(w.layout))
+        if (l.worktreeBranch && l.agentId) map[l.worktreeBranch] = l.agentId
+    return map
+  }, [workspaces])
 
   // Subscribe to the focused terminal's CWD and re-fetch when it changes.
   useEffect(() => {
@@ -38,7 +51,7 @@ export function GitPanel(): ReactElement {
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
-      <WorktreeSelector />
+      <WorktreeSelector agentByBranch={agentByBranch} />
 
       {loading && (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
