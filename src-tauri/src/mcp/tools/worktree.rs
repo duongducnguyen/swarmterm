@@ -135,11 +135,21 @@ impl SwarmtermMcpServer {
 
         let branch = args.branch.clone();
         let created = tauri::async_runtime::spawn_blocking(move || {
-            crate::git::create_worktree(Path::new(&repo_root), &branch)
+            let created = crate::git::create_worktree(Path::new(&repo_root), &branch)?;
+            // Fresh worktrees are untracked checkouts, so they never carry the
+            // repo's own .mcp.json (or any pre-existing one is stale). Without
+            // it Claude Code in the new pane has SWARMTERM_MCP_URL/SESSION env
+            // but no config wiring them up. Log-only: a missing .mcp.json still
+            // leaves a usable pane, just without MCP tools, so it must not fail
+            // the whole spawn (same policy as Welcome.tsx's fire-and-forget).
+            if let Err(e) = crate::mcp::config::write_mcp_config_to_dir(Path::new(&created.path)) {
+                eprintln!("worktree.spawn: failed to write .mcp.json in {}: {e}", created.path);
+            }
+            Ok(created)
         })
         .await
         .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?
-        .map_err(|m| rmcp::ErrorData::invalid_params(m, None))?;
+        .map_err(|m: String| rmcp::ErrorData::invalid_params(m, None))?;
 
         self.app
             .emit(
@@ -157,9 +167,13 @@ impl SwarmtermMcpServer {
         Ok(Json(WorktreeSpawnResult {
             path: created.path,
             branch: created.branch,
-            note: "A new agent pane is opening inside the worktree and will start on the \
-                   prompt. Do not edit files under that path yourself. Dependencies are not \
-                   installed there yet — the new agent handles setup."
+            // Pane-opening is best-effort: the "worktree:spawn" event above is
+            // fire-and-forget, and if the requester's pane closed mid-call the
+            // renderer silently no-ops. Don't promise a pane that may not show.
+            note: "A new agent pane should open inside the worktree and start on the prompt. \
+                   If no pane appears, the worktree still exists at this path — check \
+                   worktree.list. Do not edit files under that path yourself. Dependencies are \
+                   not installed there yet — the new agent handles setup."
                 .into(),
         }))
     }

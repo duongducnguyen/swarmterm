@@ -1,4 +1,7 @@
 // src-tauri/src/git.rs
+// git.rs has no direct schemars dependency; it reaches the crate through
+// rmcp's re-export. The derive is needed so WorktreeInfo can ride inside a
+// JsonSchema-described MCP tool result (see mcp/tools/worktree.rs).
 use rmcp::schemars;
 use serde::Serialize;
 use std::collections::HashMap;

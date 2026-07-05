@@ -341,7 +341,16 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         if (bound.length === 0) return w
         let layout = w.layout
         for (const leaf of bound) {
-          layout = updateLeaf(layout, leaf.id, { worktreeBranch: undefined })
+          // The worktree directory is gone after worktree.remove, so leaving
+          // cwd/initialPrompt pointed at it would respawn into a dead path (or
+          // replay the original prompt) next time the pane's pty restarts.
+          // Clearing cwd lets TerminalPane's existing respawn effect relocate
+          // the pane back to the workspace folder, same as any other pane.
+          layout = updateLeaf(layout, leaf.id, {
+            worktreeBranch: undefined,
+            cwd: undefined,
+            initialPrompt: undefined
+          })
         }
         return { ...w, layout }
       })

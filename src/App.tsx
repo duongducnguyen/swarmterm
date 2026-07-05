@@ -140,7 +140,7 @@ export default function App(): ReactElement {
   }, [])
 
   // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
-  // removed clears the leaf's binding back to the workspace's main root.
+  // removed clears the binding and relocates the pane back to the workspace folder.
   useEffect(() => {
     const unSpawn = onWorktreeSpawn((e) => {
       useAppStore.getState().spawnWorktreePane({

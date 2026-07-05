@@ -1,38 +1,21 @@
-use std::fs;
 use std::path::PathBuf;
 
-use crate::mcp::config::merge_mcp_config;
+use crate::mcp::config::write_mcp_config_to_dir;
 
 /// Write (or merge) `.mcp.json` in the given workspace directory so Claude
 /// Code auto-discovers the Swarmterm MCP server. Silent on the happy path;
 /// bubbles a string error for malformed existing files or IO failures so the
-/// caller can decide whether to surface it.
+/// caller can decide whether to surface it. The actual read-merge-write lives
+/// in `mcp::config` so worktree.spawn can reuse it for fresh worktree checkouts.
 #[tauri::command]
 pub async fn write_mcp_config(cwd: String) -> Result<(), String> {
-    let dir = PathBuf::from(&cwd);
-    if !dir.is_dir() {
-        return Err(format!("cwd is not a directory: {cwd}"));
-    }
-    let path = dir.join(".mcp.json");
-    let existing = match fs::read_to_string(&path) {
-        Ok(s) => Some(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(format!("read: {e}")),
-    };
-    let merged = merge_mcp_config(existing.as_deref())?;
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, merged).map_err(|e| format!("write tmp: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
-        // Best-effort tmp cleanup on rename failure so we don't leave litter.
-        let _ = fs::remove_file(&tmp);
-        format!("rename: {e}")
-    })?;
-    Ok(())
+    write_mcp_config_to_dir(&PathBuf::from(&cwd))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
 
     #[tokio::test]
