@@ -108,6 +108,11 @@ pub struct CreateTerminalOptions {
     pub cwd: Option<String>,
     pub shell_id: Option<String>,
     pub initial_command: Option<String>,
+    /// Whether the owning workspace enables MCP worktree tools for this pty.
+    pub worktree_mode: Option<bool>,
+    /// The workspace's repo folder, recorded so worktree tools can resolve the
+    /// main root even when this pane's own cwd is a linked worktree.
+    pub repo_root: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }
@@ -138,6 +143,8 @@ pub struct ManagedTerminal {
     pub killer: Box<dyn ChildKiller + Send + Sync>,
     #[cfg(windows)]
     pub job: Option<job::JobHandle>,
+    pub worktree_mode: bool,
+    pub repo_root: Option<String>,
 }
 
 impl ManagedTerminal {
@@ -285,6 +292,10 @@ pub fn spawn_terminal(
     });
     cmd.cwd(cwd);
 
+    // Clone worktree options to locals so they're available at the insert point.
+    let worktree_mode = options.worktree_mode.unwrap_or(false);
+    let repo_root = options.repo_root.clone();
+
     let child = match pair.slave.spawn_command(cmd) {
         Ok(c) => c,
         Err(e) => return CreateTerminalResult::err(e.to_string()),
@@ -334,6 +345,8 @@ pub fn spawn_terminal(
             killer,
             #[cfg(windows)]
             job,
+            worktree_mode,
+            repo_root,
         },
     );
 

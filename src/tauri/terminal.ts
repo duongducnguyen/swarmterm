@@ -10,6 +10,8 @@ export interface CreateTerminalOptions {
   cwd?: string
   shellId?: ShellId
   initialCommand?: string
+  worktreeMode?: boolean
+  repoRoot?: string
   cols: number
   rows: number
 }
