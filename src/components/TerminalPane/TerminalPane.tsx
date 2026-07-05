@@ -7,6 +7,8 @@ import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { Button } from '@/components/ui/button'
 import { PaneHeader } from './PaneHeader'
 import { agentCommand, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
+import { buildAgentSpawnCommand, shellFlavor } from '@/lib/agent-spawn-command'
+import { isWindowsPlatform } from '@/lib/platform'
 import { pickDirectory } from '@/tauri/dialog'
 import { cn } from '@/lib/utils'
 import {
@@ -29,6 +31,8 @@ interface TerminalPaneProps {
   broadcastActive: boolean
   /** Whether this pane is in the broadcast group. */
   isBroadcastMember: boolean
+  /** Whether the workspace exposes MCP worktree tools to every terminal. */
+  worktreeMode: boolean
 }
 
 /**
@@ -43,7 +47,8 @@ export function TerminalPane({
   cwd,
   isFocused,
   broadcastActive,
-  isBroadcastMember
+  isBroadcastMember,
+  worktreeMode
 }: TerminalPaneProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -83,7 +88,17 @@ export function TerminalPane({
   const resolvedCwd = leaf.cwd ?? cwd
   const resolvedShellId = leaf.shellId ?? globalShellId
   const resolvedAgentId = leaf.agentId ?? DEFAULT_TEMPLATE_ID
-  const resolvedCommand = agentCommand(resolvedAgentId)
+  const baseCommand = agentCommand(resolvedAgentId)
+  // Worker panes carry a one-shot task brief; quote it for the shell the pty
+  // actually types into (initialCommand is a typed line, not an exec).
+  const resolvedCommand =
+    baseCommand !== undefined && leaf.initialPrompt !== undefined
+      ? buildAgentSpawnCommand(
+          baseCommand,
+          leaf.initialPrompt,
+          shellFlavor(resolvedShellId, isWindowsPlatform())
+        )
+      : baseCommand
 
   const [status, setStatus] = useState<TerminalStatus>(() => getTerminalStatus(terminalId))
 
@@ -97,7 +112,9 @@ export function TerminalPane({
     attachTerminal(terminalId, container, {
       cwd: resolvedCwd,
       shellId: resolvedShellId,
-      initialCommand: resolvedCommand
+      initialCommand: resolvedCommand,
+      worktreeMode: worktreeMode || undefined,
+      repoRoot: worktreeMode ? cwd : undefined
     })
     setStatus(getTerminalStatus(terminalId))
     const unsubscribe = subscribeTerminalStatus(terminalId, () =>
@@ -132,7 +149,9 @@ export function TerminalPane({
     respawnTerminal(terminalId, {
       cwd: resolvedCwd,
       shellId: resolvedShellId,
-      initialCommand: resolvedCommand
+      initialCommand: resolvedCommand,
+      worktreeMode: worktreeMode || undefined,
+      repoRoot: worktreeMode ? cwd : undefined
     })
   }, [terminalId, resolvedCwd, resolvedShellId, resolvedCommand])
 

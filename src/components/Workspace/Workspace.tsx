@@ -50,6 +50,7 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
           isBroadcastMember={
             workspace.broadcastActive && workspace.broadcastLeafIds.includes(node.id)
           }
+          worktreeMode={workspace.worktreeMode}
         />
       )
     }
