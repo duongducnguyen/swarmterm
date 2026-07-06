@@ -1,151 +1,114 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useBrowserStore } from './browser-store'
 
-const reset = () =>
-  useBrowserStore.setState({ tabs: [], activeTabId: null, visible: false, fullscreen: false })
+const reset = () => useBrowserStore.setState({ previews: {} })
+const get = () => useBrowserStore.getState()
 
 describe('browser-store', () => {
   beforeEach(reset)
 
-  it('openTab adds a tab, makes it active and shows the column', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://localhost:3000' })
-    const s = useBrowserStore.getState()
-    expect(s.tabs).toHaveLength(1)
-    expect(s.tabs[0]).toMatchObject({ terminalId: 't1', url: 'http://localhost:3000' })
-    expect(s.activeTabId).toBe(s.tabs[0].id)
-    expect(s.visible).toBe(true)
+  it('openPreview creates the preview with history=[url]', () => {
+    get().openPreview('t1', 'http://localhost:3000')
+    expect(get().previews['t1']).toMatchObject({
+      url: 'http://localhost:3000',
+      history: ['http://localhost:3000'],
+      historyIndex: 0,
+    })
   })
 
-  it('closeTab removes it and moves active to a neighbour, hiding when empty', () => {
-    const open = useBrowserStore.getState().openTab
-    open({ terminalId: 't1', url: 'http://a' })
-    open({ terminalId: 't1', url: 'http://b' })
-    const [first, second] = useBrowserStore.getState().tabs
-    useBrowserStore.getState().setActiveTab(first.id)
-    useBrowserStore.getState().closeTab(first.id)
-    expect(useBrowserStore.getState().activeTabId).toBe(second.id)
-    useBrowserStore.getState().closeTab(second.id)
-    expect(useBrowserStore.getState().tabs).toHaveLength(0)
-    expect(useBrowserStore.getState().activeTabId).toBeNull()
-    expect(useBrowserStore.getState().visible).toBe(false)
+  it('openPreview on a terminal that already has one navigates it', () => {
+    get().openPreview('t1', 'http://a')
+    get().openPreview('t1', 'http://b')
+    expect(get().previews['t1']).toMatchObject({
+      url: 'http://b',
+      history: ['http://a', 'http://b'],
+      historyIndex: 1,
+    })
   })
 
-  it('closeTabsForTerminal drops every tab of that terminal', () => {
-    const open = useBrowserStore.getState().openTab
-    open({ terminalId: 't1', url: 'http://a' })
-    open({ terminalId: 't2', url: 'http://b' })
-    open({ terminalId: 't1', url: 'http://c' })
-    useBrowserStore.getState().closeTabsForTerminal('t1')
-    const s = useBrowserStore.getState()
-    expect(s.tabs).toHaveLength(1)
-    expect(s.tabs[0].terminalId).toBe('t2')
-    expect(s.activeTabId).toBe(s.tabs[0].id)
+  it('openPreview with the currently shown url is a no-op', () => {
+    get().openPreview('t1', 'http://a')
+    get().openPreview('t1', 'http://a')
+    expect(get().previews['t1']).toMatchObject({ history: ['http://a'], historyIndex: 0 })
   })
 
-  it('navigate updates url, setTitle updates title', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://b')
-    useBrowserStore.getState().setTitle(id, 'Hello')
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.url).toBe('http://b')
-    expect(tab.title).toBe('Hello')
+  it('openPreview does not touch other terminals', () => {
+    get().openPreview('t1', 'http://a')
+    get().openPreview('t2', 'http://b')
+    expect(get().previews['t1']).toMatchObject({ url: 'http://a' })
+    expect(get().previews['t2']).toMatchObject({ url: 'http://b' })
   })
 
-  it('toggleVisible and setFullscreen flip their flags', () => {
-    useBrowserStore.getState().toggleVisible()
-    expect(useBrowserStore.getState().visible).toBe(true)
-    useBrowserStore.getState().setFullscreen(true)
-    expect(useBrowserStore.getState().fullscreen).toBe(true)
-  })
-
-  // --- per-tab history tests ---
-
-  it('openTab initializes history=[url] and historyIndex=0', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://start' })
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.history).toEqual(['http://start'])
-    expect(tab.historyIndex).toBe(0)
+  it('closePreview removes only that terminal entry; unknown terminal is a no-op', () => {
+    get().openPreview('t1', 'http://a')
+    get().openPreview('t2', 'http://b')
+    get().closePreview('t1')
+    expect(get().previews['t1']).toBeUndefined()
+    expect(get().previews['t2']).toMatchObject({ url: 'http://b' })
+    get().closePreview('nope') // must not throw or clobber state
+    expect(get().previews['t2']).toMatchObject({ url: 'http://b' })
   })
 
   it('navigate pushes a new entry and advances historyIndex', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://b')
-    useBrowserStore.getState().navigate(id, 'http://c')
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.history).toEqual(['http://a', 'http://b', 'http://c'])
-    expect(tab.historyIndex).toBe(2)
-    expect(tab.url).toBe('http://c')
+    get().openPreview('t1', 'http://a')
+    get().navigate('t1', 'http://b')
+    get().navigate('t1', 'http://c')
+    expect(get().previews['t1']).toMatchObject({
+      url: 'http://c',
+      history: ['http://a', 'http://b', 'http://c'],
+      historyIndex: 2,
+    })
   })
 
   it('navigate to the same url as current entry is a no-op', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://a')
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.history).toEqual(['http://a'])
-    expect(tab.historyIndex).toBe(0)
+    get().openPreview('t1', 'http://a')
+    get().navigate('t1', 'http://a')
+    expect(get().previews['t1']).toMatchObject({ history: ['http://a'], historyIndex: 0 })
   })
 
   it('navigate after goBack truncates forward history', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://b')
-    useBrowserStore.getState().navigate(id, 'http://c')
-    useBrowserStore.getState().goBack(id)
-    // now at index 1 (http://b), forward has http://c
-    useBrowserStore.getState().navigate(id, 'http://d')
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.history).toEqual(['http://a', 'http://b', 'http://d'])
-    expect(tab.historyIndex).toBe(2)
-    expect(tab.url).toBe('http://d')
+    get().openPreview('t1', 'http://a')
+    get().navigate('t1', 'http://b')
+    get().navigate('t1', 'http://c')
+    get().goBack('t1')
+    get().navigate('t1', 'http://d')
+    expect(get().previews['t1']).toMatchObject({
+      url: 'http://d',
+      history: ['http://a', 'http://b', 'http://d'],
+      historyIndex: 2,
+    })
   })
 
-  it('goBack moves through history and updates tab.url', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://b')
-    useBrowserStore.getState().navigate(id, 'http://c')
-    useBrowserStore.getState().goBack(id)
-    expect(useBrowserStore.getState().tabs[0].url).toBe('http://b')
-    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(1)
-    useBrowserStore.getState().goBack(id)
-    expect(useBrowserStore.getState().tabs[0].url).toBe('http://a')
-    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(0)
+  it('navigate on a terminal without a preview is a no-op', () => {
+    get().navigate('t1', 'http://a')
+    expect(get().previews['t1']).toBeUndefined()
   })
 
-  it('goBack at start is a no-op', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().goBack(id)
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.historyIndex).toBe(0)
-    expect(tab.url).toBe('http://a')
+  it('goBack/goForward walk history and clamp at both ends', () => {
+    get().openPreview('t1', 'http://a')
+    get().navigate('t1', 'http://b')
+    get().goBack('t1')
+    expect(get().previews['t1']).toMatchObject({ url: 'http://a', historyIndex: 0 })
+    get().goBack('t1') // at start — no-op
+    expect(get().previews['t1']).toMatchObject({ url: 'http://a', historyIndex: 0 })
+    get().goForward('t1')
+    expect(get().previews['t1']).toMatchObject({ url: 'http://b', historyIndex: 1 })
+    get().goForward('t1') // at end — no-op
+    expect(get().previews['t1']).toMatchObject({ url: 'http://b', historyIndex: 1 })
   })
 
-  it('goForward moves through history and updates tab.url', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().navigate(id, 'http://b')
-    useBrowserStore.getState().navigate(id, 'http://c')
-    useBrowserStore.getState().goBack(id)
-    useBrowserStore.getState().goBack(id)
-    expect(useBrowserStore.getState().tabs[0].url).toBe('http://a')
-    useBrowserStore.getState().goForward(id)
-    expect(useBrowserStore.getState().tabs[0].url).toBe('http://b')
-    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(1)
-    useBrowserStore.getState().goForward(id)
-    expect(useBrowserStore.getState().tabs[0].url).toBe('http://c')
-    expect(useBrowserStore.getState().tabs[0].historyIndex).toBe(2)
+  it('goBack/goForward/setTitle on a terminal without a preview are no-ops', () => {
+    get().goBack('t1')
+    get().goForward('t1')
+    get().setTitle('t1', 'x')
+    expect(get().previews['t1']).toBeUndefined()
   })
 
-  it('goForward at end is a no-op', () => {
-    useBrowserStore.getState().openTab({ terminalId: 't1', url: 'http://a' })
-    const id = useBrowserStore.getState().tabs[0].id
-    useBrowserStore.getState().goForward(id)
-    const tab = useBrowserStore.getState().tabs[0]
-    expect(tab.historyIndex).toBe(0)
-    expect(tab.url).toBe('http://a')
+  it('setTitle sets the title of that terminal preview only', () => {
+    get().openPreview('t1', 'http://a')
+    get().openPreview('t2', 'http://b')
+    get().setTitle('t1', 'Hello')
+    expect(get().previews['t1']!.title).toBe('Hello')
+    expect(get().previews['t2']!.title).toBeUndefined()
   })
 })
