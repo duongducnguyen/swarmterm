@@ -110,3 +110,15 @@ pub async fn git_get_commit_info(
     .await
     .map_err(|e| format!("git task failed: {e}"))?
 }
+
+#[tauri::command]
+pub async fn git_create_worktree(
+    repo_root: String,
+    branch: String,
+) -> Result<crate::git::CreatedWorktree, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::create_worktree(std::path::Path::new(&repo_root), &branch)
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
+}

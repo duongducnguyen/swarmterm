@@ -21,6 +21,11 @@ export interface CommitInfo {
   behind: number | null
 }
 
+export interface CreatedWorktree {
+  path: string
+  branch: string
+}
+
 export function listWorktrees(cwd: string): Promise<WorktreeInfo[]> {
   return invoke('git_list_worktrees', { cwd })
 }
@@ -35,4 +40,8 @@ export function getFileDiff(worktreePath: string, file: string): Promise<string>
 
 export function getCommitInfo(worktreePath: string): Promise<CommitInfo> {
   return invoke('git_get_commit_info', { worktreePath })
+}
+
+export function createWorktree(repoRoot: string, branch: string): Promise<CreatedWorktree> {
+  return invoke('git_create_worktree', { repoRoot, branch })
 }
