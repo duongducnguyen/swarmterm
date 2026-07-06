@@ -749,6 +749,25 @@ describe('worktree panes', () => {
     expect(worker.initialPrompt).toBeUndefined()
   })
 
+  it('clearWorktreeBinding matches paths across / and \\ separator styles', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      // Leaf's cwd mixes styles, as Rust PathBuf output sometimes does on Windows.
+      path: 'C:/dev/myapp.worktrees\\feat-login',
+      branch: 'feat/login',
+      prompt: 'x'
+    })
+    // Clear using the forward-slash form only — must still match the mixed leaf.
+    store.getState().clearWorktreeBinding('C:/dev/myapp.worktrees/feat-login')
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves.every((l) => l.worktreeBranch === undefined)).toBe(true)
+    const worker = leaves.find((l) => l.id !== requester.id)!
+    expect(worker.cwd).toBeUndefined()
+    expect(worker.initialPrompt).toBeUndefined()
+  })
+
   it('setPaneAgent clears a pending initialPrompt', () => {
     const store = workspaceWithWorktrees()
     const requester = collectLeaves(store.getState().workspaces[0].layout)[0]

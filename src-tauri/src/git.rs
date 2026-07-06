@@ -18,6 +18,10 @@ fn git_command() -> Command {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000);
     }
+    // Force English git output: error-classification (e.g. "already exists")
+    // and porcelain-adjacent parsing must not depend on the user's locale —
+    // git ships full translations (incl. Vietnamese) that would break both.
+    cmd.env("LC_ALL", "C");
     cmd
 }
 

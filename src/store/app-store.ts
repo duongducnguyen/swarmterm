@@ -114,6 +114,11 @@ function makeLeaf(): LeafNode {
   return { type: 'leaf', id: uid(), terminalId: uid() }
 }
 
+/** Compare paths ignoring separator style — Windows sources mix / and \. */
+function samePath(a: string | undefined, b: string): boolean {
+  return a !== undefined && a.replace(/\\/g, '/') === b.replace(/\\/g, '/')
+}
+
 /** Return the active workspace, or `undefined` if it cannot be resolved. */
 export function selectActiveWorkspace(state: AppState): Workspace | undefined {
   return state.workspaces.find((w) => w.id === state.activeWorkspaceId)
@@ -346,7 +351,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   clearWorktreeBinding: (path) =>
     set((s) => ({
       workspaces: s.workspaces.map((w) => {
-        const bound = collectLeaves(w.layout).filter((l) => l.cwd === path)
+        const bound = collectLeaves(w.layout).filter((l) => samePath(l.cwd, path))
         if (bound.length === 0) return w
         let layout = w.layout
         for (const leaf of bound) {
