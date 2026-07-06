@@ -113,6 +113,13 @@ export default function App(): ReactElement {
         for (const terminalId of Object.keys(previews)) {
           if (!live.has(terminalId)) closePreview(terminalId)
         }
+        // Titles are keyed by terminalId outside the layout tree (see
+        // terminal-title-store) — sweep them the same way previews are, or a
+        // closed pane's title lingers in the store for the rest of the session.
+        const { titles, clearTitle } = useTerminalTitleStore.getState()
+        for (const terminalId of Object.keys(titles)) {
+          if (!live.has(terminalId)) clearTitle(terminalId)
+        }
       }),
     []
   )

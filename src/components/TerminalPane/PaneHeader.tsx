@@ -76,7 +76,16 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
     if (!el) return
     const ro = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? el.clientWidth
-      setLevel(resolveHeaderLevel(width, Boolean(worktreeBranch)))
+      // Bail out to the same object when the resolved level is unchanged —
+      // otherwise every resize tick during a divider drag re-renders the header.
+      setLevel((prev) => {
+        const next = resolveHeaderLevel(width, Boolean(worktreeBranch))
+        return prev.showFolderPath === next.showFolderPath &&
+          prev.showShellLabel === next.showShellLabel &&
+          prev.worktree === next.worktree
+          ? prev
+          : next
+      })
     })
     ro.observe(el)
     return () => ro.disconnect()
