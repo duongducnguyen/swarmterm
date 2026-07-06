@@ -42,6 +42,10 @@ export interface CreateWorkspaceConfig {
   agentIds: string[]
   /** Enable MCP worktree tools for every terminal in this workspace. */
   worktreeMode?: boolean
+  /** Per-pane worktree assignment, index-aligned with agentIds; null = pane
+   *  stays at the workspace cwd. Created by the composer BEFORE the store is
+   *  touched, so leaves are born with their isolation — no post-hoc rebinding. */
+  paneWorktrees?: ({ path: string; branch: string } | null)[]
 }
 
 export interface AppState {
@@ -149,12 +153,17 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       // agentIds order. The ?? fallback is defensive — agentIds.length panes
       // always have a matching id.
       let paneIndex = 0
-      const makeWizardLeaf = (): LeafNode => ({
-        type: 'leaf',
-        id: uid(),
-        terminalId: uid(),
-        agentId: config.agentIds[paneIndex++] ?? DEFAULT_TEMPLATE_ID
-      })
+      const makeWizardLeaf = (): LeafNode => {
+        const i = paneIndex++
+        const wt = config.paneWorktrees?.[i] ?? null
+        return {
+          type: 'leaf',
+          id: uid(),
+          terminalId: uid(),
+          agentId: config.agentIds[i] ?? DEFAULT_TEMPLATE_ID,
+          ...(wt ? { cwd: wt.path, worktreeBranch: wt.branch } : {})
+        }
+      }
       const layout = paneLayoutFor(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
         id: uid(),

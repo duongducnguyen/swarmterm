@@ -767,5 +767,26 @@ describe('worktree panes', () => {
     )!
     expect(updated.initialPrompt).toBeUndefined()
   })
+
+  it('createWorkspace stamps paneWorktrees onto leaves in pane order', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({
+      cwd: 'C:/dev/myapp',
+      terminalCount: 3,
+      agentIds: ['claude-code', 'terminal', 'claude-code'],
+      worktreeMode: true,
+      paneWorktrees: [
+        { path: 'C:/dev/myapp.worktrees/claude-code-1', branch: 'swarm/claude-code-1' },
+        null,
+        { path: 'C:/dev/myapp.worktrees/claude-code-2', branch: 'swarm/claude-code-2' }
+      ]
+    })
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves[0].cwd).toBe('C:/dev/myapp.worktrees/claude-code-1')
+    expect(leaves[0].worktreeBranch).toBe('swarm/claude-code-1')
+    expect(leaves[1].cwd).toBeUndefined()
+    expect(leaves[1].worktreeBranch).toBeUndefined()
+    expect(leaves[2].worktreeBranch).toBe('swarm/claude-code-2')
+  })
 })
 
