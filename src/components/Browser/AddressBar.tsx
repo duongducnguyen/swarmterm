@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { ExternalLink, RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, RotateCw, X } from 'lucide-react'
 import { useBrowserStore, type Preview } from '@/store/browser-store'
 import { normalizeUrl } from '@/lib/web-url'
 import { openExternalWindow } from '@/tauri/popout'
@@ -13,7 +13,15 @@ interface AddressBarProps {
 export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): ReactElement {
   const openPreview = useBrowserStore((s) => s.openPreview)
   const closePreview = useBrowserStore((s) => s.closePreview)
+  const goBack = useBrowserStore((s) => s.goBack)
+  const goForward = useBrowserStore((s) => s.goForward)
   const [draft, setDraft] = useState(preview?.url ?? '')
+
+  // Rendered unconditionally (not gated on `preview`) so the bar's layout
+  // doesn't shift width as previews open/close — only their disabled state
+  // reacts to history position.
+  const backDisabled = !preview || !terminalId || preview.historyIndex <= 0
+  const forwardDisabled = !preview || !terminalId || preview.historyIndex >= preview.history.length - 1
 
   // Keep the input in sync when the focused terminal (or its url) changes.
   useEffect(() => {
@@ -32,6 +40,24 @@ export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): 
 
   return (
     <div className="flex items-center gap-1 border-b border-border bg-background px-2 py-1">
+      <button
+        type="button"
+        aria-label="Back"
+        disabled={backDisabled}
+        onClick={() => terminalId && goBack(terminalId)}
+        className="rounded p-1 hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+      >
+        <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label="Forward"
+        disabled={forwardDisabled}
+        onClick={() => terminalId && goForward(terminalId)}
+        className="rounded p-1 hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+      >
+        <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+      </button>
       <button
         type="button"
         aria-label="Reload"
