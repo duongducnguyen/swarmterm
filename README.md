@@ -23,13 +23,14 @@ tính năng iteration 1 được giữ nguyên.
   (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
 - **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
   theo.
-- **Web browser preview** — cột thứ 3 kiểu Chrome hiển thị web gắn theo từng
-  terminal. Trigger từ trong terminal qua MCP: mỗi PTY có sẵn env
-  `SWARMTERM_MCP_URL` + `SWARMTERM_SESSION`, và Swarmterm tự viết `.mcp.json`
-  vào workspace khi tạo, nên Claude Code (hoặc bất kỳ MCP client nào) gọi
-  tool `browser.open_preview(url)` là tab hiện. Iframe DOM docked, tab strip
-  + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột; fullscreen
-  + Esc thoát.
+- **Web browser preview** — cột thứ 3 hiển thị web preview của terminal đang
+  được chọn: mỗi terminal có tối đa MỘT preview (kèm history back/forward
+  riêng), click pane nào thấy preview của pane đó. Trigger từ trong terminal
+  qua MCP: mỗi PTY có sẵn env `SWARMTERM_MCP_URL` + `SWARMTERM_SESSION`, và
+  Swarmterm tự viết `.mcp.json` vào workspace khi tạo, nên Claude Code (hoặc
+  bất kỳ MCP client nào) gọi tool `browser.open_preview(url)` là preview cập
+  nhật — gọi lần nữa là điều hướng. Agent ở terminal nền cập nhật âm thầm,
+  không cướp view. Iframe DOM docked + address bar, gõ URL tự do.
 - **Isolate features in git worktrees** — composer có toggle "Isolate features
   in git worktrees"; bật thì mỗi pane agent được tạo sẵn trong worktree riêng
   (`<repo>.worktrees/<slug>`) kèm badge 🌿 ngay lập tức. MCP tool `worktree.spawn`
@@ -95,14 +96,14 @@ src/                          # Frontend React/TS (renderer)
     WorkspaceSetup/           # Setup wizard + template picker
     Workspace/                # Render cây layout (react-resizable-panels)
     TerminalPane/             # Bọc xterm.js; gắn vào bridge qua useTerminalSession
-    Browser/                  # BrowserColumn, TabStrip, AddressBar (web preview)
+    Browser/                  # BrowserColumn, AddressBar (web preview)
     ui/                       # Button, dropdown-menu (kiểu shadcn)
   hooks/
     useTerminalSession.ts     # Effect: spawn pty → stream PtyOut vào xterm, retry
   store/
     app-store.ts              # zustand store: workspaces + layout actions
     theme-store.ts            # zustand store: theme (light/dark) + localStorage
-    browser-store.ts          # zustand store: state tab browser (web preview)
+    browser-store.ts          # zustand store: preview theo terminal (web preview)
   lib/
     layout-tree.ts            # Hàm cây split thuần (TDD; 37 test)
     theme.ts                  # Helpers theme (9 test)
@@ -210,6 +211,12 @@ Sau `npm run tauri dev`:
       `worktree.remove` từ chối nếu worktree chứa file chưa commit; commit rồi
       thử lại → thư mục xoá. Tạo workspace với toggle OFF, gọi `worktree.spawn` →
       lỗi "worktree isolation is not enabled".
+- [ ] **Preview theo terminal:** 2 pane, mỗi pane bảo agent mở một URL khác
+      nhau qua `browser.open_preview` → click qua lại giữa 2 pane thấy trang
+      đổi đúng theo pane. Agent ở pane KHÔNG focus gọi tool → view hiện tại
+      không bị cướp. Pane chưa có preview → empty state, gõ URL vào address
+      bar tạo preview cho đúng pane. Agent gọi tool lần 2 → điều hướng,
+      back/forward hoạt động, không sinh thêm gì.
 
 ## Giới hạn đã biết (iteration 1)
 
@@ -218,5 +225,5 @@ Sau `npm run tauri dev`:
   đóng (xterm reconnect chưa được implement).
 - Code editor, file browser, kanban, AI agent, Settings là phạm vi của các
   iteration sau.
-- Web browser preview đã có (cột thứ 3); lưu/khôi phục tab giữa các lần mở
-  app chưa được implement.
+- Web browser preview đã có (một preview mỗi terminal, bám focus); lưu/khôi
+  phục preview giữa các lần mở app chưa được implement.

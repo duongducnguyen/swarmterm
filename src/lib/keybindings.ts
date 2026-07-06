@@ -59,7 +59,6 @@ export function getShortcutGroups(isMac: boolean): KeybindingGroup[] {
       entries: [
         { description: 'Toggle sidebar',              keys: [mod, 'B'] },
         { description: 'Close Settings',              keys: ['Esc'] },
-        { description: 'Exit web preview fullscreen', keys: ['Esc'] },
       ],
     },
   ]
