@@ -4,6 +4,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { LeafNode } from '@/lib/layout-tree'
 import { useAppStore } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
+import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { Button } from '@/components/ui/button'
 import { PaneHeader } from './PaneHeader'
 import { agentCommand, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
@@ -62,6 +63,8 @@ export function TerminalPane({
   const globalShellId = useTerminalPrefStore((s) => s.shellId)
 
   const { id: leafId, terminalId } = leaf
+
+  const agentTitle = useTerminalTitleStore((s) => s.titles[terminalId])
 
   // Reorder-DnD: the whole pane root is both the drop target AND the draggable
   // node (so the drag overlay assumes the pane's size); the header (below) is the
@@ -153,6 +156,9 @@ export function TerminalPane({
       worktreeMode: worktreeMode || undefined,
       repoRoot: worktreeMode ? cwd : undefined
     })
+    // A same-id respawn (agent/cwd/shell switch) starts a new session; the old
+    // agent's title no longer describes it. Clear it — the new agent re-titles.
+    useTerminalTitleStore.getState().clearTitle(terminalId)
   }, [terminalId, resolvedCwd, resolvedShellId, resolvedCommand])
 
   // Pull keyboard focus into xterm when this pane becomes the focused one.
@@ -212,6 +218,7 @@ export function TerminalPane({
         dragListeners={dragListeners}
         dragAttributes={dragAttributes}
         worktreeBranch={leaf.worktreeBranch}
+        agentTitle={agentTitle}
       />
 
       <div className="relative flex-1 overflow-hidden">

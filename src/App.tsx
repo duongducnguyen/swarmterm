@@ -18,6 +18,7 @@ import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
+import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
@@ -111,6 +112,13 @@ export default function App(): ReactElement {
         const { previews, closePreview } = useBrowserStore.getState()
         for (const terminalId of Object.keys(previews)) {
           if (!live.has(terminalId)) closePreview(terminalId)
+        }
+        // Titles are keyed by terminalId outside the layout tree (see
+        // terminal-title-store) — sweep them the same way previews are, or a
+        // closed pane's title lingers in the store for the rest of the session.
+        const { titles, clearTitle } = useTerminalTitleStore.getState()
+        for (const terminalId of Object.keys(titles)) {
+          if (!live.has(terminalId)) clearTitle(terminalId)
         }
       }),
     []
