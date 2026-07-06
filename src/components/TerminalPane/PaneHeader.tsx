@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Folder, Terminal as ShellIcon, Check, Columns2, Rows2, Radio, X, GitBranch } from 'lucide-react'
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core'
 import { AgentIcon } from '@/components/AgentIcon'
@@ -11,6 +12,7 @@ import {
 import { TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { KNOWN_SHELLS, type ShellId } from '@/lib/terminal-pref'
+import { resolveHeaderLevel, shortenPath, type HeaderLevel } from '@/lib/header-layout'
 import { cn } from '@/lib/utils'
 
 interface PaneHeaderProps {
@@ -18,10 +20,12 @@ interface PaneHeaderProps {
   agentId: string
   /** Resolved shell id (leaf override already applied). */
   shellId: ShellId
-  /** Resolved cwd, shown in the folder tooltip. */
+  /** Resolved cwd, shown in the folder tooltip + collapsed label. */
   resolvedCwd: string
   /** Whether this pane has its own cwd override (enables "Use workspace folder"). */
   hasCwdOverride: boolean
+  /** Agent-set title (via the terminal.set_title MCP tool); falls back to the agent name. */
+  agentTitle?: string
   onAgentChange: (id: string) => void
   onShellChange: (id: ShellId) => void
   onChoosePath: () => void
@@ -43,23 +47,57 @@ interface PaneHeaderProps {
   worktreeBranch?: string
 }
 
-/** The per-pane header: agent / path / shell dropdowns plus split & close. */
+/**
+ * The per-pane header. Priority-ordered and responsive: the title (agent-set or
+ * agent-name fallback) is the star and soaks up free space, while folder / shell
+ * / worktree chips collapse to icons as the pane narrows — see
+ * `resolveHeaderLevel`. A ResizeObserver on the header row drives the level.
+ */
 export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
-  const { agentId, shellId, resolvedCwd, hasCwdOverride } = props
+  const { agentId, shellId, resolvedCwd, hasCwdOverride, worktreeBranch } = props
   const agent = templateById(agentId)
   const agentLabel = agent.name
   const shellLabel = KNOWN_SHELLS.find((s) => s.id === shellId)?.label ?? KNOWN_SHELLS[0].label
   const availability = useAgentAvailabilityStore((s) => s.availability)
 
+  // Title: agent-supplied wins; otherwise the agent name so the slot is never
+  // blank. Tooltip carries the full title + full branch (both may be truncated).
+  const displayTitle = props.agentTitle?.trim() || agentLabel
+  const titleTooltip = worktreeBranch ? `${displayTitle} — ${worktreeBranch}` : displayTitle
+
+  // Measure the header row and resolve which chips render at full detail. Start
+  // wide so the first paint isn't over-collapsed before the observer fires.
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [level, setLevel] = useState<HeaderLevel>(() =>
+    resolveHeaderLevel(9999, Boolean(worktreeBranch))
+  )
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? el.clientWidth
+      setLevel(resolveHeaderLevel(width, Boolean(worktreeBranch)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [worktreeBranch])
+
+  // Compose the dnd activator ref with our measure ref — the header row is both
+  // the drag handle and the element we size against.
+  const setRootRef = (el: HTMLDivElement | null): void => {
+    props.dragHandleRef(el)
+    rootRef.current = el
+  }
+
   return (
     <div
-      ref={props.dragHandleRef}
+      ref={setRootRef}
       {...props.dragAttributes}
       {...props.dragListeners}
-      className="flex h-7 shrink-0 cursor-grab items-center justify-between border-b border-border bg-card px-1.5 active:cursor-grabbing"
+      className="flex h-7 shrink-0 cursor-grab items-center gap-0.5 border-b border-border bg-card px-1.5 active:cursor-grabbing"
     >
-      <div className="flex items-center gap-0.5" data-no-dnd>
-        {/* Agent */}
+      {/* Agent — pinned far-left identity, never collapses. */}
+      <div data-no-dnd>
         <DropdownMenu
           onOpenChange={(open) => {
             if (open) void useAgentAvailabilityStore.getState().refresh()
@@ -86,25 +124,31 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
 
-        {props.worktreeBranch && (
-          <span
-            title={`Worktree branch: ${props.worktreeBranch}`}
-            className="flex min-w-0 max-w-[10rem] items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          >
-            <GitBranch className="h-3 w-3 shrink-0" />
-            <span className="truncate">{props.worktreeBranch}</span>
-          </span>
-        )}
+      {/* Title — the star. flex-1 soaks free space; truncates last. Draggable. */}
+      <span className="min-w-0 flex-1 truncate px-1 text-xs text-foreground" title={titleTooltip}>
+        {displayTitle}
+      </span>
 
-        {/* Path */}
+      {/* Folder + shell — labels collapse to icons as width shrinks. */}
+      <div className="flex items-center gap-0.5" data-no-dnd>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title={`Folder: ${resolvedCwd}`} aria-label={`Folder: ${resolvedCwd}`}>
-              <Folder className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-1.5 text-muted-foreground"
+              title={`Folder: ${resolvedCwd}`}
+              aria-label={`Folder: ${resolvedCwd}`}
+            >
+              <Folder className="h-3.5 w-3.5 shrink-0" />
+              {level.showFolderPath && (
+                <span className="max-w-[8rem] truncate text-[11px]">{shortenPath(resolvedCwd)}</span>
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={props.onChoosePath}>
               <Folder className="h-3.5 w-3.5" />
               <span>Choose folder…</span>
@@ -116,14 +160,20 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Shell */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title={`Shell: ${shellLabel}`} aria-label={`Shell: ${shellLabel}`}>
-              <ShellIcon className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-1.5 text-muted-foreground"
+              title={`Shell: ${shellLabel}`}
+              aria-label={`Shell: ${shellLabel}`}
+            >
+              <ShellIcon className="h-3.5 w-3.5 shrink-0" />
+              {level.showShellLabel && <span className="text-[11px]">{shellLabel}</span>}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="end">
             {KNOWN_SHELLS.map((s) => (
               <DropdownMenuItem key={s.id} onSelect={() => props.onShellChange(s.id)}>
                 <Check aria-hidden="true" className={cn('h-3.5 w-3.5', s.id === shellId ? 'opacity-100' : 'opacity-0')} />
@@ -134,6 +184,22 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
         </DropdownMenu>
       </div>
 
+      {/* Worktree — lowest priority: full name → truncated → icon-only → hidden. */}
+      {worktreeBranch && level.worktree !== 'hidden' && (
+        <span
+          title={`Worktree branch: ${worktreeBranch}`}
+          className="flex min-w-0 items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground"
+        >
+          <GitBranch className="h-3 w-3 shrink-0" />
+          {level.worktree !== 'icon' && (
+            <span className={cn('truncate', level.worktree === 'name-trunc' ? 'max-w-[5rem]' : 'max-w-[10rem]')}>
+              {worktreeBranch}
+            </span>
+          )}
+        </span>
+      )}
+
+      {/* Actions — unchanged cluster, far right. */}
       <div className="flex items-center gap-0.5" data-no-dnd>
         {props.broadcastActive && (
           <Button

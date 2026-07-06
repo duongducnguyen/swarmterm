@@ -64,6 +64,8 @@ export function TerminalPane({
 
   const { id: leafId, terminalId } = leaf
 
+  const agentTitle = useTerminalTitleStore((s) => s.titles[terminalId])
+
   // Reorder-DnD: the whole pane root is both the drop target AND the draggable
   // node (so the drag overlay assumes the pane's size); the header (below) is the
   // grab handle via setActivatorNodeRef. Both keyed by leafId — dnd-kit keeps the
@@ -216,6 +218,7 @@ export function TerminalPane({
         dragListeners={dragListeners}
         dragAttributes={dragAttributes}
         worktreeBranch={leaf.worktreeBranch}
+        agentTitle={agentTitle}
       />
 
       <div className="relative flex-1 overflow-hidden">
