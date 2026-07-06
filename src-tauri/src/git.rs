@@ -356,6 +356,22 @@ pub fn create_worktree(repo_cwd: &Path, branch: &str) -> Result<CreatedWorktree,
         ));
     }
     let root = main_root.to_str().ok_or("non-UTF-8 repo root")?;
+    // `worktree add -b` checks out from HEAD; on an unborn HEAD (fresh
+    // `git init`, zero commits) git fails with an opaque "invalid reference"
+    // — pre-check so callers get an actionable message instead. The composer
+    // also guards this, but MCP worktree.spawn reaches here directly.
+    let head_ok = git_command()
+        .args(["-C", root, "rev-parse", "--verify", "--quiet", "HEAD"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?
+        .status
+        .success();
+    if !head_ok {
+        return Err(
+            "repository has no commits yet — make an initial commit before creating worktrees"
+                .into(),
+        );
+    }
     let target_s = target.to_str().ok_or("non-UTF-8 target path")?.to_string();
     let out = git_command()
         .args(["-C", root, "worktree", "add", &target_s, "-b", branch])
