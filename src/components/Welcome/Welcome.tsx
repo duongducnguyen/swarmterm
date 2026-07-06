@@ -15,7 +15,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { writeMcpConfig } from '@/tauri/mcp'
-import { listWorktrees } from '@/tauri/git'
+import { listWorktrees, createWorktree } from '@/tauri/git'
+import { planWorktreeBranches, bumpBranch } from '@/lib/worktree-naming'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
 import { LayoutPreview } from './LayoutPreview'
@@ -119,14 +120,51 @@ export function Welcome(): ReactElement {
     if (picked) setFolder(picked)
   }
 
-  const submit = (): void => {
+  const submit = async (): Promise<void> => {
     if (!canCreate) return
     addRecentFolder(trimmedFolder)
+
+    const isolate = isolateWorktrees && isGitRepo
+    // Provision isolation BEFORE the workspace exists: leaves are born inside
+    // their worktrees, so no pane ever runs on the main checkout by accident
+    // (v2 spec — the toggle is a guarantee, not a suggestion to the agent).
+    let paneWorktrees: ({ path: string; branch: string } | null)[] | undefined
+    if (isolate) {
+      const plan = planWorktreeBranches(agentIds)
+      paneWorktrees = await Promise.all(
+        plan.map(async (branch) => {
+          if (branch === null) return null
+          // Bump the numeric suffix on collision (existing branch/dir from a
+          // previous session) instead of failing the pane.
+          for (let attempt = 1; attempt <= 5; attempt++) {
+            const name = attempt === 1 ? branch : bumpBranch(branch, attempt)
+            try {
+              const wt = await createWorktree(trimmedFolder, name)
+              // Worker agents need the MCP config inside their own project
+              // root; fire-and-forget like the workspace-root write below.
+              void writeMcpConfig(wt.path).catch((e) =>
+                console.warn('failed to write worktree .mcp.json:', e)
+              )
+              return { path: wt.path, branch: wt.branch }
+            } catch (e) {
+              if (attempt === 5 || !String(e).includes('already exists')) {
+                // Fallback: pane opens at the repo root, visibly badge-less.
+                console.warn(`worktree for ${branch} failed, pane falls back to repo root:`, e)
+                return null
+              }
+            }
+          }
+          return null
+        })
+      )
+    }
+
     createWorkspace({
       cwd: trimmedFolder,
       terminalCount,
       agentIds,
-      worktreeMode: isolateWorktrees && isGitRepo
+      worktreeMode: isolate,
+      paneWorktrees
     })
     // Fire-and-forget: the workspace is usable even if the MCP config write
     // fails (bad permissions, malformed existing .mcp.json). Log-only.
@@ -142,7 +180,7 @@ export function Welcome(): ReactElement {
     const onKeyDown = (e: globalThis.KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
-        submit()
+        void submit()
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -428,7 +466,7 @@ export function Welcome(): ReactElement {
 
           {/* Create workspace button */}
           <div className="mt-auto">
-            <Button className="w-full" onClick={submit} disabled={!canCreate}>
+            <Button className="w-full" onClick={() => void submit()} disabled={!canCreate}>
               Create workspace
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">
