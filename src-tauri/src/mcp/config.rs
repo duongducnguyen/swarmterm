@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::Path;
+
 use serde_json::{json, Value};
 
 /// The MCP entry Swarmterm writes into `.mcp.json`. Uses `${VAR}` syntax that
@@ -39,6 +42,32 @@ pub fn merge_mcp_config(existing: Option<&str>) -> Result<String, String> {
         .unwrap()
         .insert("swarmterm".to_string(), swarmterm_entry());
     serde_json::to_string_pretty(&root).map_err(|e| e.to_string())
+}
+
+/// Merge-write `.mcp.json` into `dir` on disk (read-merge-write-via-tmp so a
+/// crash mid-write can't leave a truncated file). Shared by the `write_mcp_config`
+/// Tauri command (workspace creation, from Welcome.tsx) and worktree.spawn — a
+/// fresh worktree checkout has no `.mcp.json` since it's untracked, even though
+/// the spawned pane's env already carries SWARMTERM_MCP_URL/SWARMTERM_SESSION.
+pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
+    if !dir.is_dir() {
+        return Err(format!("cwd is not a directory: {}", dir.display()));
+    }
+    let path = dir.join(".mcp.json");
+    let existing = match fs::read_to_string(&path) {
+        Ok(s) => Some(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("read: {e}")),
+    };
+    let merged = merge_mcp_config(existing.as_deref())?;
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, merged).map_err(|e| format!("write tmp: {e}"))?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        // Best-effort tmp cleanup on rename failure so we don't leave litter.
+        let _ = fs::remove_file(&tmp);
+        format!("rename: {e}")
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]

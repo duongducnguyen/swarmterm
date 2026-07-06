@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { writeMcpConfig } from '@/tauri/mcp'
+import { listWorktrees, createWorktree } from '@/tauri/git'
+import { planWorktreeBranches, provisionWorktrees } from '@/lib/worktree-naming'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
 import { LayoutPreview } from './LayoutPreview'
@@ -48,6 +50,12 @@ export function Welcome(): ReactElement {
   // Optimistic seed: 1 Claude Code assigned until the probe says it's not installed.
   const [counts, setCounts] = useState<Record<string, number>>({ 'claude-code': 1 })
   const seededRef = useRef(false)
+
+  const [isolateWorktrees, setIsolateWorktrees] = useState(false)
+  const [isGitRepo, setIsGitRepo] = useState(false)
+  /** Why the toggle is disabled, shown as the tooltip; null when usable. */
+  const [repoHint, setRepoHint] = useState<string | null>('Not a git repository')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -89,20 +97,97 @@ export function Welcome(): ReactElement {
   const trimmedFolder = folder.trim()
   const canCreate = trimmedFolder !== ''
 
+  // Probe whether the chosen folder is inside a git repo; the toggle is only
+  // meaningful (and only enabled) when it is. list returns [] for non-repos
+  // and for the home-dir guard, which is exactly the disable condition.
+  useEffect(() => {
+    if (trimmedFolder === '') {
+      setIsGitRepo(false)
+      setRepoHint('Not a git repository')
+      return
+    }
+    let cancelled = false
+    void listWorktrees(trimmedFolder)
+      .then((trees) => {
+        if (cancelled) return
+        // A repo with an unborn HEAD (fresh `git init`, zero commits) lists
+        // its main worktree with an all-zero head. `git worktree add` cannot
+        // check out from an unborn HEAD, so isolation would silently fall
+        // back on every pane — disable the toggle with an actionable hint
+        // instead (the first real user test hit exactly this).
+        const main = trees.find((t) => t.isMain)
+        const unborn = main !== undefined && /^0+$/.test(main.head)
+        setIsGitRepo(trees.length > 0 && !unborn)
+        setRepoHint(
+          trees.length === 0
+            ? 'Not a git repository'
+            : unborn
+              ? 'Repository has no commits yet — make an initial commit first'
+              : null
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsGitRepo(false)
+          setRepoHint('Not a git repository')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [trimmedFolder])
+
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
     if (picked) setFolder(picked)
   }
 
-  const submit = (): void => {
-    if (!canCreate) return
-    addRecentFolder(trimmedFolder)
-    createWorkspace({ cwd: trimmedFolder, terminalCount, agentIds })
-    // Fire-and-forget: the workspace is usable even if the MCP config write
-    // fails (bad permissions, malformed existing .mcp.json). Log-only.
-    void writeMcpConfig(trimmedFolder).catch((e) =>
-      console.warn('failed to write .mcp.json:', e)
-    )
+  const submit = async (): Promise<void> => {
+    // isSubmitting guards against a second Create click (or a duplicate
+    // Ctrl+Enter) firing while worktree provisioning is still in flight —
+    // without it, a slow `git worktree add` could be kicked off twice for
+    // the same plan, racing two workspaces into existence.
+    if (!canCreate || isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      addRecentFolder(trimmedFolder)
+
+      const isolate = isolateWorktrees && isGitRepo
+      // Provision isolation BEFORE the workspace exists: leaves are born inside
+      // their worktrees, so no pane ever runs on the main checkout by accident
+      // (v2 spec — the toggle is a guarantee, not a suggestion to the agent).
+      let paneWorktrees: ({ path: string; branch: string } | null)[] | undefined
+      if (isolate) {
+        const plan = planWorktreeBranches(agentIds)
+        paneWorktrees = await provisionWorktrees(plan, (name) =>
+          createWorktree(trimmedFolder, name)
+        )
+        for (const wt of paneWorktrees) {
+          if (wt) {
+            // Worker agents need the MCP config inside their own project
+            // root; fire-and-forget like the workspace-root write below.
+            void writeMcpConfig(wt.path).catch((e) =>
+              console.warn('failed to write worktree .mcp.json:', e)
+            )
+          }
+        }
+      }
+
+      createWorkspace({
+        cwd: trimmedFolder,
+        terminalCount,
+        agentIds,
+        worktreeMode: isolate,
+        paneWorktrees
+      })
+      // Fire-and-forget: the workspace is usable even if the MCP config write
+      // fails (bad permissions, malformed existing .mcp.json). Log-only.
+      void writeMcpConfig(trimmedFolder).catch((e) =>
+        console.warn('failed to write .mcp.json:', e)
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Document-level Ctrl/⌘+Enter shortcut — fires even when nothing in the
@@ -112,12 +197,12 @@ export function Welcome(): ReactElement {
     const onKeyDown = (e: globalThis.KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
-        submit()
+        void submit()
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [trimmedFolder, terminalCount, counts]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trimmedFolder, terminalCount, counts, isolateWorktrees, isGitRepo, isSubmitting]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build caption: "4 panes · 2×2 · 2 AI agents · 2 Terminals"
   const aiCount = agentIds.filter((id) => id !== DEFAULT_TEMPLATE_ID).length
@@ -371,10 +456,39 @@ export function Welcome(): ReactElement {
             </div>
           )}
 
+          {/* Worktree isolation — enables the MCP worktree tools per workspace */}
+          <label
+            className={cn(
+              'mb-3 flex cursor-pointer items-start gap-2',
+              !isGitRepo && 'cursor-not-allowed opacity-50'
+            )}
+            title={isGitRepo ? undefined : (repoHint ?? 'Not a git repository')}
+          >
+            <input
+              type="checkbox"
+              disabled={!isGitRepo}
+              checked={isolateWorktrees && isGitRepo}
+              onChange={(e) => setIsolateWorktrees(e.target.checked)}
+              className="mt-0.5 accent-current"
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Isolate features in git worktrees
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Each agent pane starts in its own worktree and branch.
+              </span>
+            </span>
+          </label>
+
           {/* Create workspace button */}
           <div className="mt-auto">
-            <Button className="w-full" onClick={submit} disabled={!canCreate}>
-              Create workspace
+            <Button
+              className="w-full"
+              onClick={() => void submit()}
+              disabled={!canCreate || isSubmitting}
+            >
+              {isSubmitting ? 'Creating worktrees…' : 'Create workspace'}
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">
               {canCreate ? 'Press ⌘↵ / Ctrl+↵ to create' : 'Choose a working folder to continue'}

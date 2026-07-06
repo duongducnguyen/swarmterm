@@ -30,6 +30,12 @@ tính năng iteration 1 được giữ nguyên.
   tool `browser.open_preview(url)` là tab hiện. Iframe DOM docked, tab strip
   + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột; fullscreen
   + Esc thoát.
+- **Isolate features in git worktrees** — composer có toggle "Isolate features
+  in git worktrees"; bật thì mỗi pane agent được tạo sẵn trong worktree riêng
+  (`<repo>.worktrees/<slug>`) kèm badge 🌿 ngay lập tức. MCP tool `worktree.spawn`
+  vẫn dùng để quản đốc giao việc giữa phiên (delegate mid-session). MCP tool
+  `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
+  không xoá worktree.
 
 Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
@@ -196,6 +202,14 @@ Sau `npm run tauri dev`:
 - [ ] Khởi động lại app → theme giữ đúng lựa chọn lần trước.
 - [ ] **Truecolor:** chạy CLI 24-bit màu (ví dụ `claude` nếu đã cài) → màu
       hiển thị đúng, không bị downscale về 256-color.
+- [ ] **Worktree isolation:** Composer toggle "Isolate features in git worktrees"
+      bị vô hiệu hoá trên folder không phải repo git; bật được trên repo thật.
+      Bật toggle + tạo workspace với 3 pane Claude → 3 thư mục worktree tồn tại
+      cạnh repo (badge 🌿 hiện ngay, không cần gõ prompt). Broadcast 1 prompt
+      sang 3 pane → 3 diff riêng biệt, sạch trên 3 nhánh trong Git tab.
+      `worktree.remove` từ chối nếu worktree chứa file chưa commit; commit rồi
+      thử lại → thư mục xoá. Tạo workspace với toggle OFF, gọi `worktree.spawn` →
+      lỗi "worktree isolation is not enabled".
 
 ## Giới hạn đã biết (iteration 1)
 

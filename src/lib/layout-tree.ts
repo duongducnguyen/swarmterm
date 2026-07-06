@@ -25,6 +25,10 @@ export interface LeafNode {
   cwd?: string
   /** Per-pane shell override. Absent means use the global default shell. */
   shellId?: ShellId
+  /** Branch of the git worktree this pane was spawned into via worktree.spawn. */
+  worktreeBranch?: string
+  /** One-shot task brief appended (shell-quoted) to the agent command at spawn. */
+  initialPrompt?: string
 }
 
 export interface SplitNode {
@@ -53,7 +57,7 @@ export function findLeaf(tree: LayoutNode, leafId: string): LeafNode | null {
 export function updateLeaf(
   tree: LayoutNode,
   leafId: string,
-  patch: Partial<Pick<LeafNode, 'agentId' | 'cwd' | 'shellId'>>
+  patch: Partial<Pick<LeafNode, 'agentId' | 'cwd' | 'shellId' | 'worktreeBranch' | 'initialPrompt'>>
 ): LayoutNode {
   if (tree.type === 'leaf') {
     return tree.id === leafId ? { ...tree, ...patch } : tree

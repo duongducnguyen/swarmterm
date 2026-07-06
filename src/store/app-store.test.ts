@@ -630,3 +630,182 @@ describe('reorderPane', () => {
   })
 })
 
+// --- worktree panes ---------------------------------------------------------
+
+describe('worktree panes', () => {
+  function workspaceWithWorktrees(): StoreApi<AppStore> {
+    const store = freshStore()
+    store.getState().createWorkspace({
+      cwd: 'C:/dev/myapp',
+      terminalCount: 1,
+      agentIds: ['claude-code'],
+      worktreeMode: true
+    })
+    return store
+  }
+
+  it('createWorkspace records worktreeMode (default false)', () => {
+    const store = workspaceWithWorktrees()
+    expect(store.getState().workspaces[0].worktreeMode).toBe(true)
+    store.getState().createWorkspace({ cwd: 'x', terminalCount: 1, agentIds: [] })
+    expect(store.getState().workspaces[1].worktreeMode).toBe(false)
+  })
+
+  it('spawnWorktreePane splits the requester leaf with binding fields and focuses it', () => {
+    const store = workspaceWithWorktrees()
+    const ws = store.getState().workspaces[0]
+    const requester = collectLeaves(ws.layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'C:/dev/myapp.worktrees/feat-login',
+      branch: 'feat/login',
+      prompt: 'Implement login'
+    })
+    const after = store.getState().workspaces[0]
+    const leaves = collectLeaves(after.layout)
+    expect(leaves).toHaveLength(2)
+    const worker = leaves.find((l) => l.worktreeBranch === 'feat/login')!
+    expect(worker.cwd).toBe('C:/dev/myapp.worktrees/feat-login')
+    expect(worker.agentId).toBe('claude-code') // inherited from requester
+    expect(worker.initialPrompt).toBe('Implement login')
+    expect(after.focusedLeafId).toBe(worker.id)
+  })
+
+  it('spawnWorktreePane is a no-op when worktreeMode is off or requester unknown', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({ cwd: 'x', terminalCount: 1, agentIds: ['claude-code'] })
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'p',
+      branch: 'b',
+      prompt: 'q'
+    })
+    expect(collectLeaves(store.getState().workspaces[0].layout)).toHaveLength(1)
+
+    // An id that matches no leaf anywhere (e.g. the pane closed between the
+    // MCP call starting and the event arriving) must also no-op, not throw.
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: 'no-such-terminal',
+      path: 'p',
+      branch: 'b',
+      prompt: 'q'
+    })
+    expect(collectLeaves(store.getState().workspaces[0].layout)).toHaveLength(1)
+  })
+
+  it('spawnWorktreePane targets the requester\'s workspace even when a different one is active', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({
+      cwd: 'C:/dev/myapp',
+      terminalCount: 1,
+      agentIds: ['claude-code'],
+      worktreeMode: true
+    })
+    const ws1Id = store.getState().workspaces[0].id
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+
+    // createWorkspace makes the new workspace active, so ws2 is now active —
+    // the MCP tool call still names ws1's pane as requester.
+    store.getState().createWorkspace({ cwd: 'C:/dev/other', terminalCount: 1, agentIds: [] })
+    const ws2Id = store.getState().workspaces[1].id
+    expect(store.getState().activeWorkspaceId).toBe(ws2Id)
+    const ws2LeavesBefore = collectLeaves(store.getState().workspaces[1].layout)
+
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'C:/dev/myapp.worktrees/feat-login',
+      branch: 'feat/login',
+      prompt: 'Implement login'
+    })
+
+    const ws1After = store.getState().workspaces.find((w) => w.id === ws1Id)!
+    const ws2After = store.getState().workspaces.find((w) => w.id === ws2Id)!
+    const ws1Leaves = collectLeaves(ws1After.layout)
+    expect(ws1Leaves).toHaveLength(2)
+    expect(ws1Leaves.some((l) => l.worktreeBranch === 'feat/login')).toBe(true)
+    // The active workspace (ws2) must be untouched by a spawn targeting ws1.
+    expect(collectLeaves(ws2After.layout)).toEqual(ws2LeavesBefore)
+  })
+
+  it('clearWorktreeBinding clears the badge field and relocates the pane off the deleted dir', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'C:/dev/myapp.worktrees/feat-login',
+      branch: 'feat/login',
+      prompt: 'x'
+    })
+    store.getState().clearWorktreeBinding('C:/dev/myapp.worktrees/feat-login')
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves.every((l) => l.worktreeBranch === undefined)).toBe(true)
+    // cwd/initialPrompt must clear too — the worktree directory no longer
+    // exists, so leaving them set would respawn the pane into a dead path or
+    // replay the original prompt; clearing cwd lets it relocate to the
+    // workspace root instead (TerminalPane's existing respawn effect).
+    const worker = leaves.find((l) => l.id !== requester.id)!
+    expect(worker.cwd).toBeUndefined()
+    expect(worker.initialPrompt).toBeUndefined()
+  })
+
+  it('clearWorktreeBinding matches paths across / and \\ separator styles', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      // Leaf's cwd mixes styles, as Rust PathBuf output sometimes does on Windows.
+      path: 'C:/dev/myapp.worktrees\\feat-login',
+      branch: 'feat/login',
+      prompt: 'x'
+    })
+    // Clear using the forward-slash form only — must still match the mixed leaf.
+    store.getState().clearWorktreeBinding('C:/dev/myapp.worktrees/feat-login')
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves.every((l) => l.worktreeBranch === undefined)).toBe(true)
+    const worker = leaves.find((l) => l.id !== requester.id)!
+    expect(worker.cwd).toBeUndefined()
+    expect(worker.initialPrompt).toBeUndefined()
+  })
+
+  it('setPaneAgent clears a pending initialPrompt', () => {
+    const store = workspaceWithWorktrees()
+    const requester = collectLeaves(store.getState().workspaces[0].layout)[0]
+    store.getState().spawnWorktreePane({
+      requesterTerminalId: requester.terminalId,
+      path: 'p',
+      branch: 'b',
+      prompt: 'the brief'
+    })
+    const worker = collectLeaves(store.getState().workspaces[0].layout).find(
+      (l) => l.worktreeBranch === 'b'
+    )!
+    store.getState().setPaneAgent(worker.id, 'codex')
+    const updated = collectLeaves(store.getState().workspaces[0].layout).find(
+      (l) => l.id === worker.id
+    )!
+    expect(updated.initialPrompt).toBeUndefined()
+  })
+
+  it('createWorkspace stamps paneWorktrees onto leaves in pane order', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({
+      cwd: 'C:/dev/myapp',
+      terminalCount: 3,
+      agentIds: ['claude-code', 'terminal', 'claude-code'],
+      worktreeMode: true,
+      paneWorktrees: [
+        { path: 'C:/dev/myapp.worktrees/claude-code-1', branch: 'swarm/claude-code-1' },
+        null,
+        { path: 'C:/dev/myapp.worktrees/claude-code-2', branch: 'swarm/claude-code-2' }
+      ]
+    })
+    const leaves = collectLeaves(store.getState().workspaces[0].layout)
+    expect(leaves[0].cwd).toBe('C:/dev/myapp.worktrees/claude-code-1')
+    expect(leaves[0].worktreeBranch).toBe('swarm/claude-code-1')
+    expect(leaves[1].cwd).toBeUndefined()
+    expect(leaves[1].worktreeBranch).toBeUndefined()
+    expect(leaves[2].worktreeBranch).toBe('swarm/claude-code-2')
+  })
+})
+

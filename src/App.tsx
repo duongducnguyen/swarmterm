@@ -19,6 +19,7 @@ import { useRecentsStore } from '@/store/recents-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
+import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
 import type { CategoryId } from '@/components/Settings/SettingsView'
 
@@ -135,6 +136,27 @@ export default function App(): ReactElement {
     })
     return () => {
       void unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
+  // removed clears the binding and relocates the pane back to the workspace folder.
+  useEffect(() => {
+    const unSpawn = onWorktreeSpawn((e) => {
+      useAppStore.getState().spawnWorktreePane({
+        requesterTerminalId: e.requesterTerminalId,
+        path: e.path,
+        branch: e.branch,
+        agentId: e.agent ?? undefined,
+        prompt: e.prompt
+      })
+    })
+    const unRemoved = onWorktreeRemoved((e) => {
+      useAppStore.getState().clearWorktreeBinding(e.path)
+    })
+    return () => {
+      void unSpawn.then((f) => f())
+      void unRemoved.then((f) => f())
     }
   }, [])
 

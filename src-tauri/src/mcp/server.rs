@@ -66,11 +66,11 @@ pub struct SwarmtermMcpServer {
 
 impl SwarmtermMcpServer {
     fn new(app: AppHandle) -> Self {
-        // Merge every tool group's router. Today there's just `browser`'s;
-        // future groups add `+ crate::mcp::tools::<group>::tool_router_<group>()`.
+        // Merge every tool group's router. `+` combines `ToolRouter`s so
+        // `#[tool_handler]` sees the union of both groups' `#[tool]` methods.
         Self {
             app,
-            tool_router: Self::tool_router_browser(),
+            tool_router: Self::tool_router_browser() + Self::tool_router_worktree(),
         }
     }
 
@@ -93,6 +93,30 @@ impl SwarmtermMcpServer {
             AuthError::Unknown => rmcp::ErrorData::invalid_request("unknown session", None),
         })
     }
+
+    /// Gate + context for worktree tools: the calling terminal must belong to
+    /// a workspace created with worktree isolation on. Returns the workspace's
+    /// repo folder recorded at spawn time.
+    pub(crate) fn worktree_ctx(
+        &self,
+        terminal: &TerminalId,
+    ) -> Result<String, rmcp::ErrorData> {
+        let state = self.app.state::<AppState>();
+        let terminals = state.terminals.lock().unwrap();
+        let t = terminals
+            .get(&terminal.0)
+            .ok_or_else(|| rmcp::ErrorData::invalid_request("unknown session", None))?;
+        if !t.worktree_mode {
+            return Err(rmcp::ErrorData::invalid_request(
+                "worktree isolation is not enabled for this workspace — enable \
+                 \"Isolate features in git worktrees\" when creating the workspace",
+                None,
+            ));
+        }
+        t.repo_root.clone().ok_or_else(|| {
+            rmcp::ErrorData::invalid_request("no repository folder recorded for this terminal", None)
+        })
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -107,9 +131,25 @@ impl ServerHandler for SwarmtermMcpServer {
                 Implementation::new("swarmterm", env!("CARGO_PKG_VERSION"))
                     .with_title("Swarmterm"),
             )
+            // The delegation guidance below is what makes agents reach for
+            // worktree.spawn unprompted — MCP clients (Claude Code et al.)
+            // surface server instructions to the model at session start, so
+            // this is the one place the hint lands in every repo without
+            // per-project CLAUDE.md edits. Instructions are server-wide and
+            // static; the tools themselves stay gated per-workspace, hence
+            // the "when the workspace enables them" hedge.
             .with_instructions(
                 "Swarmterm in-app tools: control the desktop terminal app from an agent \
-                 running inside one of its panes.",
+                 running inside one of its panes. When the workspace enables the worktree \
+                 tools: given several independent tasks, or one task worth isolating from \
+                 the current checkout, prefer delegating each to a parallel agent via \
+                 worktree.spawn (one branch per task) instead of editing in place — the \
+                 spawned agent starts inside its own git worktree, so parallel work never \
+                 collides. If your pane already runs inside a swarm/<agent>-<n> worktree, \
+                 you may rename that branch to match your actual task (git branch -m \
+                 <new-name>) — but never move or rename the worktree DIRECTORY (session \
+                 state is keyed by its path). Use worktree.remove to clean up after a branch \
+                 is merged.",
             )
     }
 

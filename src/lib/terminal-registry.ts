@@ -57,6 +57,8 @@ export interface AttachConfig {
   cwd?: string
   shellId?: import('@/lib/terminal-pref').ShellId
   initialCommand?: string
+  worktreeMode?: boolean
+  repoRoot?: string
 }
 
 interface Entry {

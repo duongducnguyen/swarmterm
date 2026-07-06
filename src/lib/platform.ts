@@ -11,3 +11,11 @@ export function isMacPlatform(): boolean {
   if (platform) return /mac/i.test(platform)
   return /mac/i.test(navigator.userAgent || '')
 }
+
+/** True when running on Windows (drives PowerShell-style quoting defaults). */
+export function isWindowsPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const platform = navigator.platform || ''
+  if (platform) return /win/i.test(platform)
+  return /windows/i.test(navigator.userAgent || '')
+}

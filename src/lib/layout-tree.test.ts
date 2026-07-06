@@ -314,6 +314,15 @@ describe('updateLeaf', () => {
     const s2 = tree.children[1] as SplitNode
     expect((s2.children[0] as LeafNode).agentId).toBeUndefined()
   })
+
+  it('sets and clears worktree binding fields', () => {
+    const leaf: LayoutNode = { type: 'leaf', id: 'a', terminalId: 't-a' }
+    const bound = updateLeaf(leaf, 'a', { worktreeBranch: 'feat/login', initialPrompt: 'go' })
+    expect((bound as LeafNode).worktreeBranch).toBe('feat/login')
+    expect((bound as LeafNode).initialPrompt).toBe('go')
+    const cleared = updateLeaf(bound, 'a', { worktreeBranch: undefined, initialPrompt: undefined })
+    expect((cleared as LeafNode).worktreeBranch).toBeUndefined()
+  })
 })
 
 // --- reorderLeaves ---------------------------------------------------------

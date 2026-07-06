@@ -27,6 +27,8 @@ export interface Workspace {
   broadcastActive: boolean
   /** Leaf ids that receive broadcast keystrokes while `broadcastActive`. */
   broadcastLeafIds: string[]
+  /** Enable MCP worktree tools for every terminal in this workspace. */
+  worktreeMode: boolean
 }
 
 /** What the setup wizard collects to build a new workspace. */
@@ -38,6 +40,12 @@ export interface CreateWorkspaceConfig {
    *  DEFAULT_TEMPLATE_ID so `agentIds.length` need not equal `terminalCount`,
    *  but the caller should keep them in sync. */
   agentIds: string[]
+  /** Enable MCP worktree tools for every terminal in this workspace. */
+  worktreeMode?: boolean
+  /** Per-pane worktree assignment, index-aligned with agentIds; null = pane
+   *  stays at the workspace cwd. Created by the composer BEFORE the store is
+   *  touched, so leaves are born with their isolation — no post-hoc rebinding. */
+  paneWorktrees?: ({ path: string; branch: string } | null)[]
 }
 
 export interface AppState {
@@ -71,6 +79,14 @@ export interface AppActions {
   setPaneAgent: (leafId: string, agentId: string) => void
   setPaneCwd: (leafId: string, cwd: string | undefined) => void
   setPaneShell: (leafId: string, shellId: ShellId) => void
+  spawnWorktreePane: (p: {
+    requesterTerminalId: string
+    path: string
+    branch: string
+    agentId?: string
+    prompt: string
+  }) => void
+  clearWorktreeBinding: (path: string) => void
   toggleBroadcast: () => void
   toggleBroadcastMember: (leafId: string) => void
   selectAllBroadcast: () => void
@@ -96,6 +112,11 @@ function arrayMove<T>(list: T[], from: number, to: number): T[] {
 /** A plain-shell leaf — no template command. Used when splitting a pane. */
 function makeLeaf(): LeafNode {
   return { type: 'leaf', id: uid(), terminalId: uid() }
+}
+
+/** Compare paths ignoring separator style — Windows sources mix / and \. */
+function samePath(a: string | undefined, b: string): boolean {
+  return a !== undefined && a.replace(/\\/g, '/') === b.replace(/\\/g, '/')
 }
 
 /** Return the active workspace, or `undefined` if it cannot be resolved. */
@@ -137,12 +158,17 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       // agentIds order. The ?? fallback is defensive — agentIds.length panes
       // always have a matching id.
       let paneIndex = 0
-      const makeWizardLeaf = (): LeafNode => ({
-        type: 'leaf',
-        id: uid(),
-        terminalId: uid(),
-        agentId: config.agentIds[paneIndex++] ?? DEFAULT_TEMPLATE_ID
-      })
+      const makeWizardLeaf = (): LeafNode => {
+        const i = paneIndex++
+        const wt = config.paneWorktrees?.[i] ?? null
+        return {
+          type: 'leaf',
+          id: uid(),
+          terminalId: uid(),
+          agentId: config.agentIds[i] ?? DEFAULT_TEMPLATE_ID,
+          ...(wt ? { cwd: wt.path, worktreeBranch: wt.branch } : {})
+        }
+      }
       const layout = paneLayoutFor(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
         id: uid(),
@@ -151,7 +177,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         layout,
         focusedLeafId: collectLeaves(layout)[0].id,
         broadcastActive: false,
-        broadcastLeafIds: []
+        broadcastLeafIds: [],
+        worktreeMode: config.worktreeMode ?? false
       }
       return {
         workspaces: [...s.workspaces, ws],
@@ -269,14 +296,79 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   resizeSplitNode: (splitId, sizes) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: resizeSplit(w.layout, splitId, sizes) }))),
 
+  // An agent switch respawns the pty; replaying a brief written for another
+  // agent would be wrong, so a pending prompt is dropped along with it.
   setPaneAgent: (leafId, agentId) =>
-    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { agentId }) }))),
+    set((s) =>
+      mapActive(s, (w) => ({
+        ...w,
+        layout: updateLeaf(w.layout, leafId, { agentId, initialPrompt: undefined })
+      }))
+    ),
 
   setPaneCwd: (leafId, cwd) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { cwd }) }))),
 
   setPaneShell: (leafId, shellId) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) }))),
+
+  // Worker panes are spawned by the backend's worktree.spawn MCP tool: split
+  // the *requester's* leaf (which may live in a non-active workspace, so this
+  // deliberately avoids mapActive) and let the normal pane-mount path spawn
+  // the pty inside the worktree with the task brief.
+  spawnWorktreePane: (p) =>
+    set((s) => {
+      const ws = selectWorkspaceByTerminalId(s, p.requesterTerminalId)
+      if (!ws || !ws.worktreeMode) return {}
+      const requester = collectLeaves(ws.layout).find(
+        (l) => l.terminalId === p.requesterTerminalId
+      )
+      if (!requester) return {}
+      const newLeaf: LeafNode = {
+        type: 'leaf',
+        id: uid(),
+        terminalId: uid(),
+        // Fall back to the requester's agent; a plain-shell requester yields a
+        // plain shell in the worktree — visible, never a silent drop.
+        agentId: p.agentId ?? requester.agentId,
+        cwd: p.path,
+        worktreeBranch: p.branch,
+        initialPrompt: p.prompt
+      }
+      return {
+        workspaces: s.workspaces.map((w) =>
+          w.id === ws.id
+            ? {
+                ...w,
+                layout: splitLeaf(w.layout, requester.id, 'horizontal', newLeaf, uid()),
+                focusedLeafId: newLeaf.id
+              }
+            : w
+        )
+      }
+    }),
+
+  clearWorktreeBinding: (path) =>
+    set((s) => ({
+      workspaces: s.workspaces.map((w) => {
+        const bound = collectLeaves(w.layout).filter((l) => samePath(l.cwd, path))
+        if (bound.length === 0) return w
+        let layout = w.layout
+        for (const leaf of bound) {
+          // The worktree directory is gone after worktree.remove, so leaving
+          // cwd/initialPrompt pointed at it would respawn into a dead path (or
+          // replay the original prompt) next time the pane's pty restarts.
+          // Clearing cwd lets TerminalPane's existing respawn effect relocate
+          // the pane back to the workspace folder, same as any other pane.
+          layout = updateLeaf(layout, leaf.id, {
+            worktreeBranch: undefined,
+            cwd: undefined,
+            initialPrompt: undefined
+          })
+        }
+        return { ...w, layout }
+      })
+    })),
 
   toggleBroadcast: () =>
     set((s) =>
