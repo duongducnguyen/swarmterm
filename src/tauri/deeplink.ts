@@ -14,3 +14,13 @@ export function onPreviewOpen(handler: (e: PreviewOpenEvent) => void): Promise<U
 export function onAuthCallback(handler: (code: string) => void): Promise<UnlistenFn> {
   return listen<{ code: string }>('auth:callback', (event) => handler(event.payload.code))
 }
+
+export interface TerminalTitleEvent {
+  terminalId: string
+  title: string
+}
+
+/** Subscribe to backend `terminal:title` events (agent-set pane titles via MCP). */
+export function onTerminalTitle(handler: (e: TerminalTitleEvent) => void): Promise<UnlistenFn> {
+  return listen<TerminalTitleEvent>('terminal:title', (event) => handler(event.payload))
+}

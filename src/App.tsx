@@ -18,7 +18,8 @@ import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
-import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
+import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { onPreviewOpen, onAuthCallback, onTerminalTitle } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
 import type { CategoryId } from '@/components/Settings/SettingsView'
@@ -126,6 +127,17 @@ export default function App(): ReactElement {
       const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
       const focused = ws ? findLeaf(ws.layout, ws.focusedLeafId)?.terminalId : undefined
       if (focused === e.terminalId) useGitStore.getState().setMode('browser')
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
+  }, [])
+
+  // Wire MCP terminal:title events to the per-terminal title store. The header
+  // reads titles by terminalId, so no focus/workspace lookup is needed here.
+  useEffect(() => {
+    const unlisten = onTerminalTitle((e) => {
+      useTerminalTitleStore.getState().setTitle(e.terminalId, e.title)
     })
     return () => {
       void unlisten.then((fn) => fn())
