@@ -1,43 +1,33 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { ExternalLink, RotateCw, X } from 'lucide-react'
-import { useBrowserStore } from '@/store/browser-store'
-import { useAppStore, selectActiveWorkspace } from '@/store/app-store'
-import { findLeaf } from '@/lib/layout-tree'
+import { useBrowserStore, type Preview } from '@/store/browser-store'
 import { normalizeUrl } from '@/lib/web-url'
 import { openExternalWindow } from '@/tauri/popout'
 
 interface AddressBarProps {
+  terminalId: string | null
+  preview: Preview | null
   onReload: () => void
 }
 
-export function AddressBar({ onReload }: AddressBarProps): ReactElement {
-  const tabs = useBrowserStore((s) => s.tabs)
-  const activeTabId = useBrowserStore((s) => s.activeTabId)
-  const navigate = useBrowserStore((s) => s.navigate)
-  const openTab = useBrowserStore((s) => s.openTab)
-  const closeTab = useBrowserStore((s) => s.closeTab)
+export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): ReactElement {
+  const openPreview = useBrowserStore((s) => s.openPreview)
+  const closePreview = useBrowserStore((s) => s.closePreview)
+  const [draft, setDraft] = useState(preview?.url ?? '')
 
-  const active = tabs.find((t) => t.id === activeTabId) ?? null
-  const [draft, setDraft] = useState(active?.url ?? '')
-
-  // Keep the input in sync when the active tab (or its url) changes.
+  // Keep the input in sync when the focused terminal (or its url) changes.
   useEffect(() => {
-    setDraft(active?.url ?? '')
-  }, [active?.id, active?.url])
+    setDraft(preview?.url ?? '')
+  }, [terminalId, preview?.url])
 
   const submit = (e: React.FormEvent): void => {
     e.preventDefault()
+    // No focused terminal (Welcome overlay, empty workspace) — nowhere to bind.
+    if (!terminalId) return
     const url = normalizeUrl(draft)
     if (!url) return
-    if (active) {
-      navigate(active.id, url)
-      return
-    }
-    // Panel opened manually with no tab yet — create one against the focused
-    // terminal so the entered URL actually loads.
-    const ws = selectActiveWorkspace(useAppStore.getState())
-    const leaf = ws ? findLeaf(ws.layout, ws.focusedLeafId) : null
-    openTab({ terminalId: leaf?.terminalId ?? 'preview', url })
+    // openPreview creates or navigates — the same gesture either way.
+    openPreview(terminalId, url)
   }
 
   return (
@@ -59,12 +49,12 @@ export function AddressBar({ onReload }: AddressBarProps): ReactElement {
           className="w-full rounded-full bg-muted px-3 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
         />
       </form>
-      {active && (
+      {preview && terminalId && (
         <>
           <button
             type="button"
             aria-label="Open in new window"
-            onClick={() => openExternalWindow(active.url)}
+            onClick={() => openExternalWindow(preview.url)}
             className="rounded p-1 hover:bg-muted"
           >
             <ExternalLink aria-hidden className="h-3.5 w-3.5" />
@@ -72,7 +62,7 @@ export function AddressBar({ onReload }: AddressBarProps): ReactElement {
           <button
             type="button"
             aria-label="Close preview"
-            onClick={() => closeTab(active.id)}
+            onClick={() => closePreview(terminalId)}
             className="rounded p-1 hover:bg-muted"
           >
             <X aria-hidden className="h-3.5 w-3.5" />
