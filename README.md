@@ -31,10 +31,11 @@ tính năng iteration 1 được giữ nguyên.
   + address bar (back/forward/reload, gõ URL tự do); kéo giãn cột; fullscreen
   + Esc thoát.
 - **Isolate features in git worktrees** — composer có toggle "Isolate features
-  in git worktrees"; bật thì workspace được tạo với chế độ worktree, agent gọi
-  MCP tool `worktree.spawn` tạo thư mục cạnh repo (`<repo>.worktrees\<branch>`)
-  và pane mới mở trong đó kèm badge hiển thị branch. MCP tool `worktree.remove`
-  từ chối nếu worktree chứa file chưa commit.
+  in git worktrees"; bật thì mỗi pane agent được tạo sẵn trong worktree riêng
+  (`<repo>.worktrees/<slug>`) kèm badge 🌿 ngay lập tức. MCP tool `worktree.spawn`
+  vẫn dùng để quản đốc giao việc giữa phiên (delegate mid-session). MCP tool
+  `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
+  không xoá worktree.
 
 Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
@@ -203,13 +204,12 @@ Sau `npm run tauri dev`:
       hiển thị đúng, không bị downscale về 256-color.
 - [ ] **Worktree isolation:** Composer toggle "Isolate features in git worktrees"
       bị vô hiệu hoá trên folder không phải repo git; bật được trên repo thật.
-      Tạo workspace với toggle ON, 1 pane Claude. Gọi MCP tool `worktree.spawn`
-      (branch `feat/smoke`, prompt `say hello`) → thư mục `<repo>.worktrees\feat-smoke`
-      xuất hiện cạnh repo, pane mới mở trong đó với badge hiển thị branch.
+      Bật toggle + tạo workspace với 3 pane Claude → 3 thư mục worktree tồn tại
+      cạnh repo (badge 🌿 hiện ngay, không cần gõ prompt). Broadcast 1 prompt
+      sang 3 pane → 3 diff riêng biệt, sạch trên 3 nhánh trong Git tab.
       `worktree.remove` từ chối nếu worktree chứa file chưa commit; commit rồi
       thử lại → thư mục xoá. Tạo workspace với toggle OFF, gọi `worktree.spawn` →
-      lỗi "worktree isolation is not enabled". Đóng workspace có live worktree →
-      thư mục vẫn giữ trên disk.
+      lỗi "worktree isolation is not enabled".
 
 ## Giới hạn đã biết (iteration 1)
 

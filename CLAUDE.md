@@ -127,16 +127,18 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   terminal map). To add a tool: drop it into `src-tauri/src/mcp/tools/` and
   add one `mod` line — see the spec at
   `docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`.
-- **Worktree-per-agent (MCP).** Workspaces created with the composer's
-  "Isolate features in git worktrees" toggle set `worktree_mode` on each PTY's
-  terminal-map entry; only then do the `worktree.spawn/list/remove` MCP tools
-  work. `worktree.spawn` creates `<repo>.worktrees/<slug>` **beside** the repo
-  (resolved via `--git-common-dir`, so calls from inside a worktree never
-  nest), then emits `worktree:spawn`; the renderer splits the requester's pane
-  and starts the agent inside the worktree with the prompt as a quoted CLI
-  arg (`src/lib/agent-spawn-command.ts` — quoting is per shell family).
-  Removal refuses dirty worktrees and anything outside `<repo>.worktrees`.
-  Closing panes/workspaces never deletes worktrees.
+- **Worktree-per-agent.** The composer's "Isolate features in git worktrees"
+  toggle now provisions isolation upfront: every agent pane is created inside
+  its own `<repo>.worktrees/<slug>` worktree on branch `swarm/<agent>-<n>`
+  (plain Terminal panes stay at the repo root; a failed creation falls back
+  to the repo root with a console warning, never blocking workspace
+  creation). The `worktree.spawn/list/remove` MCP tools remain as the
+  secondary path — mid-session delegation to new worker panes and
+  agent-driven cleanup — still gated on the same toggle via `worktree_mode`
+  in the terminal map. Removal refuses dirty worktrees and anything outside
+  `<repo>.worktrees`; closing panes/workspaces never deletes worktrees;
+  worktree directories are never renamed (agent session state is keyed by
+  absolute path).
 - **`swarmterm://auth/callback` deeplink stays** for OAuth PKCE only. Anything
   else that arrives on the scheme is now logged and dropped — the browser
   preview flow moved to MCP.
