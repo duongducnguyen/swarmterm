@@ -3,5 +3,4 @@
 //! next task) that delegates into it.
 
 pub mod browser;
-pub mod title;
 pub mod worktree;

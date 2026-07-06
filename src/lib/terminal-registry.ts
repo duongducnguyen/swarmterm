@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/tauri/terminal'
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
 import { useTerminalTextStore } from '@/store/terminal-text-store'
+import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { resolveBroadcastTargets } from '@/lib/broadcast-input'
 import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
@@ -140,6 +141,21 @@ function getOrCreate(id: string): Entry {
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
+  // Forward the terminal title straight from the program running in the pty.
+  // xterm parses the standard OSC 0/2 title escape sequences ("ESC ] 0 ; text
+  // BEL") natively and fires onTitleChange — the same mechanism VS Code uses to
+  // title its terminal tabs. Shells and modern agents (Claude Code) emit these,
+  // so the pane header reflects "what this terminal is doing" with no agent
+  // cooperation. Keyed by `id` (terminalId) so it survives remounts; an empty
+  // title (some programs emit one to clear) reverts the header to its fallback.
+  // Cap defensively — the header truncates visually, but a runaway title
+  // shouldn't bloat the store.
+  term.onTitleChange((title) => {
+    const trimmed = title.replace(/\s+/g, ' ').trim()
+    const store = useTerminalTitleStore.getState()
+    if (trimmed) store.setTitle(id, trimmed.slice(0, 120))
+    else store.clearTitle(id)
+  })
   // Fan out to the broadcast group when this terminal is an armed member;
   // otherwise this is the only target, so behaviour is unchanged. onData fires
   // only for the terminal the user is typing in, so `id` is the source. Paste
