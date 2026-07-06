@@ -70,7 +70,9 @@ impl SwarmtermMcpServer {
         // `#[tool_handler]` sees the union of both groups' `#[tool]` methods.
         Self {
             app,
-            tool_router: Self::tool_router_browser() + Self::tool_router_worktree(),
+            tool_router: Self::tool_router_browser()
+                + Self::tool_router_worktree()
+                + Self::tool_router_title(),
         }
     }
 
