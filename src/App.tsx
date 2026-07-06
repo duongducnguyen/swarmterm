@@ -3,7 +3,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { matchAppShortcut } from '@/lib/keybindings'
-import { collectLeaves } from '@/lib/layout-tree'
+import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
 import { RightPanel } from '@/components/RightPanel/RightPanel'
@@ -102,27 +102,30 @@ export default function App(): ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
 
-  // Kill orphaned PTYs and close browser tabs when terminals leave all layouts.
+  // Kill orphaned PTYs and close previews when terminals leave all layouts.
   useEffect(
     () =>
       useAppStore.subscribe((state) => {
         const live = liveTerminalIds(state.workspaces)
         disposeOrphanTerminals(live)
-        const close = useBrowserStore.getState().closeTabsForTerminal
-        for (const tab of useBrowserStore.getState().tabs) {
-          if (!live.has(tab.terminalId)) close(tab.terminalId)
+        const { previews, closePreview } = useBrowserStore.getState()
+        for (const terminalId of Object.keys(previews)) {
+          if (!live.has(terminalId)) closePreview(terminalId)
         }
       }),
     []
   )
 
-  // Wire deep-link preview:open events to browser tabs.
+  // Wire MCP preview:open events to the per-terminal preview. Background
+  // terminals update silently — the panel is only revealed when the event
+  // belongs to the terminal the user is looking at.
   useEffect(() => {
-    const open = useBrowserStore.getState().openTab
     const unlisten = onPreviewOpen((e) => {
-      open({ terminalId: e.terminalId, url: e.url })
-      // Reveal the right panel in Preview mode so the new tab is actually seen.
-      useGitStore.getState().setMode('browser')
+      useBrowserStore.getState().openPreview(e.terminalId, e.url)
+      const st = useAppStore.getState()
+      const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
+      const focused = ws ? findLeaf(ws.layout, ws.focusedLeafId)?.terminalId : undefined
+      if (focused === e.terminalId) useGitStore.getState().setMode('browser')
     })
     return () => {
       void unlisten.then((fn) => fn())
@@ -159,16 +162,6 @@ export default function App(): ReactElement {
       void unRemoved.then((f) => f())
     }
   }, [])
-
-  /** Index of a terminal within the ordered set of live terminal ids (0 if not found). */
-  const terminalIndexOf = useCallback(
-    (terminalId: string): number => {
-      const ids = [...liveTerminalIds(workspaces)]
-      const i = ids.indexOf(terminalId)
-      return i < 0 ? 0 : i
-    },
-    [workspaces]
-  )
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
@@ -218,7 +211,7 @@ export default function App(): ReactElement {
                       className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
                     />
                     <Panel id="app-browser" minSize="20%" maxSize="50%" className="h-full w-full overflow-hidden">
-                      <RightPanel terminalIndexOf={terminalIndexOf} />
+                      <RightPanel />
                     </Panel>
                   </>
                 )}

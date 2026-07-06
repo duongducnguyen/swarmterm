@@ -19,11 +19,7 @@ function RefreshButton(): ReactElement {
   )
 }
 
-interface RightPanelProps {
-  terminalIndexOf: (terminalId: string) => number
-}
-
-export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
+export function RightPanel(): ReactElement {
   const mode = useGitStore((s) => s.mode)
   const setMode = useGitStore((s) => s.setMode)
   const setPanelOpen = useGitStore((s) => s.setPanelOpen)
@@ -81,7 +77,7 @@ export function RightPanel({ terminalIndexOf }: RightPanelProps): ReactElement {
       {/* Mode content */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {mode === 'browser'
-          ? <BrowserColumn terminalIndexOf={terminalIndexOf} />
+          ? <BrowserColumn />
           : <GitPanel />
         }
       </div>

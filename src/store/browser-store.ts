@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 
-export interface WebTab {
-  id: string
-  terminalId: string
+/**
+ * One preview per terminal, keyed by terminalId. The old model (many tabs per
+ * terminal, merged into one global strip with a global activeTabId) collapsed
+ * under parallel agents — see the 2026-07-06 spec. Panel open/close is NOT
+ * here: it belongs to git-store.panelOpen (the right panel owns its chrome).
+ */
+export interface Preview {
   url: string
   title?: string
   history: string[]
@@ -10,100 +14,72 @@ export interface WebTab {
 }
 
 export interface BrowserStore {
-  tabs: WebTab[]
-  activeTabId: string | null
-  visible: boolean
-  fullscreen: boolean
-  openTab: (input: { terminalId: string; url: string }) => void
-  closeTab: (tabId: string) => void
-  closeTabsForTerminal: (terminalId: string) => void
-  setActiveTab: (tabId: string) => void
-  navigate: (tabId: string, url: string) => void
-  setTitle: (tabId: string, title: string) => void
-  toggleVisible: () => void
-  setVisible: (visible: boolean) => void
-  setFullscreen: (fullscreen: boolean) => void
-  goBack: (tabId: string) => void
-  goForward: (tabId: string) => void
+  previews: Record<string, Preview>
+  /** Create the terminal's preview, or navigate it if one already exists. */
+  openPreview: (terminalId: string, url: string) => void
+  closePreview: (terminalId: string) => void
+  navigate: (terminalId: string, url: string) => void
+  setTitle: (terminalId: string, title: string) => void
+  goBack: (terminalId: string) => void
+  goForward: (terminalId: string) => void
 }
 
-function uid(): string {
-  return crypto.randomUUID()
-}
-
-/** Pick a surviving tab's id after `removedId` leaves `before`, or null. */
-function neighbourId(before: WebTab[], removedId: string): string | null {
-  const idx = before.findIndex((t) => t.id === removedId)
-  const remaining = before.filter((t) => t.id !== removedId)
-  if (remaining.length === 0) return null
-  return remaining[Math.min(idx, remaining.length - 1)].id
+/** Push `url` onto the history, truncating forward entries; no-op on same url. */
+function pushUrl(p: Preview, url: string): Preview {
+  if (p.history[p.historyIndex] === url) return p
+  const history = [...p.history.slice(0, p.historyIndex + 1), url]
+  return { ...p, url, history, historyIndex: history.length - 1 }
 }
 
 export const useBrowserStore = create<BrowserStore>((set) => ({
-  tabs: [],
-  activeTabId: null,
-  visible: false,
-  fullscreen: false,
+  previews: {},
 
-  openTab: ({ terminalId, url }) =>
+  openPreview: (terminalId, url) =>
     set((s) => {
-      const tab: WebTab = { id: uid(), terminalId, url, history: [url], historyIndex: 0 }
-      return { tabs: [...s.tabs, tab], activeTabId: tab.id, visible: true }
+      const existing = s.previews[terminalId]
+      const preview = existing ? pushUrl(existing, url) : { url, history: [url], historyIndex: 0 }
+      return { previews: { ...s.previews, [terminalId]: preview } }
     }),
 
-  closeTab: (tabId) =>
+  closePreview: (terminalId) =>
     set((s) => {
-      const tabs = s.tabs.filter((t) => t.id !== tabId)
-      const activeTabId =
-        s.activeTabId === tabId ? neighbourId(s.tabs, tabId) : s.activeTabId
-      return { tabs, activeTabId, visible: tabs.length > 0 && s.visible, fullscreen: tabs.length === 0 ? false : s.fullscreen }
+      if (!(terminalId in s.previews)) return s
+      const previews = { ...s.previews }
+      delete previews[terminalId]
+      return { previews }
     }),
 
-  closeTabsForTerminal: (terminalId) =>
+  navigate: (terminalId, url) =>
     set((s) => {
-      const tabs = s.tabs.filter((t) => t.terminalId !== terminalId)
-      const activeStillThere = tabs.some((t) => t.id === s.activeTabId)
-      const activeTabId = activeStillThere ? s.activeTabId : (tabs[0]?.id ?? null)
-      return { tabs, activeTabId, visible: tabs.length > 0 && s.visible, fullscreen: tabs.length === 0 ? false : s.fullscreen }
+      const p = s.previews[terminalId]
+      if (!p) return s
+      return { previews: { ...s.previews, [terminalId]: pushUrl(p, url) } }
     }),
 
-  setActiveTab: (tabId) => set({ activeTabId: tabId }),
+  setTitle: (terminalId, title) =>
+    set((s) => {
+      const p = s.previews[terminalId]
+      if (!p) return s
+      return { previews: { ...s.previews, [terminalId]: { ...p, title } } }
+    }),
 
-  navigate: (tabId, url) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId) return t
-        // no-op if already on this url
-        if (t.history[t.historyIndex] === url) return t
-        // truncate forward entries then push
-        const newHistory = [...t.history.slice(0, t.historyIndex + 1), url]
-        return { ...t, url, history: newHistory, historyIndex: newHistory.length - 1 }
-      }),
-    })),
+  goBack: (terminalId) =>
+    set((s) => {
+      const p = s.previews[terminalId]
+      if (!p || p.historyIndex <= 0) return s
+      const historyIndex = p.historyIndex - 1
+      return {
+        previews: { ...s.previews, [terminalId]: { ...p, historyIndex, url: p.history[historyIndex] } },
+      }
+    }),
 
-  setTitle: (tabId, title) =>
-    set((s) => ({ tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)) })),
-
-  toggleVisible: () => set((s) => ({ visible: !s.visible })),
-  setVisible: (visible) => set({ visible }),
-
-  setFullscreen: (fullscreen) => set({ fullscreen }),
-
-  goBack: (tabId) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId || t.historyIndex <= 0) return t
-        const newIndex = t.historyIndex - 1
-        return { ...t, historyIndex: newIndex, url: t.history[newIndex] }
-      }),
-    })),
-
-  goForward: (tabId) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId || t.historyIndex >= t.history.length - 1) return t
-        const newIndex = t.historyIndex + 1
-        return { ...t, historyIndex: newIndex, url: t.history[newIndex] }
-      }),
-    })),
+  goForward: (terminalId) =>
+    set((s) => {
+      const p = s.previews[terminalId]
+      if (!p || p.historyIndex >= p.history.length - 1) return s
+      const historyIndex = p.historyIndex + 1
+      return {
+        previews: { ...s.previews, [terminalId]: { ...p, historyIndex, url: p.history[historyIndex] } },
+      }
+    }),
 }))
