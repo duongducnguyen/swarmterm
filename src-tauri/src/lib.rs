@@ -108,6 +108,7 @@ pub fn run() {
             commands::git_create_worktree,
             commands::git_clear_worktree,
             commands::git_branch_unmerged_count,
+            commands::ensure_repo_with_commit,
             auth::save_auth_session,
             auth::load_auth_session,
             auth::clear_auth_session,

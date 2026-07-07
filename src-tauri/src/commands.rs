@@ -148,3 +148,14 @@ pub async fn git_clear_worktree(
     .await
     .map_err(|e| format!("git task failed: {e}"))?
 }
+
+/// Ensure a directory is a git repository with at least one commit.
+/// Frontend calls this during workspace creation when isolate=true and folder is not a git repo.
+#[tauri::command]
+pub async fn ensure_repo_with_commit(path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::ensure_repo_with_commit(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
