@@ -2,11 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { LeafNode } from '@/lib/layout-tree'
-import { useAppStore } from '@/store/app-store'
+import { collectLeaves } from '@/lib/layout-tree'
+import { useAppStore, type ClearTarget } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { Button } from '@/components/ui/button'
 import { PaneHeader } from './PaneHeader'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from '@/components/ui/context-menu'
+import { ClearWorktreeDialog, type DialogTarget } from '@/components/Workspace/ClearWorktreeDialog'
+import { getChangedFiles, getCommitInfo } from '@/tauri/git'
+import { classifyWorktree, clearWorktreeMenuLabel } from '@/lib/worktree-cleanup'
 import { agentCommand, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { buildAgentSpawnCommand, shellFlavor } from '@/lib/agent-spawn-command'
 import { isWindowsPlatform } from '@/lib/platform'
@@ -60,6 +70,7 @@ export function TerminalPane({
   const setPaneAgent = useAppStore((s) => s.setPaneAgent)
   const setPaneCwd = useAppStore((s) => s.setPaneCwd)
   const setPaneShell = useAppStore((s) => s.setPaneShell)
+  const clearWorktrees = useAppStore((s) => s.clearWorktrees)
   const globalShellId = useTerminalPrefStore((s) => s.shellId)
 
   const { id: leafId, terminalId } = leaf
@@ -171,6 +182,46 @@ export function TerminalPane({
     if (dir) setPaneCwd(leafId, dir)
   }
 
+  const [dialog, setDialog] = useState<{ targets: DialogTarget[]; clears: ClearTarget[] } | null>(null)
+
+  // Resolve which panes this action targets: the broadcast group if THIS leaf is
+  // in it, else just this pane — then keep only panes bound to a worktree.
+  function resolveWorktreeTargets(): ClearTarget[] {
+    const st = useAppStore.getState()
+    const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
+    if (!ws) return []
+    const inGroup = ws.broadcastLeafIds.includes(leafId)
+    const leaves = collectLeaves(ws.layout).filter((l) =>
+      inGroup ? ws.broadcastLeafIds.includes(l.id) : l.id === leafId
+    )
+    return leaves
+      .filter((l) => l.worktreeBranch !== undefined && l.cwd !== undefined)
+      .map((l) => ({ leafId: l.id, path: l.cwd as string, branch: l.worktreeBranch as string, repoRoot: ws.cwd }))
+  }
+
+  const worktreeTargetCount = resolveWorktreeTargets().length
+
+  async function openClearDialog(): Promise<void> {
+    const clears = resolveWorktreeTargets()
+    if (clears.length === 0) return
+    const targets: DialogTarget[] = await Promise.all(
+      clears.map(async (c) => {
+        const changed = await getChangedFiles(c.path)
+        const { ahead } = await getCommitInfo(c.path)
+        const { uncommittedCount, unmergedCount, dirty } = classifyWorktree(changed, ahead)
+        return { leafId: c.leafId, branch: c.branch, uncommittedCount, unmergedCount, dirty }
+      })
+    )
+    setDialog({ targets, clears })
+  }
+
+  function confirmClear(approvedLeafIds: string[]): void {
+    if (!dialog) return
+    const approved = dialog.clears.filter((c) => approvedLeafIds.includes(c.leafId))
+    void clearWorktrees(approved)
+    setDialog(null)
+  }
+
   return (
     <div
       ref={setPaneRef}
@@ -219,6 +270,26 @@ export function TerminalPane({
         dragAttributes={dragAttributes}
         worktreeBranch={leaf.worktreeBranch}
         agentTitle={agentTitle}
+        headerWrapper={(root) => (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>{root}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem
+                disabled={worktreeTargetCount === 0}
+                onSelect={() => void openClearDialog()}
+              >
+                {clearWorktreeMenuLabel(worktreeTargetCount)}
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        )}
+      />
+
+      <ClearWorktreeDialog
+        open={dialog !== null}
+        targets={dialog?.targets ?? []}
+        onConfirm={confirmClear}
+        onClose={() => setDialog(null)}
       />
 
       <div className="relative flex-1 overflow-hidden">
