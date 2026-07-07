@@ -53,8 +53,6 @@ export function Welcome(): ReactElement {
 
   const [isolateWorktrees, setIsolateWorktrees] = useState(false)
   const [isGitRepo, setIsGitRepo] = useState(false)
-  /** Why the toggle is disabled, shown as the tooltip; null when usable. */
-  const [repoHint, setRepoHint] = useState<string | null>('Not a git repository')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
@@ -97,13 +95,11 @@ export function Welcome(): ReactElement {
   const trimmedFolder = folder.trim()
   const canCreate = trimmedFolder !== ''
 
-  // Probe whether the chosen folder is inside a git repo; the toggle is only
-  // meaningful (and only enabled) when it is. list returns [] for non-repos
-  // and for the home-dir guard, which is exactly the disable condition.
+  // Probe whether the chosen folder is inside a git repo. list returns []
+  // for non-repos and for the home-dir guard.
   useEffect(() => {
     if (trimmedFolder === '') {
       setIsGitRepo(false)
-      setRepoHint('Not a git repository')
       return
     }
     let cancelled = false
@@ -112,24 +108,15 @@ export function Welcome(): ReactElement {
         if (cancelled) return
         // A repo with an unborn HEAD (fresh `git init`, zero commits) lists
         // its main worktree with an all-zero head. `git worktree add` cannot
-        // check out from an unborn HEAD, so isolation would silently fall
-        // back on every pane — disable the toggle with an actionable hint
-        // instead (the first real user test hit exactly this).
+        // check out from an unborn HEAD, so we disable this feature until
+        // the repo has at least one commit.
         const main = trees.find((t) => t.isMain)
         const unborn = main !== undefined && /^0+$/.test(main.head)
         setIsGitRepo(trees.length > 0 && !unborn)
-        setRepoHint(
-          trees.length === 0
-            ? 'Not a git repository'
-            : unborn
-              ? 'Repository has no commits yet — make an initial commit first'
-              : null
-        )
       })
       .catch(() => {
         if (!cancelled) {
           setIsGitRepo(false)
-          setRepoHint('Not a git repository')
         }
       })
     return () => {
@@ -462,12 +449,12 @@ export function Welcome(): ReactElement {
               'mb-3 flex cursor-pointer items-start gap-2',
               !isGitRepo && 'cursor-not-allowed opacity-50'
             )}
-            title={isGitRepo ? undefined : (repoHint ?? 'Not a git repository')}
+            title={isGitRepo ? undefined : 'Will auto-initialize git when you create'}
           >
             <input
               type="checkbox"
-              disabled={!isGitRepo}
-              checked={isolateWorktrees && isGitRepo}
+              disabled={false}
+              checked={isolateWorktrees}
               onChange={(e) => setIsolateWorktrees(e.target.checked)}
               className="mt-0.5 accent-current"
             />
