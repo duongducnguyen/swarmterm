@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { writeMcpConfig } from '@/tauri/mcp'
-import { listWorktrees, createWorktree } from '@/tauri/git'
+import { listWorktrees, createWorktree, ensureRepoWithCommit } from '@/tauri/git'
 import { planWorktreeBranches, provisionWorktrees } from '@/lib/worktree-naming'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
@@ -139,12 +139,22 @@ export function Welcome(): ReactElement {
     try {
       addRecentFolder(trimmedFolder)
 
-      const isolate = isolateWorktrees && isGitRepo
-      // Provision isolation BEFORE the workspace exists: leaves are born inside
-      // their worktrees, so no pane ever runs on the main checkout by accident
-      // (v2 spec — the toggle is a guarantee, not a suggestion to the agent).
+      const isolate = isolateWorktrees
       let paneWorktrees: ({ path: string; branch: string } | null)[] | undefined
+
       if (isolate) {
+        try {
+          // Auto-initialize git if folder is not a repo and has no commits
+          await ensureRepoWithCommit(trimmedFolder)
+        } catch (err) {
+          setIsSubmitting(false)
+          console.error('failed to initialize git repo:', err)
+          return
+        }
+
+        // Provision isolation BEFORE the workspace exists: leaves are born inside
+        // their worktrees, so no pane ever runs on the main checkout by accident
+        // (v2 spec — the toggle is a guarantee, not a suggestion to the agent).
         const plan = planWorktreeBranches(agentIds)
         paneWorktrees = await provisionWorktrees(plan, (name) =>
           createWorktree(trimmedFolder, name)
