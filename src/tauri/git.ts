@@ -57,3 +57,7 @@ export function clearWorktree(
 ): Promise<void> {
   return invoke('git_clear_worktree', { repoRoot, worktreePath, branch })
 }
+
+export async function ensureRepoWithCommit(path: string): Promise<void> {
+  return invoke<void>('ensure_repo_with_commit', { path })
+}
