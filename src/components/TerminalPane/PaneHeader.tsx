@@ -45,6 +45,8 @@ interface PaneHeaderProps {
   dragAttributes: DraggableAttributes
   /** Branch of the bound git worktree, shown as a chip; absent for normal panes. */
   worktreeBranch?: string
+  /** Optional wrapper (e.g. a context-menu trigger) applied around the header root. */
+  headerWrapper?: (root: React.ReactElement) => React.ReactElement
 }
 
 /**
@@ -98,7 +100,7 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
     rootRef.current = el
   }
 
-  return (
+  const root = (
     <div
       ref={setRootRef}
       {...props.dragAttributes}
@@ -239,4 +241,5 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
       </div>
     </div>
   )
+  return props.headerWrapper ? props.headerWrapper(root) : root
 }

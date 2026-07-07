@@ -14,6 +14,9 @@ import {
 } from '@/lib/layout-tree'
 import type { ShellId } from '@/lib/terminal-pref'
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates'
+import { clearWorktree } from '@/tauri/git'
+import { isTransientLock } from '@/lib/worktree-cleanup'
+import { awaitTerminalRelocated } from '@/lib/terminal-registry'
 
 /** A workspace: a named binary split-tree of terminal panes. */
 export interface Workspace {
@@ -46,6 +49,15 @@ export interface CreateWorkspaceConfig {
    *  stays at the workspace cwd. Created by the composer BEFORE the store is
    *  touched, so leaves are born with their isolation — no post-hoc rebinding. */
   paneWorktrees?: ({ path: string; branch: string } | null)[]
+}
+
+/** One worktree to clear: the bound leaf, its worktree path + branch, and the repo root. */
+export interface ClearTarget {
+  leafId: string
+  terminalId: string
+  path: string
+  branch: string
+  repoRoot: string
 }
 
 export interface AppState {
@@ -87,6 +99,7 @@ export interface AppActions {
     prompt: string
   }) => void
   clearWorktreeBinding: (path: string) => void
+  clearWorktrees: (targets: ClearTarget[]) => Promise<void>
   toggleBroadcast: () => void
   toggleBroadcastMember: (leafId: string) => void
   selectAllBroadcast: () => void
@@ -306,8 +319,17 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       }))
     ),
 
+  // Re-pointing a pane's folder must drop any stale worktree binding — otherwise
+  // the header keeps showing the old branch chip and a later "Clear worktree"
+  // would target a path the pane no longer runs in. Matches clearWorktreeBinding's
+  // patch shape (also drops a stale initialPrompt written for the old folder).
   setPaneCwd: (leafId, cwd) =>
-    set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { cwd }) }))),
+    set((s) =>
+      mapActive(s, (w) => ({
+        ...w,
+        layout: updateLeaf(w.layout, leafId, { cwd, worktreeBranch: undefined, initialPrompt: undefined })
+      }))
+    ),
 
   setPaneShell: (leafId, shellId) =>
     set((s) => mapActive(s, (w) => ({ ...w, layout: updateLeaf(w.layout, leafId, { shellId }) }))),
@@ -369,6 +391,33 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         return { ...w, layout }
       })
     })),
+
+  clearWorktrees: async (targets) => {
+    const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    for (const t of targets) {
+      // Relocate the pane home — its respawn kills the pty holding the worktree
+      // cwd lock and restarts a shell at the repo root.
+      get().clearWorktreeBinding(t.path)
+      // Wait for that relocation to complete (old pty dead) BEFORE deleting the
+      // directory: deleting under a live pty guts the dir then fails rmdir on
+      // Windows, leaving a husk. Timeout-backstopped inside the helper.
+      await awaitTerminalRelocated(t.terminalId)
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await clearWorktree(t.repoRoot, t.path, t.branch)
+          break
+        } catch (e) {
+          const msg = String(e)
+          if (attempt < 5 && isTransientLock(msg)) {
+            await delay(150)
+            continue
+          }
+          console.warn(`clear worktree failed for ${t.branch}:`, msg)
+          break
+        }
+      }
+    }
+  },
 
   toggleBroadcast: () =>
     set((s) =>
