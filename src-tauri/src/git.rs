@@ -829,4 +829,103 @@ detached
             main
         ));
     }
+
+    #[test]
+    fn ensure_repo_with_commit_initializes_nonexistent_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("new-project");
+        std::fs::create_dir(&path).unwrap();
+
+        let result = ensure_repo_with_commit(&path);
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep exists
+        assert!(path.join(".gitkeep").exists(), ".gitkeep should be created");
+        // Verify it's a git repo
+        let log_out = git_command()
+            .args([
+                "-C",
+                path.to_str().unwrap(),
+                "log",
+                "--oneline",
+            ])
+            .output()
+            .unwrap();
+        let log = String::from_utf8_lossy(&log_out.stdout);
+        assert!(
+            log.contains("Initial commit"),
+            "repo should have initial commit: {log}"
+        );
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_skips_existing_repo_with_commits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("existing-repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        init_repo(&repo); // Uses existing test helper
+
+        let result = ensure_repo_with_commit(&repo);
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep was NOT created (it would only be created if unborn)
+        assert!(
+            !repo.join(".gitkeep").exists(),
+            ".gitkeep should not be created for existing repo with commits"
+        );
+        // Verify it still has exactly 1 commit (the init one, not a new one)
+        let log_out = git_command()
+            .args(["-C", repo.to_str().unwrap(), "rev-list", "--count", "HEAD"])
+            .output()
+            .unwrap();
+        let count = String::from_utf8_lossy(&log_out.stdout).trim().parse::<u32>();
+        assert_eq!(count, Ok(1), "should still have only 1 commit");
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_commits_unborn_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("unborn-repo");
+        std::fs::create_dir_all(&repo).unwrap();
+
+        // Initialize a bare repo (unborn HEAD)
+        let p = repo.to_str().unwrap();
+        git_command()
+            .args(["-C", p, "init", "--quiet"])
+            .output()
+            .unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.name", "Test"])
+            .output()
+            .unwrap();
+
+        let result = ensure_repo_with_commit(&repo);
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep was created
+        assert!(repo.join(".gitkeep").exists(), ".gitkeep should be created");
+        // Verify HEAD is now valid
+        let head_ok = git_command()
+            .args(["-C", p, "rev-parse", "--verify", "--quiet", "HEAD"])
+            .output()
+            .unwrap()
+            .status
+            .success();
+        assert!(head_ok, "HEAD should be valid after ensure_repo_with_commit");
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_fails_on_permission_error() {
+        // Try a non-existent deeply nested path
+        let bad_path = std::path::Path::new("/nonexistent/does/not/exist/repo");
+
+        let result = ensure_repo_with_commit(bad_path);
+
+        // Should fail with an error
+        assert!(result.is_err(), "should fail on invalid path: {result:?}");
+    }
 }
