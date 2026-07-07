@@ -14,6 +14,8 @@ import {
 } from '@/lib/layout-tree'
 import type { ShellId } from '@/lib/terminal-pref'
 import { DEFAULT_TEMPLATE_ID } from '@/lib/templates'
+import { clearWorktree } from '@/tauri/git'
+import { isTransientLock } from '@/lib/worktree-cleanup'
 
 /** A workspace: a named binary split-tree of terminal panes. */
 export interface Workspace {
@@ -46,6 +48,14 @@ export interface CreateWorkspaceConfig {
    *  stays at the workspace cwd. Created by the composer BEFORE the store is
    *  touched, so leaves are born with their isolation — no post-hoc rebinding. */
   paneWorktrees?: ({ path: string; branch: string } | null)[]
+}
+
+/** One worktree to clear: the bound leaf, its worktree path + branch, and the repo root. */
+export interface ClearTarget {
+  leafId: string
+  path: string
+  branch: string
+  repoRoot: string
 }
 
 export interface AppState {
@@ -87,6 +97,7 @@ export interface AppActions {
     prompt: string
   }) => void
   clearWorktreeBinding: (path: string) => void
+  clearWorktrees: (targets: ClearTarget[]) => Promise<void>
   toggleBroadcast: () => void
   toggleBroadcastMember: (leafId: string) => void
   selectAllBroadcast: () => void
@@ -369,6 +380,38 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
         return { ...w, layout }
       })
     })),
+
+  clearWorktrees: async (targets) => {
+    const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    for (const t of targets) {
+      // Relocate the pane back to the repo root FIRST. This clears the leaf's
+      // cwd, so TerminalPane's respawn effect kills the pty that is still cwd'd
+      // inside the worktree (freeing the Windows directory lock) and respawns a
+      // shell at the repo root. The pane survives; it just goes home.
+      get().clearWorktreeBinding(t.path)
+      // Remove the directory + branch. The pty teardown above is async (React
+      // effect + Exit wait), so the first attempt can race the lock — retry
+      // briefly on the transient lock while it releases; a genuine git refusal
+      // (bad path) is not a lock and throws on the first attempt.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await clearWorktree(t.repoRoot, t.path, t.branch)
+          break
+        } catch (e) {
+          const msg = String(e)
+          if (attempt < 5 && isTransientLock(msg)) {
+            await delay(150)
+            continue
+          }
+          // Surface via console — the pane already relocated, so this is a
+          // stale directory/branch left behind, not a broken pane. (Matches the
+          // app's existing console-only worktree fallbacks; a toast is a later nicety.)
+          console.warn(`clear worktree failed for ${t.branch}:`, msg)
+          break
+        }
+      }
+    }
+  },
 
   toggleBroadcast: () =>
     set((s) =>
