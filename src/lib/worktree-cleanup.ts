@@ -35,7 +35,7 @@ export function classifyWorktree(
  * worth a brief retry — versus a genuine git refusal, which should fail fast.
  */
 export function isTransientLock(message: string): boolean {
-  return /permission denied|not empty|locked|unable to/i.test(message)
+  return /permission denied|not empty|locked|unable to|not a working tree|validation failed/i.test(message)
 }
 
 /** Context-menu label; plural with a count when clearing a broadcast group. */

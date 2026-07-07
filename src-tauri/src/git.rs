@@ -409,6 +409,29 @@ pub fn remove_worktree(repo_cwd: &Path, worktree_path: &Path) -> Result<(), Stri
     Ok(())
 }
 
+/// Count commits on `branch` not reachable from the main worktree's HEAD — the
+/// real "unmerged work" signal. Measured against main's HEAD, NOT an upstream:
+/// swarm branches created via `git worktree add -b` never have an upstream, so
+/// `git status`'s ahead/behind is always null for them. `HEAD` here is resolved
+/// in the main worktree (`resolve_main_root`), and branch refs are shared across
+/// all worktrees of the repo, so `HEAD..<branch>` is well-defined.
+pub fn branch_unmerged_count(repo_cwd: &Path, branch: &str) -> Result<u32, String> {
+    let main_root = resolve_main_root(repo_cwd)?;
+    let root = main_root.to_str().ok_or("non-UTF-8 repo root")?;
+    let range = format!("HEAD..{branch}");
+    let out = git_command()
+        .args(["-C", root, "rev-list", "--count", &range])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u32>()
+        .map_err(|e| format!("could not parse rev-list count: {e}"))
+}
+
 /// UI-driven worktree removal: force-remove the directory and delete its branch.
 /// Distinct from `remove_worktree` (the agent-facing MCP path, kept strict and
 /// non-force): here the UI has already surfaced and gated any real unsaved work
@@ -477,6 +500,34 @@ mod tests {
             .args(["-C", p, "commit", "--quiet", "-m", "init"])
             .output()
             .unwrap();
+    }
+
+    /// Run a git command inside `dir` for test setup (commits, adds, etc.) —
+    /// mirrors how `init_repo` shells out, just parameterized on args/cwd.
+    fn run_git(dir: &Path, args: &[&str]) {
+        let status = git_command()
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed in {}", dir.display());
+    }
+
+    #[test]
+    fn branch_unmerged_count_counts_commits_not_in_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        init_repo(&repo);
+        let created = create_worktree(&repo, "swarm/x").unwrap();
+        let wt = std::path::PathBuf::from(&created.path);
+        // Fresh worktree branch has no commits ahead of main.
+        assert_eq!(branch_unmerged_count(&repo, "swarm/x").unwrap(), 0);
+        // Commit inside the worktree → one unmerged commit.
+        std::fs::write(wt.join("f.txt"), "hi").unwrap();
+        run_git(&wt, &["add", "."]);
+        run_git(&wt, &["commit", "-m", "work"]);
+        assert_eq!(branch_unmerged_count(&repo, "swarm/x").unwrap(), 1);
     }
 
     #[test]

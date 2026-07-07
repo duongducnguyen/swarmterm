@@ -15,7 +15,7 @@ import {
   ContextMenuItem,
 } from '@/components/ui/context-menu'
 import { ClearWorktreeDialog, type DialogTarget } from '@/components/Workspace/ClearWorktreeDialog'
-import { getChangedFiles, getCommitInfo } from '@/tauri/git'
+import { getChangedFiles, branchUnmergedCount } from '@/tauri/git'
 import { classifyWorktree, clearWorktreeMenuLabel } from '@/lib/worktree-cleanup'
 import { agentCommand, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { buildAgentSpawnCommand, shellFlavor } from '@/lib/agent-spawn-command'
@@ -183,6 +183,9 @@ export function TerminalPane({
   }
 
   const [dialog, setDialog] = useState<{ targets: DialogTarget[]; clears: ClearTarget[] } | null>(null)
+  // Lazily computed when the context menu opens (see the ContextMenu wrapper
+  // below) rather than on every render of every pane.
+  const [menuTargetCount, setMenuTargetCount] = useState(0)
 
   // Resolve which panes this action targets: the broadcast group if THIS leaf is
   // in it, else just this pane — then keep only panes bound to a worktree.
@@ -196,20 +199,31 @@ export function TerminalPane({
     )
     return leaves
       .filter((l) => l.worktreeBranch !== undefined && l.cwd !== undefined)
-      .map((l) => ({ leafId: l.id, path: l.cwd as string, branch: l.worktreeBranch as string, repoRoot: ws.cwd }))
+      .map((l) => ({
+        leafId: l.id,
+        terminalId: l.terminalId,
+        path: l.cwd as string,
+        branch: l.worktreeBranch as string,
+        repoRoot: ws.cwd
+      }))
   }
-
-  const worktreeTargetCount = resolveWorktreeTargets().length
 
   async function openClearDialog(): Promise<void> {
     const clears = resolveWorktreeTargets()
     if (clears.length === 0) return
     const targets: DialogTarget[] = await Promise.all(
       clears.map(async (c) => {
-        const changed = await getChangedFiles(c.path)
-        const { ahead } = await getCommitInfo(c.path)
-        const { uncommittedCount, unmergedCount, dirty } = classifyWorktree(changed, ahead)
-        return { leafId: c.leafId, branch: c.branch, uncommittedCount, unmergedCount, dirty }
+        try {
+          const changed = await getChangedFiles(c.path)
+          const unmerged = await branchUnmergedCount(c.repoRoot, c.branch)
+          const { uncommittedCount, unmergedCount, dirty } = classifyWorktree(changed, unmerged)
+          return { leafId: c.leafId, branch: c.branch, uncommittedCount, unmergedCount, dirty }
+        } catch (e) {
+          // An uninspectable worktree is treated as having unsaved work so it is
+          // protected (unchecked), never silently auto-removed.
+          console.warn(`inspect worktree failed for ${c.branch}:`, e)
+          return { leafId: c.leafId, branch: c.branch, uncommittedCount: 0, unmergedCount: 0, dirty: true }
+        }
       })
     )
     setDialog({ targets, clears })
@@ -271,14 +285,14 @@ export function TerminalPane({
         worktreeBranch={leaf.worktreeBranch}
         agentTitle={agentTitle}
         headerWrapper={(root) => (
-          <ContextMenu>
+          <ContextMenu onOpenChange={(open) => { if (open) setMenuTargetCount(resolveWorktreeTargets().length) }}>
             <ContextMenuTrigger asChild>{root}</ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem
-                disabled={worktreeTargetCount === 0}
+                disabled={menuTargetCount === 0}
                 onSelect={() => void openClearDialog()}
               >
-                {clearWorktreeMenuLabel(worktreeTargetCount)}
+                {clearWorktreeMenuLabel(menuTargetCount)}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>

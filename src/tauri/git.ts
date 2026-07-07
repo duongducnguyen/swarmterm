@@ -46,6 +46,10 @@ export function createWorktree(repoRoot: string, branch: string): Promise<Create
   return invoke('git_create_worktree', { repoRoot, branch })
 }
 
+export function branchUnmergedCount(repoRoot: string, branch: string): Promise<number> {
+  return invoke('git_branch_unmerged_count', { repoRoot, branch })
+}
+
 export function clearWorktree(
   repoRoot: string,
   worktreePath: string,

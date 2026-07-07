@@ -50,6 +50,11 @@ describe('isTransientLock', () => {
   it('does not match a genuine git refusal', () => {
     expect(isTransientLock('refusing: path is not a swarmterm-managed worktree')).toBe(false)
   })
+
+  it('matches git post-partial-delete validation errors', () => {
+    expect(isTransientLock("fatal: 'x' is not a working tree")).toBe(true)
+    expect(isTransientLock('validation failed: gitdir incorrect')).toBe(true)
+  })
 })
 
 describe('clearWorktreeMenuLabel', () => {

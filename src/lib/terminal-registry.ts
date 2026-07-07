@@ -307,6 +307,37 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
 
+/**
+ * Resolve once a terminal has finished relocating (respawn: old pty killed, new
+ * pty up). The session emits `connecting` then, only after the old pty exits,
+ * `running` — so a settled state after a `connecting` means the OLD pty (and its
+ * Job-Object child tree) is dead and any cwd it held is released. Used before
+ * deleting a worktree so the delete never races a live pty (which on Windows
+ * guts the directory then fails rmdir, leaving a husk). A timeout backstop keeps
+ * a stuck pane from hanging the caller.
+ */
+export function awaitTerminalRelocated(id: string, timeoutMs = 4000): Promise<void> {
+  const entry = entries.get(id)
+  if (!entry) return Promise.resolve()
+  return new Promise((resolve) => {
+    let sawConnecting = entry.session.getStatus().kind === 'connecting'
+    let done = false
+    const finish = (): void => {
+      if (done) return
+      done = true
+      unsub()
+      clearTimeout(timer)
+      resolve()
+    }
+    const unsub = entry.session.subscribe(() => {
+      const k = entry.session.getStatus().kind
+      if (k === 'connecting') sawConnecting = true
+      else if (sawConnecting) finish()
+    })
+    const timer = setTimeout(finish, timeoutMs)
+  })
+}
+
 export function getTerminalStatus(id: string): TerminalStatus {
   return entries.get(id)?.session.getStatus() ?? NO_STATUS
 }

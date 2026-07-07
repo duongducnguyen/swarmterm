@@ -112,6 +112,15 @@ pub async fn git_get_commit_info(
 }
 
 #[tauri::command]
+pub async fn git_branch_unmerged_count(repo_root: String, branch: String) -> Result<u32, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::branch_unmerged_count(std::path::Path::new(&repo_root), &branch)
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
+}
+
+#[tauri::command]
 pub async fn git_create_worktree(
     repo_root: String,
     branch: String,
