@@ -236,7 +236,7 @@ export function TerminalPane({
     setDialog(null)
   }
 
-  return (
+  const pane = (
     <div
       ref={setPaneRef}
       onMouseDown={(e) => {
@@ -284,19 +284,6 @@ export function TerminalPane({
         dragAttributes={dragAttributes}
         worktreeBranch={leaf.worktreeBranch}
         agentTitle={agentTitle}
-        headerWrapper={(root) => (
-          <ContextMenu onOpenChange={(open) => { if (open) setMenuTargetCount(resolveWorktreeTargets().length) }}>
-            <ContextMenuTrigger asChild>{root}</ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem
-                disabled={menuTargetCount === 0}
-                onSelect={() => void openClearDialog()}
-              >
-                {clearWorktreeMenuLabel(menuTargetCount)}
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        )}
       />
 
       <ClearWorktreeDialog
@@ -327,6 +314,23 @@ export function TerminalPane({
         )}
       </div>
     </div>
+  )
+
+  // Right-click anywhere in the pane (header or the terminal body) opens the
+  // context menu — the whole pane is the trigger, not just the header. xterm
+  // doesn't use right-click, so capturing it here steals no terminal action.
+  return (
+    <ContextMenu onOpenChange={(open) => { if (open) setMenuTargetCount(resolveWorktreeTargets().length) }}>
+      <ContextMenuTrigger asChild>{pane}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          disabled={menuTargetCount === 0}
+          onSelect={() => void openClearDialog()}
+        >
+          {clearWorktreeMenuLabel(menuTargetCount)}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
