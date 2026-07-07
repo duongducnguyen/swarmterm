@@ -9,8 +9,11 @@
     --foreground: 0 0% 80%;
     --card: 0 0% 12%;
     --card-foreground: 0 0% 80%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 80%;
+    /* Menus/popovers are an ELEVATED surface — kept distinctly lighter than the
+       card (12%) and the terminal (VS Code Dark ~12%) so a context menu opened
+       over the terminal body doesn't blend into it. */
+    --popover: 0 0% 17%;
+    --popover-foreground: 0 0% 90%;
     --primary: 206 100% 42%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 9%;
