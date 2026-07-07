@@ -10,6 +10,7 @@ import {
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu'
 import { TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
+import { resolvePaneTitle } from '@/lib/pane-title'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { KNOWN_SHELLS, type ShellId } from '@/lib/terminal-pref'
 import { resolveHeaderLevel, shortenPath, type HeaderLevel } from '@/lib/header-layout'
@@ -62,7 +63,7 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
 
   // Title: agent-supplied wins; otherwise the agent name so the slot is never
   // blank. Tooltip carries the full title + full branch (both may be truncated).
-  const displayTitle = props.agentTitle?.trim() || agentLabel
+  const displayTitle = resolvePaneTitle(agentId, props.agentTitle)
   const titleTooltip = worktreeBranch ? `${displayTitle} — ${worktreeBranch}` : displayTitle
 
   // Measure the header row and resolve which chips render at full detail. Start
