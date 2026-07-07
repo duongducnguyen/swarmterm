@@ -106,6 +106,7 @@ pub fn run() {
             commands::git_get_file_diff,
             commands::git_get_commit_info,
             commands::git_create_worktree,
+            commands::git_clear_worktree,
             auth::save_auth_session,
             auth::load_auth_session,
             auth::clear_auth_session,

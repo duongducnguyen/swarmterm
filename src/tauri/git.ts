@@ -45,3 +45,11 @@ export function getCommitInfo(worktreePath: string): Promise<CommitInfo> {
 export function createWorktree(repoRoot: string, branch: string): Promise<CreatedWorktree> {
   return invoke('git_create_worktree', { repoRoot, branch })
 }
+
+export function clearWorktree(
+  repoRoot: string,
+  worktreePath: string,
+  branch: string
+): Promise<void> {
+  return invoke('git_clear_worktree', { repoRoot, worktreePath, branch })
+}

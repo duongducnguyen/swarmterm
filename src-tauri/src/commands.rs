@@ -122,3 +122,20 @@ pub async fn git_create_worktree(
     .await
     .map_err(|e| format!("git task failed: {e}"))?
 }
+
+#[tauri::command]
+pub async fn git_clear_worktree(
+    repo_root: String,
+    worktree_path: String,
+    branch: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::clear_worktree(
+            std::path::Path::new(&repo_root),
+            std::path::Path::new(&worktree_path),
+            &branch,
+        )
+    })
+    .await
+    .map_err(|e| format!("git task failed: {e}"))?
+}

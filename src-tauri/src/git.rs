@@ -409,9 +409,112 @@ pub fn remove_worktree(repo_cwd: &Path, worktree_path: &Path) -> Result<(), Stri
     Ok(())
 }
 
+/// UI-driven worktree removal: force-remove the directory and delete its branch.
+/// Distinct from `remove_worktree` (the agent-facing MCP path, kept strict and
+/// non-force): here the UI has already surfaced and gated any real unsaved work
+/// in a confirmation dialog, and the app-written `.mcp.json` would otherwise
+/// block a non-force remove. The `is_inside_worktrees_dir` guard — not the
+/// dirty-check — is the real protection against nuking an arbitrary path.
+///
+/// The transient Windows lock (a pane's pty still cwd'd inside the worktree) is
+/// handled by the CALLER retrying the IPC while the pane relocates home; a retry
+/// loop here would block the command thread, so it is deliberately absent.
+pub fn clear_worktree(repo_cwd: &Path, worktree_path: &Path, branch: &str) -> Result<(), String> {
+    let main_root = resolve_main_root(repo_cwd)?;
+    if !is_inside_worktrees_dir(worktree_path, &main_root) {
+        return Err("refusing: path is not a swarmterm-managed worktree".into());
+    }
+    let root = main_root.to_str().ok_or("non-UTF-8 repo root")?;
+    let target = worktree_path.to_str().ok_or("non-UTF-8 worktree path")?;
+
+    let out = git_command()
+        .args(["-C", root, "worktree", "remove", "--force", target])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        // Windows: an open handle (a shell still cwd'd inside) blocks deletion.
+        return Err(format!(
+            "{err} (if files are locked, close the worktree's pane and retry)"
+        ));
+    }
+
+    // Delete the branch ref from the main repo. `-D` (force) because the UI has
+    // already warned about unmerged commits; the branch is no longer checked out
+    // anywhere now that its only worktree is gone.
+    let out = git_command()
+        .args(["-C", root, "branch", "-D", branch])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(format!("worktree removed, but branch delete failed: {err}"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Minimal real git repo for the worktree integration tests below (the rest
+    /// of this module tests pure parsing functions, so no such helper existed
+    /// yet). One commit so `create_worktree`'s HEAD-exists precheck passes.
+    fn init_repo(path: &Path) {
+        let p = path.to_str().unwrap();
+        git_command().args(["-C", p, "init", "--quiet"]).output().unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.name", "Test"])
+            .output()
+            .unwrap();
+        std::fs::write(path.join("README.md"), "test").unwrap();
+        git_command().args(["-C", p, "add", "."]).output().unwrap();
+        git_command()
+            .args(["-C", p, "commit", "--quiet", "-m", "init"])
+            .output()
+            .unwrap();
+    }
+
+    #[test]
+    fn clear_worktree_refuses_path_outside_worktrees_dir() {
+        // A path that is not under <repo>.worktrees must be refused before any
+        // git mutation — the guard is the real protection for the force remove.
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        init_repo(&repo);
+        let outside = tmp.path().join("not-a-worktree");
+        std::fs::create_dir_all(&outside).unwrap();
+        let err = clear_worktree(&repo, &outside, "swarm/x").unwrap_err();
+        assert!(err.contains("not a swarmterm-managed worktree"), "got: {err}");
+    }
+
+    #[test]
+    fn clear_worktree_removes_directory_and_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        init_repo(&repo);
+        let created = create_worktree(&repo, "swarm/gone").unwrap();
+        let wt = std::path::PathBuf::from(&created.path);
+        assert!(wt.exists());
+
+        clear_worktree(&repo, &wt, "swarm/gone").unwrap();
+
+        assert!(!wt.exists(), "worktree directory should be gone");
+        let branches = git_command()
+            .args(["-C", repo.to_str().unwrap(), "branch", "--list", "swarm/gone"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "branch should be deleted"
+        );
+    }
 
     #[test]
     fn test_parse_worktree_list_two_entries() {
