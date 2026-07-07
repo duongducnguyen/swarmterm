@@ -343,6 +343,85 @@ pub fn resolve_main_root(cwd: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "unexpected git dir layout".to_string())
 }
 
+/// Ensure a directory is a git repository with at least one commit.
+/// If not a repo, initializes it. If repo has no commits (unborn HEAD),
+/// creates .gitkeep placeholder and makes initial commit.
+/// Returns Ok(()) on success (repo is now ready for worktree operations),
+/// or Err(message) if any step fails.
+pub fn ensure_repo_with_commit(path: &Path) -> Result<(), String> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", path.display()))?;
+
+    // Step 1: Check if already a git repo
+    let is_repo = git_command()
+        .args(["-C", path_str, "rev-parse", "--git-dir"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?
+        .status
+        .success();
+
+    if !is_repo {
+        // Not a repo yet, initialize it
+        let init_out = git_command()
+            .args(["-C", path_str, "init"])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !init_out.status.success() {
+            return Err(String::from_utf8_lossy(&init_out.stderr).trim().to_string());
+        }
+
+        // Configure git user for this repo (required to commit)
+        git_command()
+            .args(["-C", path_str, "config", "user.email", "user@example.com"])
+            .output()
+            .map_err(|e| format!("git config failed: {e}"))?;
+
+        git_command()
+            .args(["-C", path_str, "config", "user.name", "Swarmterm"])
+            .output()
+            .map_err(|e| format!("git config failed: {e}"))?;
+    }
+
+    // Step 2: Check if HEAD is valid (repo has commits)
+    let head_ok = git_command()
+        .args(["-C", path_str, "rev-parse", "--verify", "--quiet", "HEAD"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?
+        .status
+        .success();
+
+    if !head_ok {
+        // Unborn HEAD — repo exists but has no commits
+        // Create .gitkeep placeholder so we have something to commit
+        let gitkeep_path = path.join(".gitkeep");
+        std::fs::write(&gitkeep_path, "")
+            .map_err(|e| format!("failed to create .gitkeep: {e}"))?;
+
+        // Stage and commit
+        let add_out = git_command()
+            .args(["-C", path_str, "add", "."])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !add_out.status.success() {
+            return Err(String::from_utf8_lossy(&add_out.stderr).trim().to_string());
+        }
+
+        let commit_out = git_command()
+            .args(["-C", path_str, "commit", "-m", "Initial commit"])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !commit_out.status.success() {
+            return Err(String::from_utf8_lossy(&commit_out.stderr).trim().to_string());
+        }
+    }
+
+    Ok(())
+}
+
 pub fn create_worktree(repo_cwd: &Path, branch: &str) -> Result<CreatedWorktree, String> {
     validate_branch_name(branch)?;
     let main_root = resolve_main_root(repo_cwd)?;
