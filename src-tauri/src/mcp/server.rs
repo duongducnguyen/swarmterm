@@ -145,7 +145,7 @@ impl ServerHandler for SwarmtermMcpServer {
                  the current checkout, prefer delegating each to a parallel agent via \
                  worktree.spawn (one branch per task) instead of editing in place — the \
                  spawned agent starts inside its own git worktree, so parallel work never \
-                 collides. If your pane already runs inside a swarm/<agent>-<n> worktree, \
+                 collides. If your pane already runs inside a swarm/* worktree, \
                  you may rename that branch to match your actual task (git branch -m \
                  <new-name>) — but never move or rename the worktree DIRECTORY (session \
                  state is keyed by its path). Use worktree.remove to clean up after a branch \
