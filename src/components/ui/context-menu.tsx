@@ -13,8 +13,8 @@ export function ContextMenuContent({
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         className={cn(
-          'z-50 min-w-[9rem] overflow-hidden rounded-md border border-border bg-popover p-1',
-          'text-popover-foreground shadow-md',
+          'z-50 min-w-[9rem] overflow-hidden rounded-md border border-pane-border bg-popover p-1',
+          'text-popover-foreground shadow-xl',
           'data-[state=open]:animate-in data-[state=open]:fade-in-0',
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
           className
@@ -33,7 +33,7 @@ export function ContextMenuItem({
     <ContextMenuPrimitive.Item
       className={cn(
         'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm',
-        'outline-none transition-colors focus:bg-accent focus:text-accent-foreground',
+        'outline-none transition-colors focus:bg-white/10 focus:text-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
