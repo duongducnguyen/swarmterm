@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { AccountIcon } from '@/components/Account/AccountIcon'
+import { TerminalList } from '@/components/Navbar/TerminalList'
 import { getAppVersion } from '@/tauri/app'
 
 interface NavbarProps {
@@ -156,6 +157,8 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
             New workspace
           </Button>
         </div>
+
+        <TerminalList />
 
         <div className="shrink-0 space-y-0.5 border-t border-border p-2">
           <AccountIcon onOpenAccountSettings={onOpenAccountSettings} />
