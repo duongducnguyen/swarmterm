@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { AccountIcon } from '@/components/Account/AccountIcon'
+import { TerminalList } from '@/components/Navbar/TerminalList'
 import { getAppVersion } from '@/tauri/app'
 
 interface NavbarProps {
@@ -101,10 +102,11 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
       className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-in-out motion-reduce:transition-none"
     >
       <div className="flex h-full w-56 flex-col">
-        <div className="flex-1 overflow-y-auto p-2">
-          <p className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <p className="shrink-0 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
             Workspaces
           </p>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -155,7 +157,10 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
             <Plus className="h-4 w-4" />
             New workspace
           </Button>
+          </div>
         </div>
+
+        <TerminalList />
 
         <div className="shrink-0 space-y-0.5 border-t border-border p-2">
           <AccountIcon onOpenAccountSettings={onOpenAccountSettings} />

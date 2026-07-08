@@ -343,6 +343,104 @@ pub fn resolve_main_root(cwd: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "unexpected git dir layout".to_string())
 }
 
+/// Ensure a directory is a git repository with at least one commit, ready for
+/// `create_worktree`. If `path` is not its own repo — or only sits *inside* an
+/// unrelated parent repo (classically the user's home dir being a git repo) —
+/// a fresh repo is initialized in `path`. If the repo has no commits (unborn
+/// HEAD) a `.gitkeep` placeholder is committed so `git worktree add` (which
+/// cannot check out an unborn HEAD) works. Returns Ok(()) once the repo is
+/// ready, or Err(message) if any git step fails.
+///
+/// `home` is the user's home directory; it guards against attaching to a repo
+/// that merely *contains* `path`, mirroring `list_worktrees`' own guard
+/// (`should_ignore_repo_root`). Without it, picking any folder under a
+/// home-level repo would make us provision worktrees of that whole repo.
+pub fn ensure_repo_with_commit(path: &Path, home: &Path) -> Result<(), String> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", path.display()))?;
+
+    // Step 1: Does `path` live in its OWN repo? `--show-toplevel` gives the
+    // absolute root git found by walking up from `path`. If that root is home
+    // (or an ancestor of home) the folder only sits inside an unrelated repo —
+    // treat it as "no repo here" and init a fresh one, exactly as list_worktrees
+    // ignores such roots. `--git-dir` is wrong here: it returns a bare ".git"
+    // from a repo root, whose parent is empty, defeating the guard.
+    let toplevel_out = git_command()
+        .args(["-C", path_str, "rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?;
+    let is_own_repo = if toplevel_out.status.success() {
+        let root = PathBuf::from(String::from_utf8_lossy(&toplevel_out.stdout).trim());
+        let root_norm = root.canonicalize().unwrap_or_else(|_| root.clone());
+        let home_norm = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+        !should_ignore_repo_root(&root_norm, &home_norm)
+    } else {
+        // Not inside any repo — a fresh init is exactly what's wanted.
+        false
+    };
+
+    if !is_own_repo {
+        // Not a repo yet, initialize it
+        let init_out = git_command()
+            .args(["-C", path_str, "init"])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !init_out.status.success() {
+            return Err(String::from_utf8_lossy(&init_out.stderr).trim().to_string());
+        }
+
+        // Configure git user for this repo (required to commit)
+        git_command()
+            .args(["-C", path_str, "config", "user.email", "user@example.com"])
+            .output()
+            .map_err(|e| format!("git config failed: {e}"))?;
+
+        git_command()
+            .args(["-C", path_str, "config", "user.name", "Swarmterm"])
+            .output()
+            .map_err(|e| format!("git config failed: {e}"))?;
+    }
+
+    // Step 2: Check if HEAD is valid (repo has commits)
+    let head_ok = git_command()
+        .args(["-C", path_str, "rev-parse", "--verify", "--quiet", "HEAD"])
+        .output()
+        .map_err(|e| format!("git not found: {e}"))?
+        .status
+        .success();
+
+    if !head_ok {
+        // Unborn HEAD — repo exists but has no commits
+        // Create .gitkeep placeholder so we have something to commit
+        let gitkeep_path = path.join(".gitkeep");
+        std::fs::write(&gitkeep_path, "")
+            .map_err(|e| format!("failed to create .gitkeep: {e}"))?;
+
+        // Stage and commit
+        let add_out = git_command()
+            .args(["-C", path_str, "add", "."])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !add_out.status.success() {
+            return Err(String::from_utf8_lossy(&add_out.stderr).trim().to_string());
+        }
+
+        let commit_out = git_command()
+            .args(["-C", path_str, "commit", "-m", "Initial commit"])
+            .output()
+            .map_err(|e| format!("git not found: {e}"))?;
+
+        if !commit_out.status.success() {
+            return Err(String::from_utf8_lossy(&commit_out.stderr).trim().to_string());
+        }
+    }
+
+    Ok(())
+}
+
 pub fn create_worktree(repo_cwd: &Path, branch: &str) -> Result<CreatedWorktree, String> {
     validate_branch_name(branch)?;
     let main_root = resolve_main_root(repo_cwd)?;
@@ -749,5 +847,149 @@ detached
             Path::new("/dev/myapp.worktrees/./feat-login/.."),
             main
         ));
+    }
+
+    /// The real home dir. On this codebase's dev machines `home` is itself a
+    /// git repo and the OS temp dir lives under it, so tempdirs are discovered
+    /// as "inside home's repo" — passing the true home lets the home-repo guard
+    /// fire deterministically. On a machine where temp is outside any repo,
+    /// `--show-toplevel` simply fails and the guard is moot; either way the
+    /// fresh-init path is taken.
+    fn test_home() -> PathBuf {
+        std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("/nonexistent-home"))
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_initializes_nonexistent_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("new-project");
+        std::fs::create_dir(&path).unwrap();
+
+        let result = ensure_repo_with_commit(&path, &test_home());
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep exists
+        assert!(path.join(".gitkeep").exists(), ".gitkeep should be created");
+        // Verify it's a git repo
+        let log_out = git_command()
+            .args([
+                "-C",
+                path.to_str().unwrap(),
+                "log",
+                "--oneline",
+            ])
+            .output()
+            .unwrap();
+        let log = String::from_utf8_lossy(&log_out.stdout);
+        assert!(
+            log.contains("Initial commit"),
+            "repo should have initial commit: {log}"
+        );
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_skips_existing_repo_with_commits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("existing-repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        init_repo(&repo); // Uses existing test helper
+
+        let result = ensure_repo_with_commit(&repo, &test_home());
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep was NOT created (it would only be created if unborn)
+        assert!(
+            !repo.join(".gitkeep").exists(),
+            ".gitkeep should not be created for existing repo with commits"
+        );
+        // Verify it still has exactly 1 commit (the init one, not a new one)
+        let log_out = git_command()
+            .args(["-C", repo.to_str().unwrap(), "rev-list", "--count", "HEAD"])
+            .output()
+            .unwrap();
+        let count = String::from_utf8_lossy(&log_out.stdout).trim().parse::<u32>();
+        assert_eq!(count, Ok(1), "should still have only 1 commit");
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_commits_unborn_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("unborn-repo");
+        std::fs::create_dir_all(&repo).unwrap();
+
+        // Initialize a bare repo (unborn HEAD)
+        let p = repo.to_str().unwrap();
+        git_command()
+            .args(["-C", p, "init", "--quiet"])
+            .output()
+            .unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.email", "test@example.com"])
+            .output()
+            .unwrap();
+        git_command()
+            .args(["-C", p, "config", "user.name", "Test"])
+            .output()
+            .unwrap();
+
+        let result = ensure_repo_with_commit(&repo, &test_home());
+
+        assert!(result.is_ok(), "should succeed: {result:?}");
+        // Verify .gitkeep was created
+        assert!(repo.join(".gitkeep").exists(), ".gitkeep should be created");
+        // Verify HEAD is now valid
+        let head_ok = git_command()
+            .args(["-C", p, "rev-parse", "--verify", "--quiet", "HEAD"])
+            .output()
+            .unwrap()
+            .status
+            .success();
+        assert!(head_ok, "HEAD should be valid after ensure_repo_with_commit");
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_fails_on_permission_error() {
+        // Try a non-existent deeply nested path
+        let bad_path = std::path::Path::new("/nonexistent/does/not/exist/repo");
+
+        let result = ensure_repo_with_commit(bad_path, &test_home());
+
+        // Should fail with an error
+        assert!(result.is_err(), "should fail on invalid path: {result:?}");
+    }
+
+    #[test]
+    fn ensure_repo_with_commit_inits_fresh_repo_inside_parent_repo() {
+        // A folder that merely sits INSIDE an unrelated parent repo (the
+        // home-dir-is-a-repo case) must get its OWN fresh repo, not attach to
+        // the parent — otherwise create_worktree would provision worktrees of
+        // the whole parent. `parent` doubles as `home` so the guard treats it
+        // as the ignorable root regardless of where the real temp dir lives.
+        let tmp = tempfile::tempdir().unwrap();
+        let parent = tmp.path().join("parent-repo");
+        std::fs::create_dir_all(&parent).unwrap();
+        init_repo(&parent); // parent is a git repo with a commit
+        let child = parent.join("child-project");
+        std::fs::create_dir_all(&child).unwrap();
+
+        ensure_repo_with_commit(&child, &parent).unwrap();
+
+        // child got its OWN repo + initial commit, not parent's.
+        assert!(
+            child.join(".gitkeep").exists(),
+            "child should have its own .gitkeep"
+        );
+        let toplevel = git_command()
+            .args(["-C", child.to_str().unwrap(), "rev-parse", "--show-toplevel"])
+            .output()
+            .unwrap();
+        let root = String::from_utf8_lossy(&toplevel.stdout);
+        assert!(
+            root.trim().ends_with("child-project"),
+            "child should be its own repo root, got: {root}"
+        );
     }
 }
