@@ -44,30 +44,37 @@ pub fn merge_mcp_config(existing: Option<&str>) -> Result<String, String> {
     serde_json::to_string_pretty(&root).map_err(|e| e.to_string())
 }
 
-/// Merge-write `.mcp.json` into `dir` on disk (read-merge-write-via-tmp so a
-/// crash mid-write can't leave a truncated file). Shared by the `write_mcp_config`
-/// Tauri command (workspace creation, from Welcome.tsx) and worktree.spawn — a
-/// fresh worktree checkout has no `.mcp.json` since it's untracked, even though
-/// the spawned pane's env already carries SWARMTERM_MCP_URL/SWARMTERM_SESSION.
-pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
-    if !dir.is_dir() {
-        return Err(format!("cwd is not a directory: {}", dir.display()));
-    }
-    let path = dir.join(".mcp.json");
-    let existing = match fs::read_to_string(&path) {
+/// Merge-write the `swarmterm` MCP entry into `path` on disk (read →
+/// `merge_mcp_config` → write tmp → rename). The tmp+rename means a crash
+/// mid-write can never truncate the target — important for `~/.claude.json`,
+/// which holds far more than MCP config. A missing file is created; a
+/// malformed existing file returns `Err` and is left untouched.
+pub fn write_mcp_config_to_file(path: &Path) -> Result<(), String> {
+    let existing = match fs::read_to_string(path) {
         Ok(s) => Some(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("read: {e}")),
     };
     let merged = merge_mcp_config(existing.as_deref())?;
+    // `.claude.json` → `.claude.json.tmp` (same for `.mcp.json`): with_extension
+    // replaces the trailing `json` segment, preserving the leading dot-name.
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, merged).map_err(|e| format!("write tmp: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
+    fs::rename(&tmp, path).map_err(|e| {
         // Best-effort tmp cleanup on rename failure so we don't leave litter.
         let _ = fs::remove_file(&tmp);
         format!("rename: {e}")
     })?;
     Ok(())
+}
+
+/// Merge-write `.mcp.json` into `dir`. Thin wrapper over
+/// `write_mcp_config_to_file` for the directory case.
+pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
+    if !dir.is_dir() {
+        return Err(format!("cwd is not a directory: {}", dir.display()));
+    }
+    write_mcp_config_to_file(&dir.join(".mcp.json"))
 }
 
 /// Resolve Claude Code's user-scope config file (`.claude.json`). Honors
@@ -162,5 +169,44 @@ mod tests {
         // resolve to "/.claude.json".
         let p = resolve_global_config_path(Path::new("/home/duong"), Some("   "));
         assert_eq!(p, Path::new("/home/duong/.claude.json"));
+    }
+
+    #[test]
+    fn to_file_creates_when_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        write_mcp_config_to_file(&path).unwrap();
+        let contents = std::fs::read_to_string(&path).unwrap();
+        assert!(contents.contains("\"swarmterm\""));
+        assert!(contents.contains("${SWARMTERM_MCP_URL}"));
+    }
+
+    #[test]
+    fn to_file_merges_and_preserves_other_config() {
+        // Simulate a realistic ~/.claude.json: a top-level key plus an
+        // unrelated MCP server that must survive the merge.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        std::fs::write(
+            &path,
+            r#"{"numStartups":42,"mcpServers":{"1devtool":{"command":"x"}}}"#,
+        )
+        .unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(v["numStartups"], 42);
+        assert_eq!(v["mcpServers"]["1devtool"]["command"], "x");
+        assert_eq!(v["mcpServers"]["swarmterm"]["type"], "http");
+    }
+
+    #[test]
+    fn to_file_leaves_malformed_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        std::fs::write(&path, "{not json").unwrap();
+        assert!(write_mcp_config_to_file(&path).is_err());
+        // Original bytes preserved — the tmp+rename never clobbered them.
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{not json");
     }
 }
