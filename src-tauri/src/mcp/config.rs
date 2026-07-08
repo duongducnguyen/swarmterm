@@ -56,6 +56,19 @@ pub fn write_mcp_config_to_file(path: &Path) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("read: {e}")),
     };
+    // Skip rewriting when the user's config already carries our exact entry.
+    // Serde re-serialization would otherwise reorder keys (serde_json's default
+    // BTreeMap) and reformat the file on every boot — a needless, noisy churn of
+    // the user's PRIMARY Claude config, and it would also widen the (already
+    // tiny) read-merge-rename race against a concurrently running Claude Code.
+    // So we only ever write on the first run (or if the entry drifts).
+    if let Some(s) = existing.as_deref() {
+        if let Ok(v) = serde_json::from_str::<Value>(s) {
+            if v.get("mcpServers").and_then(|m| m.get("swarmterm")) == Some(&swarmterm_entry()) {
+                return Ok(());
+            }
+        }
+    }
     let merged = merge_mcp_config(existing.as_deref())?;
     // `.claude.json` → `.claude.json.tmp` (same for `.mcp.json`): with_extension
     // replaces the trailing `json` segment, preserving the leading dot-name.
@@ -85,6 +98,10 @@ pub fn register_user_scope(app: &AppHandle) {
     };
     let cfg_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
     let path = resolve_global_config_path(&home, cfg_dir.as_deref());
+    // Note: read-merge-rename is not locked against a concurrently running
+    // Claude Code writing ~/.claude.json; the rename is atomic (never corrupts),
+    // and the skip-if-present check keeps this to at most a first-run write, so
+    // any lost-update window is a single boot-time write, not steady-state.
     if let Err(e) = write_mcp_config_to_file(&path) {
         eprintln!(
             "mcp: failed to register global MCP config at {}: {e}",
@@ -224,5 +241,31 @@ mod tests {
         assert!(write_mcp_config_to_file(&path).is_err());
         // Original bytes preserved — the tmp+rename never clobbered them.
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{not json");
+    }
+
+    #[test]
+    fn to_file_is_idempotent() {
+        // Writing twice must leave byte-identical content: the second call sees
+        // the swarmterm entry already present and must not rewrite (no reformat).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        write_mcp_config_to_file(&path).unwrap();
+        let first = std::fs::read_to_string(&path).unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        let second = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn to_file_skips_rewrite_when_entry_already_present() {
+        // A file that already contains the exact swarmterm entry but in a
+        // different (compact) formatting must be left byte-for-byte untouched —
+        // we must not reformat/reorder the user's ~/.claude.json on repeat boots.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        let compact = r#"{"numStartups":7,"mcpServers":{"swarmterm":{"type":"http","url":"${SWARMTERM_MCP_URL}","headers":{"Authorization":"Bearer ${SWARMTERM_SESSION}"}}}}"#;
+        std::fs::write(&path, compact).unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), compact);
     }
 }
