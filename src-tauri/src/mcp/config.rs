@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
 
 /// The MCP entry Swarmterm writes into `.mcp.json`. Uses `${VAR}` syntax that
 /// Claude Code expands from the shell env — the two vars are set on every PTY
@@ -75,6 +76,30 @@ pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
         return Err(format!("cwd is not a directory: {}", dir.display()));
     }
     write_mcp_config_to_file(&dir.join(".mcp.json"))
+}
+
+/// Register Swarmterm's MCP server once in Claude Code's user-scope config
+/// (`~/.claude.json`) so every terminal Swarmterm spawns — in any folder or
+/// worktree — discovers it without a per-project `.mcp.json`. Idempotent: the
+/// entry is placeholder-only, so re-running on an already-registered config
+/// writes identical bytes. Log-only: a failure here must never block boot, and
+/// leaves Swarmterm fully usable minus the agent-facing MCP tools.
+pub fn register_user_scope(app: &AppHandle) {
+    let home = match app.path().home_dir() {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("mcp: cannot resolve home dir for global MCP config: {e}");
+            return;
+        }
+    };
+    let cfg_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
+    let path = resolve_global_config_path(&home, cfg_dir.as_deref());
+    if let Err(e) = write_mcp_config_to_file(&path) {
+        eprintln!(
+            "mcp: failed to register global MCP config at {}: {e}",
+            path.display()
+        );
+    }
 }
 
 /// Resolve Claude Code's user-scope config file (`.claude.json`). Honors

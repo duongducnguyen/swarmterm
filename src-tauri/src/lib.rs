@@ -63,6 +63,10 @@ pub fn run() {
                 }
             }
             tray::setup_tray(app)?;
+            // Register the MCP server at Claude's user scope (~/.claude.json)
+            // instead of dropping a .mcp.json into every project. One-shot,
+            // idempotent, log-only.
+            crate::mcp::config::register_user_scope(app.handle());
             // Boot the MCP server. Any failure is logged and swallowed: browser
             // preview via MCP just won't work for this run, but Swarmterm as a
             // whole still functions.
