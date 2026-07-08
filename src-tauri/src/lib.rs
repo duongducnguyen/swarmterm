@@ -116,7 +116,6 @@ pub fn run() {
             auth::save_auth_session,
             auth::load_auth_session,
             auth::clear_auth_session,
-            mcp::commands::write_mcp_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

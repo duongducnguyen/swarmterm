@@ -69,15 +69,6 @@ pub fn write_mcp_config_to_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Merge-write `.mcp.json` into `dir`. Thin wrapper over
-/// `write_mcp_config_to_file` for the directory case.
-pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
-    if !dir.is_dir() {
-        return Err(format!("cwd is not a directory: {}", dir.display()));
-    }
-    write_mcp_config_to_file(&dir.join(".mcp.json"))
-}
-
 /// Register Swarmterm's MCP server once in Claude Code's user-scope config
 /// (`~/.claude.json`) so every terminal Swarmterm spawns — in any folder or
 /// worktree — discovers it without a per-project `.mcp.json`. Idempotent: the
