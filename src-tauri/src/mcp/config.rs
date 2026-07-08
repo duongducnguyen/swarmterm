@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
@@ -70,6 +70,16 @@ pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Resolve Claude Code's user-scope config file (`.claude.json`). Honors
+/// `CLAUDE_CONFIG_DIR` (Claude Code lets users relocate its config there);
+/// a blank value is treated as unset so we never resolve to `/.claude.json`.
+pub fn resolve_global_config_path(home: &Path, claude_config_dir: Option<&str>) -> PathBuf {
+    match claude_config_dir.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(dir) => Path::new(dir).join(".claude.json"),
+        None => home.join(".claude.json"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +142,25 @@ mod tests {
     #[test]
     fn errors_when_mcp_servers_not_object() {
         assert!(merge_mcp_config(Some(r#"{"mcpServers":"nope"}"#)).is_err());
+    }
+
+    #[test]
+    fn global_path_defaults_to_home() {
+        let p = resolve_global_config_path(Path::new("/home/duong"), None);
+        assert_eq!(p, Path::new("/home/duong/.claude.json"));
+    }
+
+    #[test]
+    fn global_path_honors_claude_config_dir() {
+        let p = resolve_global_config_path(Path::new("/home/duong"), Some("/custom/cfg"));
+        assert_eq!(p, Path::new("/custom/cfg/.claude.json"));
+    }
+
+    #[test]
+    fn global_path_ignores_blank_config_dir() {
+        // Blank/whitespace CLAUDE_CONFIG_DIR must fall back to home, not
+        // resolve to "/.claude.json".
+        let p = resolve_global_config_path(Path::new("/home/duong"), Some("   "));
+        assert_eq!(p, Path::new("/home/duong/.claude.json"));
     }
 }
