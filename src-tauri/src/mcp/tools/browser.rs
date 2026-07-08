@@ -124,7 +124,12 @@ pub struct OpenPreviewResult {
 impl SwarmtermMcpServer {
     #[tool(
         name = "browser.open_preview",
-        description = "Open a web preview tab bound to the calling terminal."
+        description = "Show a URL in the user's Swarmterm web-preview column, beside the \
+                       calling terminal. Call this proactively whenever you start a dev \
+                       server or produce any viewable http(s) URL (e.g. Local: \
+                       http://localhost:3000) instead of only printing it — a connected \
+                       Swarmterm means the user already has a live preview pane ready. \
+                       Accepts one http:// or https:// URL."
     )]
     pub async fn open_preview(
         &self,
