@@ -135,17 +135,10 @@ impl SwarmtermMcpServer {
 
         let branch = args.branch.clone();
         let created = tauri::async_runtime::spawn_blocking(move || {
-            let created = crate::git::create_worktree(Path::new(&repo_root), &branch)?;
-            // Fresh worktrees are untracked checkouts, so they never carry the
-            // repo's own .mcp.json (or any pre-existing one is stale). Without
-            // it Claude Code in the new pane has SWARMTERM_MCP_URL/SESSION env
-            // but no config wiring them up. Log-only: a missing .mcp.json still
-            // leaves a usable pane, just without MCP tools, so it must not fail
-            // the whole spawn (same policy as Welcome.tsx's fire-and-forget).
-            if let Err(e) = crate::mcp::config::write_mcp_config_to_dir(Path::new(&created.path)) {
-                eprintln!("worktree.spawn: failed to write .mcp.json in {}: {e}", created.path);
-            }
-            Ok(created)
+            // The spawned pane's env already carries SWARMTERM_MCP_URL/SESSION;
+            // the MCP server is registered once at Claude's user scope, so a
+            // fresh worktree needs no per-directory .mcp.json.
+            crate::git::create_worktree(Path::new(&repo_root), &branch)
         })
         .await
         .map_err(|e| rmcp::ErrorData::internal_error(e.to_string(), None))?

@@ -14,7 +14,6 @@ import { AgentIcon } from '@/components/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
-import { writeMcpConfig } from '@/tauri/mcp'
 import { listWorktrees, createWorktree, ensureRepoWithCommit } from '@/tauri/git'
 import { planWorktreeBranches, provisionWorktrees } from '@/lib/worktree-naming'
 import { folderName } from '@/lib/recent-folders'
@@ -159,15 +158,6 @@ export function Welcome(): ReactElement {
         paneWorktrees = await provisionWorktrees(plan, (name) =>
           createWorktree(trimmedFolder, name)
         )
-        for (const wt of paneWorktrees) {
-          if (wt) {
-            // Worker agents need the MCP config inside their own project
-            // root; fire-and-forget like the workspace-root write below.
-            void writeMcpConfig(wt.path).catch((e) =>
-              console.warn('failed to write worktree .mcp.json:', e)
-            )
-          }
-        }
       }
 
       createWorkspace({
@@ -177,11 +167,6 @@ export function Welcome(): ReactElement {
         worktreeMode: isolate,
         paneWorktrees
       })
-      // Fire-and-forget: the workspace is usable even if the MCP config write
-      // fails (bad permissions, malformed existing .mcp.json). Log-only.
-      void writeMcpConfig(trimmedFolder).catch((e) =>
-        console.warn('failed to write .mcp.json:', e)
-      )
     } finally {
       setIsSubmitting(false)
     }

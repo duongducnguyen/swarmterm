@@ -1,7 +1,8 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
 
 /// The MCP entry Swarmterm writes into `.mcp.json`. Uses `${VAR}` syntax that
 /// Claude Code expands from the shell env — the two vars are set on every PTY
@@ -44,30 +45,79 @@ pub fn merge_mcp_config(existing: Option<&str>) -> Result<String, String> {
     serde_json::to_string_pretty(&root).map_err(|e| e.to_string())
 }
 
-/// Merge-write `.mcp.json` into `dir` on disk (read-merge-write-via-tmp so a
-/// crash mid-write can't leave a truncated file). Shared by the `write_mcp_config`
-/// Tauri command (workspace creation, from Welcome.tsx) and worktree.spawn — a
-/// fresh worktree checkout has no `.mcp.json` since it's untracked, even though
-/// the spawned pane's env already carries SWARMTERM_MCP_URL/SWARMTERM_SESSION.
-pub fn write_mcp_config_to_dir(dir: &Path) -> Result<(), String> {
-    if !dir.is_dir() {
-        return Err(format!("cwd is not a directory: {}", dir.display()));
-    }
-    let path = dir.join(".mcp.json");
-    let existing = match fs::read_to_string(&path) {
+/// Merge-write the `swarmterm` MCP entry into `path` on disk (read →
+/// `merge_mcp_config` → write tmp → rename). The tmp+rename means a crash
+/// mid-write can never truncate the target — important for `~/.claude.json`,
+/// which holds far more than MCP config. A missing file is created; a
+/// malformed existing file returns `Err` and is left untouched.
+pub fn write_mcp_config_to_file(path: &Path) -> Result<(), String> {
+    let existing = match fs::read_to_string(path) {
         Ok(s) => Some(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("read: {e}")),
     };
+    // Skip rewriting when the user's config already carries our exact entry.
+    // Serde re-serialization would otherwise reorder keys (serde_json's default
+    // BTreeMap) and reformat the file on every boot — a needless, noisy churn of
+    // the user's PRIMARY Claude config, and it would also widen the (already
+    // tiny) read-merge-rename race against a concurrently running Claude Code.
+    // So we only ever write on the first run (or if the entry drifts).
+    if let Some(s) = existing.as_deref() {
+        if let Ok(v) = serde_json::from_str::<Value>(s) {
+            if v.get("mcpServers").and_then(|m| m.get("swarmterm")) == Some(&swarmterm_entry()) {
+                return Ok(());
+            }
+        }
+    }
     let merged = merge_mcp_config(existing.as_deref())?;
+    // `.claude.json` → `.claude.json.tmp` (same for `.mcp.json`): with_extension
+    // replaces the trailing `json` segment, preserving the leading dot-name.
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, merged).map_err(|e| format!("write tmp: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
+    fs::rename(&tmp, path).map_err(|e| {
         // Best-effort tmp cleanup on rename failure so we don't leave litter.
         let _ = fs::remove_file(&tmp);
         format!("rename: {e}")
     })?;
     Ok(())
+}
+
+/// Register Swarmterm's MCP server once in Claude Code's user-scope config
+/// (`~/.claude.json`) so every terminal Swarmterm spawns — in any folder or
+/// worktree — discovers it without a per-project `.mcp.json`. Idempotent: the
+/// entry is placeholder-only, so re-running on an already-registered config
+/// writes identical bytes. Log-only: a failure here must never block boot, and
+/// leaves Swarmterm fully usable minus the agent-facing MCP tools.
+pub fn register_user_scope(app: &AppHandle) {
+    let home = match app.path().home_dir() {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("mcp: cannot resolve home dir for global MCP config: {e}");
+            return;
+        }
+    };
+    let cfg_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
+    let path = resolve_global_config_path(&home, cfg_dir.as_deref());
+    // Note: read-merge-rename is not locked against a concurrently running
+    // Claude Code writing ~/.claude.json; the rename is atomic (never corrupts),
+    // and the skip-if-present check keeps this to at most a first-run write, so
+    // any lost-update window is a single boot-time write, not steady-state.
+    if let Err(e) = write_mcp_config_to_file(&path) {
+        eprintln!(
+            "mcp: failed to register global MCP config at {}: {e}",
+            path.display()
+        );
+    }
+}
+
+/// Resolve Claude Code's user-scope config file (`.claude.json`). Honors
+/// `CLAUDE_CONFIG_DIR` (Claude Code lets users relocate its config there);
+/// a blank value is treated as unset so we never resolve to `/.claude.json`.
+pub fn resolve_global_config_path(home: &Path, claude_config_dir: Option<&str>) -> PathBuf {
+    match claude_config_dir.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(dir) => Path::new(dir).join(".claude.json"),
+        None => home.join(".claude.json"),
+    }
 }
 
 #[cfg(test)]
@@ -132,5 +182,90 @@ mod tests {
     #[test]
     fn errors_when_mcp_servers_not_object() {
         assert!(merge_mcp_config(Some(r#"{"mcpServers":"nope"}"#)).is_err());
+    }
+
+    #[test]
+    fn global_path_defaults_to_home() {
+        let p = resolve_global_config_path(Path::new("/home/duong"), None);
+        assert_eq!(p, Path::new("/home/duong/.claude.json"));
+    }
+
+    #[test]
+    fn global_path_honors_claude_config_dir() {
+        let p = resolve_global_config_path(Path::new("/home/duong"), Some("/custom/cfg"));
+        assert_eq!(p, Path::new("/custom/cfg/.claude.json"));
+    }
+
+    #[test]
+    fn global_path_ignores_blank_config_dir() {
+        // Blank/whitespace CLAUDE_CONFIG_DIR must fall back to home, not
+        // resolve to "/.claude.json".
+        let p = resolve_global_config_path(Path::new("/home/duong"), Some("   "));
+        assert_eq!(p, Path::new("/home/duong/.claude.json"));
+    }
+
+    #[test]
+    fn to_file_creates_when_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        write_mcp_config_to_file(&path).unwrap();
+        let contents = std::fs::read_to_string(&path).unwrap();
+        assert!(contents.contains("\"swarmterm\""));
+        assert!(contents.contains("${SWARMTERM_MCP_URL}"));
+    }
+
+    #[test]
+    fn to_file_merges_and_preserves_other_config() {
+        // Simulate a realistic ~/.claude.json: a top-level key plus an
+        // unrelated MCP server that must survive the merge.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        std::fs::write(
+            &path,
+            r#"{"numStartups":42,"mcpServers":{"1devtool":{"command":"x"}}}"#,
+        )
+        .unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(v["numStartups"], 42);
+        assert_eq!(v["mcpServers"]["1devtool"]["command"], "x");
+        assert_eq!(v["mcpServers"]["swarmterm"]["type"], "http");
+    }
+
+    #[test]
+    fn to_file_leaves_malformed_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        std::fs::write(&path, "{not json").unwrap();
+        assert!(write_mcp_config_to_file(&path).is_err());
+        // Original bytes preserved — the tmp+rename never clobbered them.
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{not json");
+    }
+
+    #[test]
+    fn to_file_is_idempotent() {
+        // Writing twice must leave byte-identical content: the second call sees
+        // the swarmterm entry already present and must not rewrite (no reformat).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        write_mcp_config_to_file(&path).unwrap();
+        let first = std::fs::read_to_string(&path).unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        let second = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn to_file_skips_rewrite_when_entry_already_present() {
+        // A file that already contains the exact swarmterm entry but in a
+        // different (compact) formatting must be left byte-for-byte untouched —
+        // we must not reformat/reorder the user's ~/.claude.json on repeat boots.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".claude.json");
+        let compact = r#"{"numStartups":7,"mcpServers":{"swarmterm":{"type":"http","url":"${SWARMTERM_MCP_URL}","headers":{"Authorization":"Bearer ${SWARMTERM_SESSION}"}}}}"#;
+        std::fs::write(&path, compact).unwrap();
+        write_mcp_config_to_file(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), compact);
     }
 }
