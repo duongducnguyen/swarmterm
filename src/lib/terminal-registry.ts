@@ -14,6 +14,8 @@ import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
 import { shouldFollowLink } from '@/lib/terminal-links'
 import { openUrl } from '@/tauri/opener'
+import { ActivityTracker } from '@/lib/activity-tracker'
+import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 
 export type { TerminalStatus }
 
@@ -75,6 +77,19 @@ interface Entry {
 
 /** Live terminals keyed by terminalId, owned outside React's render tree. */
 const entries = new Map<string, Entry>()
+
+/**
+ * One activity tracker for every terminal. `notify(id)` fires on each decoded
+ * pty chunk (see the session sink below); after ACTIVITY_IDLE_MS of no chunks
+ * the terminal flips back to idle. 1100ms is long enough to bridge the quiet
+ * gaps between an agent's spinner redraws so the badge doesn't flicker, short
+ * enough to clear promptly once real output stops.
+ */
+const ACTIVITY_IDLE_MS = 1100
+const activityTracker = new ActivityTracker<string>(
+  (id, active) => useTerminalActivityStore.getState().setActive(id, active),
+  ACTIVITY_IDLE_MS
+)
 
 const NO_STATUS: TerminalStatus = { kind: 'connecting' }
 
@@ -212,7 +227,15 @@ function getOrCreate(id: string): Entry {
 
   const session = new TerminalSession(
     id,
-    { write: (data) => term.write(data) },
+    {
+      write: (data) => {
+        // Every decoded pty chunk is one activity tick: the pane is "working"
+        // while bytes flow (including agent spinner redraws) and goes idle after
+        // ACTIVITY_IDLE_MS of silence.
+        activityTracker.notify(id)
+        term.write(data)
+      }
+    },
     { createTerminal, killTerminal }
   )
 
@@ -271,6 +294,10 @@ export function disposeTerminal(id: string): void {
   entry.term.dispose()
   entry.host.remove()
   entries.delete(id)
+  // Drop the pending idle timer WITHOUT firing its callback, then remove the
+  // store entry — order matters so the timer can't re-add a cleared id.
+  activityTracker.cancel(id)
+  useTerminalActivityStore.getState().clear(id)
 }
 
 /** Dispose every terminal whose id is not in `keep` (its leaf was removed). */

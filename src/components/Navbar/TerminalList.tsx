@@ -4,7 +4,9 @@ import { templateById, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { resolvePaneTitle } from '@/lib/pane-title'
 import { useAppStore } from '@/store/app-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { AgentIcon } from '@/components/AgentIcon'
+import { ActivityDot } from '@/components/ActivityDot'
 import { cn } from '@/lib/utils'
 
 /**
@@ -20,6 +22,7 @@ export function TerminalList(): ReactElement | null {
   const welcomeFocused = useAppStore((s) => s.welcomeFocused)
   const setFocusedLeaf = useAppStore((s) => s.setFocusedLeaf)
   const titles = useTerminalTitleStore((s) => s.titles)
+  const activity = useTerminalActivityStore((s) => s.active)
 
   const active = workspaces.find((w) => w.id === activeWorkspaceId)
   // Nothing to mirror while the Welcome tab is foreground or before any
@@ -58,6 +61,7 @@ export function TerminalList(): ReactElement | null {
               >
                 <AgentIcon template={template} className="h-3.5 w-3.5 shrink-0" />
                 <span className="flex-1 truncate">{title}</span>
+                {activity[leaf.terminalId] && <ActivityDot />}
               </div>
             </li>
           )

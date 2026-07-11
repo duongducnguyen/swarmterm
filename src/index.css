@@ -29,6 +29,7 @@
     --input: 0 0% 19%;
     --ring: 206 100% 42%;
     --broadcast: 174 62% 47%;   /* teal accent for broadcast-group panes */
+    --activity: 48 96% 53%;     /* yellow: a terminal is actively producing output */
     --radius: 0.5rem;
 
     /* Scrollbar (see docs/design-docs/specs/2026-05-31-scrollbar-redesign-design.md) */
