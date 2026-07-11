@@ -26,4 +26,10 @@ describe('terminal-activity-store', () => {
     useTerminalActivityStore.getState().clear('t1')
     expect(useTerminalActivityStore.getState().active).toEqual({})
   })
+
+  it('clear on an unknown id is a no-op (same reference)', () => {
+    const before = useTerminalActivityStore.getState().active
+    useTerminalActivityStore.getState().clear('unknown')
+    expect(useTerminalActivityStore.getState().active).toBe(before)
+  })
 })
