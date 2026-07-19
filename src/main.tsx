@@ -1,3 +1,6 @@
+// MUST stay the first import: it installs the boot-failure screen, and anything
+// imported above it could throw before the listeners exist (see boot-guard.ts).
+import './boot-guard'
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import './index.css'
