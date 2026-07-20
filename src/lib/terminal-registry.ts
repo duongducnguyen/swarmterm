@@ -16,6 +16,7 @@ import { shouldFollowLink } from '@/lib/terminal-links'
 import { openUrl } from '@/tauri/opener'
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { imeTextFromKeyEvent } from '@/lib/ime-input'
 
 export type { TerminalStatus }
 
@@ -176,14 +177,15 @@ function getOrCreate(id: string): Entry {
   // only for the terminal the user is typing in, so `id` is the source. Paste
   // (term.paste) flows through onData too, so it fans out for free. Each target
   // pty echoes independently — this is real broadcast, not a text mirror.
-  term.onData((data) => {
+  const sendInput = (data: string): void => {
     const state = useAppStore.getState()
     const ws = selectWorkspaceByTerminalId(state, id)
     const targets = ws
       ? resolveBroadcastTargets(ws.layout, ws.broadcastActive, ws.broadcastLeafIds, id)
       : [id]
     for (const target of targets) void writeTerminal(target, data)
-  })
+  }
+  term.onData(sendInput)
 
   // Match VS Code: Ctrl+C copies the selection (Cmd+C on mac), Ctrl+V pastes.
   // Returning false stops xterm from forwarding the key to the pty, but does
@@ -205,6 +207,18 @@ function getOrCreate(id: string): Entry {
     })
   )
   term.attachCustomKeyEventHandler((event) => {
+    // A bộ gõ re-inserting a corrected word delivers several characters in one
+    // keydown; xterm's keypress path can only carry the first (see ime-input.ts).
+    // Send the whole string ourselves and preventDefault() so the browser never
+    // fires the keypress/input events that would re-send a truncated copy.
+    if (event.type === 'keydown') {
+      const text = imeTextFromKeyEvent(event)
+      if (text !== null) {
+        event.preventDefault()
+        sendInput(text)
+        return false
+      }
+    }
     const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
     if (action === 'copy') {
       event.preventDefault()
