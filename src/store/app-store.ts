@@ -71,6 +71,11 @@ export interface AppState {
   welcomeFocused: boolean
   /** Draft working folder shown in the Welcome form (shared with the title-bar search). */
   welcomeFolder: string
+  /**
+   * Terminal the OS drag is currently hovering, for the drop-target ring.
+   * Transient: set on drag enter/over, cleared on drop or leave.
+   */
+  dropTargetTerminalId: string | null
 }
 
 export interface AppActions {
@@ -84,6 +89,7 @@ export interface AppActions {
   closeWorkspace: (id: string) => void
   moveWorkspace: (fromId: string, toId: string) => void
   setFocusedLeaf: (leafId: string) => void
+  setDropTarget: (terminalId: string | null) => void
   splitPane: (leafId: string, direction: Direction) => void
   closePane: (leafId: string) => void
   reorderPane: (fromLeafId: string, toLeafId: string) => void
@@ -162,6 +168,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
   nextWorkspaceNumber: 1,
   welcomeOpen: true,
   welcomeFocused: true,
+  dropTargetTerminalId: null,
   welcomeFolder: '',
 
   createWorkspace: (config) =>
@@ -255,6 +262,8 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     set((s) =>
       mapActive(s, (w) => (findLeaf(w.layout, leafId) ? { ...w, focusedLeafId: leafId } : w))
     ),
+
+  setDropTarget: (terminalId) => set({ dropTargetTerminalId: terminalId }),
 
   splitPane: (leafId, direction) =>
     set((s) =>

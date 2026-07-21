@@ -72,6 +72,7 @@ export function TerminalPane({
   const setPaneShell = useAppStore((s) => s.setPaneShell)
   const clearWorktrees = useAppStore((s) => s.clearWorktrees)
   const globalShellId = useTerminalPrefStore((s) => s.shellId)
+  const isDropTarget = useAppStore((s) => s.dropTargetTerminalId === leaf.terminalId)
 
   const { id: leafId, terminalId } = leaf
 
@@ -113,6 +114,9 @@ export function TerminalPane({
           shellFlavor(resolvedShellId, isWindowsPlatform())
         )
       : baseCommand
+  // Published to the DOM so the app-level file-drop listener can quote paths
+  // for this pane's shell without re-deriving the resolution chain.
+  const paneShellFlavor = shellFlavor(resolvedShellId, isWindowsPlatform())
 
   const [status, setStatus] = useState<TerminalStatus>(() => getTerminalStatus(terminalId))
 
@@ -249,6 +253,9 @@ export function TerminalPane({
         }
         setFocusedLeaf(leafId)
       }}
+      data-terminal-id={terminalId}
+      data-leaf-id={leafId}
+      data-shell-flavor={paneShellFlavor}
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-md border bg-background',
         isFocused
@@ -260,6 +267,9 @@ export function TerminalPane({
         broadcastActive && !isBroadcastMember && 'opacity-60',
         // Drop-target ring while another pane is dragged over this one.
         isOver && !isDragging && 'ring-2 ring-inset ring-ring',
+        // OS file drag hovering this pane — same affordance as the pane-reorder
+        // drop ring, in the accent color so the two gestures read differently.
+        isDropTarget && 'ring-2 ring-inset ring-primary',
         // Dim the pane being dragged, so the lifted ghost reads as the "real" one.
         isDragging && 'opacity-40'
       )}

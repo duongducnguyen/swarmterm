@@ -325,6 +325,18 @@ export function focusTerminal(id: string): void {
   entries.get(id)?.term.focus()
 }
 
+/**
+ * Type `text` into a terminal as if the user pasted it. Routed through
+ * `term.paste` rather than `writeTerminal` on purpose: paste flows through
+ * `onData`, so it picks up the broadcast fan-out above for free instead of
+ * duplicating that rule here. Also gets bracketed-paste framing, so a shell
+ * treats the text as literal input and never runs it on its own.
+ * No-op when the terminal is not live.
+ */
+export function pasteIntoTerminal(id: string, text: string): void {
+  entries.get(id)?.term.paste(text)
+}
+
 /** Re-spawn the pty after exit/error, clearing the screen first. */
 export function retryTerminal(id: string): void {
   const entry = entries.get(id)
