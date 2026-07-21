@@ -809,3 +809,17 @@ describe('worktree panes', () => {
   })
 })
 
+
+describe('drop target', () => {
+  it('starts with no drop target', () => {
+    expect(freshStore().getState().dropTargetTerminalId).toBeNull()
+  })
+
+  it('sets and clears the drop target', () => {
+    const store = freshStore()
+    store.getState().setDropTarget('term-1')
+    expect(store.getState().dropTargetTerminalId).toBe('term-1')
+    store.getState().setDropTarget(null)
+    expect(store.getState().dropTargetTerminalId).toBeNull()
+  })
+})
