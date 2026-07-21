@@ -23,9 +23,20 @@ static CACHE: OnceLock<Vec<ShellEntry>> = OnceLock::new();
 /// Walk `$PATH` (split on the platform separator) looking for `exe_name`.
 /// Returns the first match, or `None`.
 pub fn find_in_path(path_var: &str, exe_name: &str) -> Option<PathBuf> {
+    find_in_path_with(path_var, exe_name, &|p| p.is_file())
+}
+
+/// `find_in_path` with the existence check injected, so probes that take a fake
+/// filesystem stay honest — a hard-coded `is_file()` here would silently bypass
+/// the fake and make the caller's tests assert against the real machine.
+pub fn find_in_path_with(
+    path_var: &str,
+    exe_name: &str,
+    exists: &dyn Fn(&std::path::Path) -> bool,
+) -> Option<PathBuf> {
     for segment in std::env::split_paths(path_var) {
         let candidate = segment.join(exe_name);
-        if candidate.is_file() {
+        if exists(&candidate) {
             return Some(candidate);
         }
     }
@@ -104,18 +115,72 @@ fn probe() -> Vec<ShellEntry> {
     ]
 }
 
+/// The unix shells the catalog advertises, paired with the well-known absolute
+/// locations to check when the binary is not on `$PATH`. GUI apps on macOS
+/// inherit a stub `$PATH` that has neither `/opt/homebrew/bin` nor
+/// `/usr/local/bin`, so a `$PATH`-only probe would miss a Homebrew fish/bash
+/// that the user's Terminal.app finds fine — hence the explicit fallbacks.
 #[cfg(not(windows))]
-fn probe() -> Vec<ShellEntry> {
-    // v1 placeholder: every non-Windows build advertises only the platform
-    // default. macOS / Linux catalog work lands in a later iteration.
-    let path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
-    let args = crate::pty::login_args(&path);
-    vec![ShellEntry {
+const UNIX_SHELLS: &[(&str, &[&str])] = &[
+    ("zsh", &["/bin/zsh", "/usr/bin/zsh", "/opt/homebrew/bin/zsh"]),
+    (
+        "bash",
+        &["/bin/bash", "/usr/bin/bash", "/opt/homebrew/bin/bash", "/usr/local/bin/bash"],
+    ),
+    (
+        "fish",
+        &["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"],
+    ),
+];
+
+/// Build the unix catalog. `exists` is injected so the resolution rules can be
+/// unit-tested against a fake filesystem instead of whatever happens to be
+/// installed on the test machine.
+///
+/// Note there is intentionally no `powershell` / `cmd` / `git-bash` / `wsl`
+/// entry: the renderer renders exactly the ids this probe reports, so omitting
+/// them here is what keeps the Windows shells out of the macOS shell picker.
+#[cfg(not(windows))]
+pub fn unix_catalog(
+    default_shell: &str,
+    path_var: &str,
+    exists: &dyn Fn(&std::path::Path) -> bool,
+) -> Vec<ShellEntry> {
+    let mut entries = vec![ShellEntry {
         id: "default".into(),
         available: true,
-        detected_path: Some(path),
-        args,
-    }]
+        detected_path: Some(default_shell.to_string()),
+        args: crate::pty::login_args(default_shell),
+    }];
+
+    for (id, fallbacks) in UNIX_SHELLS {
+        // `$PATH` first so a user's preferred build (Homebrew bash 5 over the
+        // ancient /bin/bash 3.2) wins over the system copy.
+        let found = find_in_path_with(path_var, id, exists)
+            .or_else(|| {
+                fallbacks
+                    .iter()
+                    .map(std::path::PathBuf::from)
+                    .find(|p| exists(p))
+            });
+        entries.push(ShellEntry {
+            id: (*id).to_string(),
+            available: found.is_some(),
+            args: found
+                .as_ref()
+                .map(|p| crate::pty::login_args(&p.to_string_lossy()))
+                .unwrap_or_default(),
+            detected_path: found.map(|p| p.to_string_lossy().into_owned()),
+        });
+    }
+    entries
+}
+
+#[cfg(not(windows))]
+fn probe() -> Vec<ShellEntry> {
+    let default_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
+    let path_var = std::env::var("PATH").unwrap_or_default();
+    unix_catalog(&default_shell, &path_var, &|p| p.is_file())
 }
 
 #[cfg(windows)]
@@ -304,6 +369,99 @@ mod tests {
     #[test]
     fn git_bash_from_git_exe_returns_none_for_root() {
         assert_eq!(git_bash_from_git_exe(Path::new("/")), None);
+    }
+
+    #[cfg(not(windows))]
+    mod unix {
+        use super::super::*;
+        use std::collections::HashSet;
+        use std::path::Path;
+
+        fn fake_fs(present: &[&str]) -> impl Fn(&Path) -> bool {
+            let set: HashSet<String> = present.iter().map(|s| s.to_string()).collect();
+            move |p: &Path| set.contains(&p.to_string_lossy().into_owned())
+        }
+
+        fn ids(entries: &[ShellEntry]) -> Vec<&str> {
+            entries.iter().map(|e| e.id.as_str()).collect()
+        }
+
+        fn get<'a>(entries: &'a [ShellEntry], id: &str) -> &'a ShellEntry {
+            entries.iter().find(|e| e.id == id).expect(id)
+        }
+
+        #[test]
+        fn never_advertises_windows_shells() {
+            // The regression this whole change exists for: a macOS pane's shell
+            // picker renders exactly what this probe returns.
+            let entries = unix_catalog("/bin/zsh", "", &fake_fs(&[]));
+            for win_only in ["powershell", "cmd", "pwsh", "git-bash", "wsl"] {
+                assert!(!ids(&entries).contains(&win_only), "leaked {win_only}");
+            }
+        }
+
+        #[test]
+        fn always_offers_the_default_as_a_login_shell() {
+            let entries = unix_catalog("/bin/zsh", "", &fake_fs(&[]));
+            let default = get(&entries, "default");
+            assert!(default.available);
+            assert_eq!(default.detected_path.as_deref(), Some("/bin/zsh"));
+            assert_eq!(default.args, vec!["-l".to_string()]);
+        }
+
+        #[test]
+        fn lists_every_unix_shell_marking_missing_ones_unavailable() {
+            let entries = unix_catalog("/bin/zsh", "", &fake_fs(&["/bin/zsh"]));
+            assert_eq!(ids(&entries), vec!["default", "zsh", "bash", "fish"]);
+            assert!(get(&entries, "zsh").available);
+            assert!(!get(&entries, "bash").available);
+            assert!(!get(&entries, "fish").available);
+            assert!(get(&entries, "fish").detected_path.is_none());
+        }
+
+        #[test]
+        fn finds_homebrew_shells_absent_from_a_gui_stub_path() {
+            // A Tauri app launched from Finder gets PATH=/usr/bin:/bin:… — no
+            // Homebrew. The absolute fallbacks are what keep fish discoverable.
+            let entries = unix_catalog("/bin/zsh", "/usr/bin:/bin", &fake_fs(&["/opt/homebrew/bin/fish"]));
+            let fish = get(&entries, "fish");
+            assert!(fish.available);
+            assert_eq!(fish.detected_path.as_deref(), Some("/opt/homebrew/bin/fish"));
+        }
+
+        #[test]
+        fn path_hit_wins_over_the_absolute_fallback() {
+            let entries = unix_catalog(
+                "/bin/zsh",
+                "/opt/homebrew/bin",
+                &fake_fs(&["/opt/homebrew/bin/bash", "/bin/bash"]),
+            );
+            assert_eq!(
+                get(&entries, "bash").detected_path.as_deref(),
+                Some("/opt/homebrew/bin/bash")
+            );
+        }
+
+        #[test]
+        fn the_real_probe_reports_a_windows_free_catalog() {
+            // The fake-fs tests never exercise `probe()` itself — env lookups
+            // and the real `is_file` check only run here.
+            let entries = list_shells();
+            assert!(entries.iter().any(|e| e.id == "default" && e.available));
+            for win_only in ["powershell", "cmd", "git-bash", "wsl"] {
+                assert!(
+                    !entries.iter().any(|e| e.id == win_only),
+                    "{win_only} leaked into the unix catalog"
+                );
+            }
+        }
+
+        #[test]
+        fn detected_shells_spawn_as_login_shells() {
+            let entries = unix_catalog("/bin/zsh", "", &fake_fs(&["/bin/zsh", "/bin/bash"]));
+            assert_eq!(get(&entries, "zsh").args, vec!["-l".to_string()]);
+            assert_eq!(get(&entries, "bash").args, vec!["-l".to_string()]);
+        }
     }
 
     #[test]

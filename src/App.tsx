@@ -19,6 +19,7 @@ import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
+import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
@@ -62,6 +63,7 @@ export default function App(): ReactElement {
     useRecentsStore.getState().hydrate()
     void useAuthStore.getState().hydrate()
     void useAgentAvailabilityStore.getState().refresh()
+    void useShellAvailabilityStore.getState().refresh()
   }, [])
 
   // Esc closes the Welcome page when it's closeable and Settings isn't covering it.

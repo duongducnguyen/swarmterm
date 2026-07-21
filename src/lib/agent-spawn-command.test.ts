@@ -10,6 +10,11 @@ describe('shellFlavor', () => {
     expect(shellFlavor('powershell', true)).toBe('powershell')
     expect(shellFlavor('pwsh', false)).toBe('powershell')
   })
+  it('maps the unix-native shells to posix', () => {
+    expect(shellFlavor('zsh', false)).toBe('posix')
+    expect(shellFlavor('bash', false)).toBe('posix')
+    expect(shellFlavor('fish', false)).toBe('posix')
+  })
   it('maps cmd', () => {
     expect(shellFlavor('cmd', true)).toBe('cmd')
   })

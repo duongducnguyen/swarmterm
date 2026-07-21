@@ -12,7 +12,8 @@ import {
 import { TEMPLATES, templateById, isTemplateAvailable } from '@/lib/templates'
 import { resolvePaneTitle } from '@/lib/pane-title'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
-import { KNOWN_SHELLS, type ShellId } from '@/lib/terminal-pref'
+import { KNOWN_SHELLS, visibleShells, type ShellId } from '@/lib/terminal-pref'
+import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { resolveHeaderLevel, shortenPath, type HeaderLevel } from '@/lib/header-layout'
 import { cn } from '@/lib/utils'
 
@@ -60,6 +61,8 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
   const agentLabel = agent.name
   const shellLabel = KNOWN_SHELLS.find((s) => s.id === shellId)?.label ?? KNOWN_SHELLS[0].label
   const availability = useAgentAvailabilityStore((s) => s.availability)
+  const shellAvailability = useShellAvailabilityStore((s) => s.availability)
+  const shells = visibleShells(shellAvailability)
 
   // Title: agent-supplied wins; otherwise the agent name so the slot is never
   // blank. Tooltip carries the full title + full branch (both may be truncated).
@@ -170,7 +173,14 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            // Re-probe on open so a shell installed while the app runs (brew
+            // install fish) shows up without a restart — same contract as the
+            // agent menu above.
+            if (open) void useShellAvailabilityStore.getState().refresh()
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -184,7 +194,9 @@ export function PaneHeader(props: PaneHeaderProps): React.ReactElement {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {KNOWN_SHELLS.map((s) => (
+            {/* Only shells the backend probe found on THIS machine — the
+                catalog is cross-platform, the menu must not be. */}
+            {shells.map((s) => (
               <DropdownMenuItem key={s.id} onSelect={() => props.onShellChange(s.id)}>
                 <Check aria-hidden="true" className={cn('h-3.5 w-3.5', s.id === shellId ? 'opacity-100' : 'opacity-0')} />
                 <span>{s.label}</span>
