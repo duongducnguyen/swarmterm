@@ -1,6 +1,6 @@
 [package]
 name = "swarmterm"
-version = "0.1.1"
+version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
