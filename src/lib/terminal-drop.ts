@@ -13,6 +13,36 @@ const SAFE_POSIX = /^[A-Za-z0-9_@%+=:,./-]+$/
 // and cmd inside a bare word.
 const SAFE_WINDOWS = /^[A-Za-z0-9_@%+=:,./\\~-]+$/
 
+/** A point in the coordinate space `document.elementFromPoint` expects (CSS px). */
+export interface CssPoint {
+  x: number
+  y: number
+}
+
+/**
+ * Convert a drop position reported by Tauri into CSS pixels.
+ *
+ * The type Tauri hands us is called `PhysicalPosition`, but on macOS wry fills
+ * it from `NSEvent.locationInWindow`, which is in *logical* points — no scaling
+ * applied. Measured on a Retina display: `scale_factor` 2.0 and window
+ * `inner_size` 2560x1640, while drag positions over the full window never
+ * exceeded ~1280x820. Dividing by devicePixelRatio there halves every
+ * coordinate into the top-left quadrant, so drops land on the wrong pane or on
+ * nothing at all — intermittently, which is what makes it look flaky.
+ *
+ * Windows and Linux do report true physical pixels, so they still need the
+ * divide. Only the macOS branch is verified against a running app.
+ */
+export function dropPointToCss(
+  position: CssPoint,
+  devicePixelRatio: number,
+  isMac: boolean
+): CssPoint {
+  if (isMac) return { x: position.x, y: position.y }
+  const ratio = devicePixelRatio || 1
+  return { x: position.x / ratio, y: position.y / ratio }
+}
+
 /**
  * Build the string to write into the pty for `paths`, quoted for `flavor`.
  * Ends with a single trailing space so the user can keep typing, and returns

@@ -6,6 +6,7 @@ import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
 import { disposeOrphanTerminals } from '@/lib/terminal-registry'
+import { FileDropListener } from '@/components/FileDropListener'
 import { RightPanel } from '@/components/RightPanel/RightPanel'
 import { Navbar } from '@/components/Navbar/Navbar'
 import { SettingsView } from '@/components/Settings/SettingsView'
@@ -173,6 +174,7 @@ export default function App(): ReactElement {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+      <FileDropListener />
       <TitleBar />
 
       <div className="relative flex min-h-0 flex-1">

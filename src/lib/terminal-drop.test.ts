@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { formatDroppedPaths } from './terminal-drop'
+import { formatDroppedPaths, dropPointToCss } from './terminal-drop'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -51,5 +51,30 @@ describe('formatDroppedPaths', () => {
 
   it('returns an empty string for an empty list', () => {
     expect(formatDroppedPaths([], 'posix')).toBe('')
+  })
+})
+
+describe('dropPointToCss', () => {
+  it('passes macOS positions through unscaled on a Retina display', () => {
+    // Measured against a running app: scale_factor 2.0, inner_size 2560x1640,
+    // yet drag positions never exceeded the 1280x820 logical size. Halving
+    // these would land the drop in the top-left quadrant.
+    expect(dropPointToCss({ x: 1031, y: 210 }, 2, true)).toEqual({ x: 1031, y: 210 })
+  })
+
+  it('passes macOS positions through on a non-Retina display too', () => {
+    expect(dropPointToCss({ x: 640, y: 400 }, 1, true)).toEqual({ x: 640, y: 400 })
+  })
+
+  it('scales physical pixels down to CSS pixels off macOS', () => {
+    expect(dropPointToCss({ x: 1024, y: 512 }, 2, false)).toEqual({ x: 512, y: 256 })
+  })
+
+  it('handles fractional Windows scaling', () => {
+    expect(dropPointToCss({ x: 500, y: 250 }, 1.25, false)).toEqual({ x: 400, y: 200 })
+  })
+
+  it('treats a zero ratio as 1 rather than dividing by zero', () => {
+    expect(dropPointToCss({ x: 300, y: 150 }, 0, false)).toEqual({ x: 300, y: 150 })
   })
 })
