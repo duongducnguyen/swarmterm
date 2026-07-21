@@ -193,7 +193,41 @@ pub fn default_shell() -> (String, Vec<String>) {
     #[cfg(not(windows))]
     {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        (shell, vec![])
+        let args = login_args(&shell);
+        (shell, args)
+    }
+}
+
+/// Args that make `shell` start as a *login* shell, or empty if we don't
+/// recognise it.
+///
+/// This matters far more than it looks: a non-login zsh reads neither
+/// `/etc/zprofile` (where macOS runs `path_helper`, the source of
+/// `/usr/local/bin`) nor `~/.zprofile` (where Homebrew's installer writes
+/// `brew shellenv`, the source of `/opt/homebrew/bin`). Panes would inherit
+/// only the stub PATH the GUI process was launched with, so `brew`, `gh`,
+/// `node`, `docker`… all come back "command not found" while Terminal.app on
+/// the same machine works. Every mainstream emulator (Terminal.app, iTerm2,
+/// Ghostty, WezTerm, Alacritty) starts a login shell for this reason.
+///
+/// Unknown shells get no args on purpose: an exotic shell that rejects `-l`
+/// would exit immediately and leave a dead pane, which is a worse failure than
+/// a short PATH.
+#[cfg(not(windows))]
+pub fn login_args(shell: &str) -> Vec<String> {
+    // Compare on the file name only — `$SHELL` is an absolute path, and some
+    // installs carry a version suffix (`bash-5.2`).
+    let name = std::path::Path::new(shell)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| shell.to_string());
+    let stem = name.split('-').next().unwrap_or(&name);
+    match stem {
+        // `-l` is the login flag for all of these (fish and csh included).
+        "sh" | "bash" | "zsh" | "fish" | "ksh" | "mksh" | "dash" | "csh" | "tcsh" => {
+            vec!["-l".to_string()]
+        }
+        _ => vec![],
     }
 }
 
@@ -403,6 +437,40 @@ mod tests {
     fn default_shell_is_nonempty() {
         let (cmd, _args) = default_shell();
         assert!(!cmd.is_empty());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn default_shell_is_a_login_shell() {
+        let (_cmd, args) = default_shell();
+        assert!(
+            args.iter().any(|a| a == "-l"),
+            "unix panes must spawn a login shell, got args {args:?}"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn login_args_cover_the_common_posix_shells() {
+        for shell in ["/bin/zsh", "/bin/bash", "/bin/sh", "/opt/homebrew/bin/fish", "/bin/ksh"] {
+            assert_eq!(login_args(shell), vec!["-l".to_string()], "{shell}");
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn login_args_are_empty_for_unknown_shells() {
+        // An unrecognised shell may reject `-l` and leave the pane dead on
+        // arrival; no args is the safe fallback.
+        assert!(login_args("/usr/local/bin/nu").is_empty());
+        assert!(login_args("/usr/bin/xonsh").is_empty());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn login_args_ignore_the_directory_and_version_suffix() {
+        assert_eq!(login_args("zsh"), vec!["-l".to_string()]);
+        assert_eq!(login_args("/usr/local/bin/bash-5.2"), vec!["-l".to_string()]);
     }
 
     #[test]

@@ -109,11 +109,12 @@ fn probe() -> Vec<ShellEntry> {
     // v1 placeholder: every non-Windows build advertises only the platform
     // default. macOS / Linux catalog work lands in a later iteration.
     let path = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
+    let args = crate::pty::login_args(&path);
     vec![ShellEntry {
         id: "default".into(),
         available: true,
         detected_path: Some(path),
-        args: vec![],
+        args,
     }]
 }
 
