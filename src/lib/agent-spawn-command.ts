@@ -12,6 +12,9 @@ export function shellFlavor(shellId: ShellId | undefined, windows: boolean): She
   switch (shellId) {
     case 'git-bash':
     case 'wsl':
+    case 'zsh':
+    case 'bash':
+    case 'fish':
       return 'posix'
     case 'powershell':
     case 'pwsh':

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { Check, Minus, Plus } from 'lucide-react'
-import { KNOWN_SHELLS, type ShellId, type ShellMeta } from '@/lib/terminal-pref'
+import { platformShells, type ShellId, type ShellMeta } from '@/lib/terminal-pref'
 import {
   MONO_FONTS,
   FONT_SIZE_MIN,
@@ -81,7 +81,11 @@ export function TerminalPanel(): ReactElement {
         </div>
 
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
-          {KNOWN_SHELLS.map((meta) => {
+          {/* Only this platform's shells — a greyed "WSL" card on macOS is
+              noise, but a greyed "fish — not detected" card is guidance. */}
+          {platformShells(
+            Object.fromEntries((available ?? []).map((s) => [s.id, s.available]))
+          ).map((meta) => {
             const probe = available?.find((s) => s.id === meta.id)
             const detected = probe?.available ?? meta.id === 'default'
             return (
