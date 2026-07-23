@@ -9,6 +9,8 @@ import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
+import { nextSystemChromeReveal, systemChromeOffset } from '@/lib/titlebar-chrome'
+import { onFullscreenChanged } from '@/tauri/window'
 import { disposeOrphanTerminals, focusTerminal } from '@/lib/terminal-registry'
 import {
   describeFocusedElement,
@@ -35,6 +37,9 @@ import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
 import type { CategoryId } from '@/components/Settings/SettingsView'
 
+// Platform never changes at runtime, so a module-level constant is fine.
+const isMac = isMacPlatform()
+
 /** Terminal ids referenced by any workspace's layout — the ones to keep alive. */
 function liveTerminalIds(workspaces: WorkspaceModel[]): Set<string> {
   const ids = new Set<string>()
@@ -52,6 +57,9 @@ export default function App(): ReactElement {
   const closeWelcome = useAppStore((s) => s.closeWelcome)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<CategoryId>('appearance')
+  // Native full-screen state, owned here because both the header's traffic-light
+  // inset and the system-chrome dodge below are driven by it.
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const openAccountSettings = useCallback(() => {
     setSettingsTab('account')
@@ -86,7 +94,6 @@ export default function App(): ReactElement {
   }, [showWelcome, welcomeClosable, settingsOpen, closeWelcome])
 
   useEffect(() => {
-    const isMac = isMacPlatform()
     const onKeyDown = (e: KeyboardEvent): void => {
       // Esc exits broadcast mode (which clears the group).
       if (e.key === 'Escape') {
@@ -191,6 +198,35 @@ export default function App(): ReactElement {
     return () => window.removeEventListener('focus', deferReturnFocusToTerminal)
   }, [deferReturnFocusToTerminal])
 
+  // --- macOS full screen: get out from under the auto-hiding system chrome ---
+  // In full screen macOS slides the menu bar + titlebar down ON TOP of the app
+  // the moment the pointer touches the top edge of the screen, burying our
+  // header and half the tab strip. The pointer is the only signal a webview
+  // gets, and it is enough: shift the app down by the band the OS is about to
+  // occupy, so the revealed chrome lands in empty space (see lib/titlebar-chrome).
+  const [systemChromeRevealed, setSystemChromeRevealed] = useState(false)
+
+  useEffect(() => {
+    if (!isMac) return // no auto-hiding titlebar to dodge off macOS
+    let unlisten: (() => void) | undefined
+    onFullscreenChanged(setIsFullscreen).then((un) => (unlisten = un))
+    return () => unlisten?.()
+  }, [])
+
+  useEffect(() => {
+    if (!isMac || !isFullscreen) {
+      setSystemChromeRevealed(false)
+      return
+    }
+    const onMove = (e: MouseEvent): void => {
+      setSystemChromeRevealed((prev) => nextSystemChromeReveal(prev, e.clientY))
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [isFullscreen])
+
+  const chromeOffset = systemChromeOffset(isMac, isFullscreen, systemChromeRevealed)
+
   // Kill orphaned PTYs and close previews when terminals leave all layouts.
   useEffect(
     () =>
@@ -260,9 +296,20 @@ export default function App(): ReactElement {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+    <div
+      // translateY, not padding or a spacer: those would shrink the app's height,
+      // and a height change reflows every xterm and resizes its pty — line-wrap
+      // churn in a TUI every time the pointer grazes the top of the screen. A
+      // transform slides the whole app down as one block; the bottom few rows go
+      // off-screen for as long as the overlay is up, and nothing re-lays out.
+      style={{
+        transform: `translateY(${chromeOffset}px)`,
+        transition: 'transform 150ms ease-out'
+      }}
+      className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground"
+    >
       <FileDropListener />
-      <TitleBar />
+      <TitleBar fullscreen={isFullscreen} />
 
       <div className="relative flex min-h-0 flex-1">
         <Navbar

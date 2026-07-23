@@ -15,13 +15,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { useGitStore } from '@/store/git-store'
-import {
-  minimize,
-  toggleMaximize,
-  closeWindow,
-  onMaximizedChanged,
-  onFullscreenChanged
-} from '@/tauri/window'
+import { minimize, toggleMaximize, closeWindow, onMaximizedChanged } from '@/tauri/window'
 import { isMacPlatform } from '@/lib/platform'
 import { needsTrafficLightInset } from '@/lib/titlebar-chrome'
 import { HeaderRecentSearch } from './HeaderRecentSearch'
@@ -36,6 +30,11 @@ const isMac = isMacPlatform()
 const navbarHint = isMac ? '⌘B' : 'Ctrl+B'
 const broadcastHint = isMac ? '⇧⌘B' : 'Ctrl+Shift+B'
 
+interface TitleBarProps {
+  /** Native full screen, owned by App — it drives the system-chrome dodge too. */
+  fullscreen: boolean
+}
+
 /**
  * Custom window title bar for the frameless window. Left cluster:
  * [sidebar toggle] [app icon] [app name]. Centre: a read-only pill showing the
@@ -43,9 +42,8 @@ const broadcastHint = isMac ? '⇧⌘B' : 'Ctrl+Shift+B'
  * on Windows/Linux; on macOS those are hidden — the OS overlays native
  * traffic lights at the left instead (see tauri.macos.conf.json).
  */
-export function TitleBar(): ReactElement {
+export function TitleBar({ fullscreen }: TitleBarProps): ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const visible = useNavbarVisibilityStore((s) => s.visible)
   const toggleNavbar = useNavbarVisibilityStore((s) => s.toggle)
   const rightPanelOpen = useGitStore((s) => s.panelOpen)
@@ -69,13 +67,6 @@ export function TitleBar(): ReactElement {
     return () => unlisten?.()
   }, [])
 
-  useEffect(() => {
-    if (!isMac) return // only the mac traffic-light inset depends on full screen
-    let unlisten: (() => void) | undefined
-    onFullscreenChanged(setIsFullscreen).then((un) => (unlisten = un))
-    return () => unlisten?.()
-  }, [])
-
   return (
     <div
       data-tauri-drag-region
@@ -85,7 +76,7 @@ export function TitleBar(): ReactElement {
       data-focus-return
       className={cn(
         'flex h-9 shrink-0 items-center justify-between border-b border-border bg-card pl-1.5',
-        needsTrafficLightInset(isMac, isFullscreen) && 'pl-20'
+        needsTrafficLightInset(isMac, fullscreen) && 'pl-20'
       )}
     >
       <div className="flex items-center gap-1.5">
