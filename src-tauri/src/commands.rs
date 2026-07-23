@@ -162,3 +162,12 @@ pub async fn ensure_repo_with_commit(app: AppHandle, path: String) -> Result<(),
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// Resolve a path candidate the renderer found in terminal output. Returns the
+/// canonical path as a string, or `None` when it does not name an existing file
+/// — in which case the renderer does not draw a link.
+#[tauri::command]
+pub fn resolve_path_link(cwd: String, candidate: String) -> Option<String> {
+    crate::links::resolve_candidate(std::path::Path::new(&cwd), &candidate)
+        .map(|p| p.to_string_lossy().into_owned())
+}

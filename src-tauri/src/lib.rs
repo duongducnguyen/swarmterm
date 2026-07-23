@@ -4,6 +4,7 @@ mod commands;
 mod deeplink;
 mod mcp;
 mod git;
+mod links;
 mod pty;
 mod shell;
 mod tray;
@@ -105,6 +106,7 @@ pub fn run() {
             commands::kill_terminal,
             commands::list_available_shells,
             commands::list_available_agents,
+            commands::resolve_path_link,
             commands::git_list_worktrees,
             commands::git_get_changed_files,
             commands::git_get_file_diff,
