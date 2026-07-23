@@ -21,7 +21,7 @@ import {
 import { parseFileUrl } from '@/lib/file-url'
 import { detectPathCandidates, parsePathSuffix } from '@/lib/path-link-parse'
 import { classifyOscLink, openPathLocation } from '@/lib/terminal-link-actions'
-import { useBrowserStore } from '@/store/browser-store'
+import { openUrl } from '@/tauri/opener'
 import {
   findAvailableEditor,
   openInEditor,
@@ -240,9 +240,12 @@ function getOrCreate(id: string): Entry {
 
   /**
    * The single activation path for every link kind and every source (OSC 8,
-   * WebLinksAddon, the path provider). URLs open the in-app preview column on a
-   * PLAIN click; paths need Cmd/Ctrl because launching an external editor takes
-   * OS focus away from the app. Nothing here ever reaches the OS default opener.
+   * WebLinksAddon, the path provider). URLs go to the OS default browser — the
+   * in-app preview column stays reserved for the `browser.open_preview` MCP
+   * tool, i.e. for pages an agent decides to show you, not for every link you
+   * click. Paths need Cmd/Ctrl because launching an external editor takes OS
+   * focus away from the app; a path never reaches the OS default opener, which
+   * would make a misclick on a script execute it.
    */
   const followLink = (event: MouseEvent, kind: LinkKind, target: string): void => {
     const entry = entries.get(id)
@@ -250,7 +253,7 @@ function getOrCreate(id: string): Entry {
     if (!shouldFollowLink(event, isMac, kind)) return
 
     if (kind === 'url') {
-      useBrowserStore.getState().openPreview(id, target)
+      openUrl(target).catch(console.warn)
       return
     }
     const { path, line, col } = parsePathSuffix(target)
@@ -277,8 +280,8 @@ function getOrCreate(id: string): Entry {
   term.options.linkHandler = linkHandler
 
   // Bare http(s) URLs in plain text. Kept on WebLinksAddon (its regex is well
-  // tested) but retargeted from the OS browser to the preview column beside the
-  // pane, matching what the browser.open_preview MCP tool does for agents.
+  // tested) but routed through followLink so every link source shares one
+  // gesture gate and one destination — the OS default browser.
   term.loadAddon(new WebLinksAddon((event, uri) => followLink(event, 'url', uri)))
 
   // Plain-text file paths — stack traces, tsc/eslint/pytest output. Async because

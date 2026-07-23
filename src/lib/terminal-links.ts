@@ -16,9 +16,11 @@ export type LinkKind = 'url' | 'path'
  * Whether a click on a terminal link should open it. The gate is chosen by the
  * cost of a misclick, not by uniformity:
  *
- * - `url` follows a PLAIN click. It opens the in-app preview column beside the
- *   pane — no focus leaves the app and one click closes it, so an accidental
- *   open is nearly free.
+ * - `url` follows a PLAIN click. It hands the address to the OS default browser,
+ *   which is where a link the user clicked belongs — the in-app preview column
+ *   is reserved for `browser.open_preview`, i.e. pages an AGENT chose to show.
+ *   A misclick costs one stray browser tab, which is cheap enough that the
+ *   one-click gesture is worth keeping.
  * - `path` requires Cmd (macOS) / Ctrl (win/linux), because it launches an
  *   EXTERNAL editor, which yanks OS focus out of Swarmterm entirely. That is the
  *   exact failure terminal-focus.ts exists to prevent, and agent output has far

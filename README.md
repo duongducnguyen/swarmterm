@@ -38,8 +38,9 @@ tính năng iteration 1 được giữ nguyên.
   `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
   không xoá worktree.
 
-- **Link trong terminal** — URL bấm thẳng một cái là mở ở cột web-preview bên
-  cạnh (không rời app, không mở trình duyệt OS); đường dẫn file bấm
+- **Link trong terminal** — URL bấm thẳng một cái là mở bằng trình duyệt mặc
+  định của hệ điều hành (cột web-preview trong app dành riêng cho MCP
+  `browser.open_preview`, tức trang do agent chủ động mở); đường dẫn file bấm
   Cmd/Ctrl+click là mở trong editor đúng dòng (`src/foo.ts:42:9`, kể cả dạng
   `src/foo.ts(42,9)` của tsc và `File "x.py", line 42` của Python). Hai gesture
   khác nhau là cố ý: mở URL gần như miễn phí, còn mở editor thì cướp focus khỏi
@@ -205,9 +206,9 @@ Sau `npm run tauri dev`:
       tray → Quit tắt hẳn và kill mọi pty.
 - [ ] Mở app lần 2 → chỉ focus cửa sổ cũ (single-instance).
 - [ ] Link — URL: `echo https://example.com` → hover thấy gạch chân + con trỏ
-      pointer; **bấm thường** một cái → cột web-preview mở ra bên cạnh, KHÔNG có
-      cửa sổ trình duyệt OS nào bật lên.
-- [ ] Link — bôi đen: kéo chuột qua URL đó → chọn được text, preview KHÔNG mở.
+      pointer; **bấm thường** một cái → trang mở ở trình duyệt mặc định của OS,
+      cột web-preview trong app KHÔNG bật lên.
+- [ ] Link — bôi đen: kéo chuột qua URL đó → chọn được text, trình duyệt KHÔNG mở.
 - [ ] Link — path tuyệt đối: `ls $PWD/package.json` → bấm thường không có gì xảy
       ra; Cmd/Ctrl+click → file mở trong editor.
 - [ ] Link — path tương đối + dòng: `echo "src/lib/terminal-links.ts:15:1"` →
