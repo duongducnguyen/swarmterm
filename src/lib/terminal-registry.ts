@@ -13,6 +13,7 @@ import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
 import { shouldFollowLink } from '@/lib/terminal-links'
+import { parseFileUrl } from '@/lib/file-url'
 import { openUrl } from '@/tauri/opener'
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
@@ -72,6 +73,12 @@ interface Entry {
   host: HTMLDivElement
   session: TerminalSession
   config: AttachConfig
+  /**
+   * The shell's live working directory, used to resolve relative path links.
+   * Seeded from the spawn cwd and updated on every OSC 7 report, because `cd`
+   * makes the spawn value wrong within seconds.
+   */
+  cwd: string
   opened: boolean
   observer?: ResizeObserver
 }
@@ -172,6 +179,17 @@ function getOrCreate(id: string): Entry {
     if (trimmed) store.setTitle(id, trimmed.slice(0, 120))
     else store.clearTitle(id)
   })
+  // OSC 7 is how a shell reports its working directory ("ESC ] 7 ; file://host/path
+  // BEL") — the same mechanism VS Code, kitty and WezTerm use. Handled here rather
+  // than in Rust because the value is only consumed on this side, and because it
+  // keeps the hot read_loop streaming path untouched. Returning true marks the
+  // sequence handled so xterm doesn't pass it on.
+  term.parser.registerOscHandler(7, (data) => {
+    const dir = parseFileUrl(data)
+    const entry = entries.get(id)
+    if (dir && entry) entry.cwd = dir
+    return true
+  })
   // Fan out to the broadcast group when this terminal is an armed member;
   // otherwise this is the only target, so behaviour is unchanged. onData fires
   // only for the terminal the user is typing in, so `id` is the source. Paste
@@ -253,7 +271,7 @@ function getOrCreate(id: string): Entry {
     { createTerminal, killTerminal }
   )
 
-  const entry: Entry = { term, fit, host, session, config: {}, opened: false }
+  const entry: Entry = { term, fit, host, session, config: {}, cwd: '', opened: false }
   entries.set(id, entry)
   return entry
 }
@@ -272,6 +290,11 @@ export function attachTerminal(id: string, container: HTMLElement, config: Attac
     // out from under the user.
     shellId: entry.config.shellId ?? config.shellId
   }
+  // Seed the link-resolution cwd from the spawn config. OSC 7 overwrites this as
+  // soon as the shell draws its first prompt; until then (and forever, in shells
+  // that don't report it) the spawn directory is the best answer available.
+  // `||` not `??` so an earlier OSC 7 value isn't clobbered by a later remount.
+  entry.cwd = entry.cwd || config.cwd || ''
   container.appendChild(entry.host)
 
   if (!entry.opened) {
@@ -393,6 +416,11 @@ export function awaitTerminalRelocated(id: string, timeoutMs = 4000): Promise<vo
 
 export function getTerminalStatus(id: string): TerminalStatus {
   return entries.get(id)?.session.getStatus() ?? NO_STATUS
+}
+
+/** The terminal's live cwd — OSC 7 if the shell reports it, else the spawn cwd. */
+export function getTerminalCwd(id: string): string | undefined {
+  return entries.get(id)?.cwd || undefined
 }
 
 export function subscribeTerminalStatus(id: string, listener: () => void): () => void {
