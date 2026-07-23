@@ -35,6 +35,26 @@ pub fn resolve_candidate(cwd: &Path, candidate: &str) -> Option<PathBuf> {
     }
 }
 
+/// Mirrors EditorId in `src/lib/editor-command.ts`. Duplicated rather than
+/// shared because this copy is the one that matters: the renderer builds the
+/// argv, but the renderer is not the security boundary. A misclick must never be
+/// able to launch an arbitrary program, so the launcher re-checks the name here.
+const ALLOWED_EDITORS: &[&str] = &["code", "cursor", "zed", "subl", "idea"];
+
+pub fn is_allowed_editor(bin: &str) -> bool {
+    ALLOWED_EDITORS.contains(&bin)
+}
+
+/// First entry of `preferred` that exists on `path_var`. Reuses the same PATH
+/// scan the shell catalog uses, so platform quirks (Windows extensions) stay in
+/// one place.
+pub fn find_editor(path_var: &str, preferred: &[String]) -> Option<String> {
+    preferred
+        .iter()
+        .find(|name| crate::shell::find_in_path(path_var, name).is_some())
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,5 +110,32 @@ mod tests {
     #[test]
     fn rejects_an_empty_candidate() {
         assert_eq!(resolve_candidate(&manifest_dir(), ""), None);
+    }
+
+    #[test]
+    fn find_editor_prefers_the_first_candidate_present_on_path() {
+        let dir = manifest_dir();
+        let path_var = dir.to_string_lossy().into_owned();
+        // find_in_path matches the name verbatim and only checks existence, so
+        // any real file in the directory stands in for an editor binary here —
+        // what's under test is the ordering, not executability.
+        let got = find_editor(&path_var, &["nope-editor".into(), "Cargo.toml".into()]);
+        assert_eq!(got.as_deref(), Some("Cargo.toml"));
+    }
+
+    #[test]
+    fn find_editor_returns_none_when_nothing_is_present() {
+        let path_var = manifest_dir().to_string_lossy().into_owned();
+        assert_eq!(find_editor(&path_var, &["nope-editor".into()]), None);
+    }
+
+    #[test]
+    fn allowlist_accepts_known_editors_only() {
+        assert!(is_allowed_editor("code"));
+        assert!(is_allowed_editor("cursor"));
+        assert!(is_allowed_editor("idea"));
+        assert!(!is_allowed_editor("bash"));
+        assert!(!is_allowed_editor("code; rm -rf /"));
+        assert!(!is_allowed_editor("/usr/bin/code"));
     }
 }
