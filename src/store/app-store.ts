@@ -17,6 +17,7 @@ import { DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { clearWorktree } from '@/tauri/git'
 import { isTransientLock } from '@/lib/worktree-cleanup'
 import { awaitTerminalRelocated } from '@/lib/terminal-registry'
+import { workspaceNameFor } from '@/lib/workspace-name'
 
 /** A workspace: a named binary split-tree of terminal panes. */
 export interface Workspace {
@@ -63,7 +64,7 @@ export interface ClearTarget {
 export interface AppState {
   workspaces: Workspace[]
   activeWorkspaceId: string
-  /** Monotonic counter used to name new workspaces "Workspace N". */
+  /** Monotonic counter — the "Workspace N" fallback name when no cwd is picked. */
   nextWorkspaceNumber: number
   /** Whether the Welcome tab exists in the tab strip. */
   welcomeOpen: boolean
@@ -153,6 +154,16 @@ export function selectWorkspaceByTerminalId(
   )
 }
 
+/**
+ * The terminal that should own the keyboard: the focused leaf of the active
+ * workspace. `undefined` when no workspace exists (Welcome-only launch).
+ */
+export function selectFocusedTerminalId(state: AppState): string | undefined {
+  const ws = selectActiveWorkspace(state)
+  if (!ws) return undefined
+  return findLeaf(ws.layout, ws.focusedLeafId)?.terminalId
+}
+
 /** Map the active workspace through `fn`, leaving the others untouched. */
 function mapActive(state: AppState, fn: (w: Workspace) => Workspace): Pick<AppState, 'workspaces'> {
   return {
@@ -192,7 +203,11 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       const layout = paneLayoutFor(config.terminalCount, makeWizardLeaf, uid)
       const ws: Workspace = {
         id: uid(),
-        name: `Workspace ${s.nextWorkspaceNumber}`,
+        name: workspaceNameFor(
+          config.cwd,
+          s.workspaces.map((w) => w.name),
+          s.nextWorkspaceNumber
+        ),
         cwd: config.cwd,
         layout,
         focusedLeafId: collectLeaves(layout)[0].id,

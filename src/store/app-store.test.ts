@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import {
   appStoreCreator,
   selectWorkspaceByTerminalId,
+  selectFocusedTerminalId,
   type AppStore,
   type CreateWorkspaceConfig,
   type Workspace
@@ -53,16 +54,21 @@ describe('initial state', () => {
 // --- createWorkspace ------------------------------------------------------
 
 describe('createWorkspace', () => {
-  it('appends a workspace named "Workspace 1" first', () => {
+  it('names the workspace after its folder', () => {
     const store = storeWithWorkspace()
     expect(store.getState().workspaces).toHaveLength(1)
-    expect(store.getState().workspaces[0].name).toBe('Workspace 1')
+    expect(store.getState().workspaces[0].name).toBe('work')
   })
 
-  it('numbers workspaces sequentially', () => {
+  it('suffixes repeats of the same folder name', () => {
     const store = storeWithWorkspace()
     store.getState().createWorkspace(SINGLE_TERMINAL)
-    expect(store.getState().workspaces.map((w) => w.name)).toEqual(['Workspace 1', 'Workspace 2'])
+    expect(store.getState().workspaces.map((w) => w.name)).toEqual(['work', 'work (1)'])
+  })
+
+  it('falls back to "Workspace N" when no folder was picked', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, cwd: '' })
+    expect(store.getState().workspaces[0].name).toBe('Workspace 1')
   })
 
   it('makes the new workspace active', () => {
@@ -159,7 +165,7 @@ describe('renameWorkspace', () => {
   it('ignores an empty or whitespace-only name', () => {
     const store = storeWithWorkspace()
     store.getState().renameWorkspace(store.getState().workspaces[0].id, '   ')
-    expect(store.getState().workspaces[0].name).toBe('Workspace 1')
+    expect(store.getState().workspaces[0].name).toBe('work')
   })
 })
 
@@ -172,7 +178,7 @@ describe('closeWorkspace', () => {
     store.getState().createWorkspace(SINGLE_TERMINAL)
     store.getState().closeWorkspace(firstId)
     expect(store.getState().workspaces).toHaveLength(1)
-    expect(store.getState().workspaces[0].name).toBe('Workspace 2')
+    expect(store.getState().workspaces[0].name).toBe('work (1)')
   })
 
   it('keeps the active workspace unchanged when closing another', () => {
@@ -217,9 +223,9 @@ describe('moveWorkspace', () => {
     const [a, , c] = store.getState().workspaces
     store.getState().moveWorkspace(a.id, c.id)
     expect(store.getState().workspaces.map((w) => w.name)).toEqual([
-      'Workspace 2',
-      'Workspace 3',
-      'Workspace 1'
+      'work (1)',
+      'work (2)',
+      'work'
     ])
   })
 
@@ -228,9 +234,9 @@ describe('moveWorkspace', () => {
     const [a, , c] = store.getState().workspaces
     store.getState().moveWorkspace(c.id, a.id)
     expect(store.getState().workspaces.map((w) => w.name)).toEqual([
-      'Workspace 3',
-      'Workspace 1',
-      'Workspace 2'
+      'work (2)',
+      'work',
+      'work (1)'
     ])
   })
 
@@ -544,6 +550,30 @@ describe('selectWorkspaceByTerminalId', () => {
   it('returns undefined for an unknown terminalId', () => {
     const store = storeWithWorkspace()
     expect(selectWorkspaceByTerminalId(store.getState(), 'nope')).toBeUndefined()
+  })
+})
+
+// --- selectFocusedTerminalId ----------------------------------------------
+
+describe('selectFocusedTerminalId', () => {
+  it('resolves the focused leaf of the active workspace to its terminalId', () => {
+    const store = storeWithWorkspace({ ...SINGLE_TERMINAL, terminalCount: 2, agentIds: panes(2) })
+    const ws = activeWorkspace(store)
+    const second = collectLeaves(ws.layout)[1]
+    store.getState().setFocusedLeaf(second.id)
+    expect(selectFocusedTerminalId(store.getState())).toBe(second.terminalId)
+  })
+
+  it('follows the active workspace when the user switches tabs', () => {
+    const store = storeWithWorkspace()
+    const first = activeWorkspace(store)
+    store.getState().createWorkspace(SINGLE_TERMINAL)
+    store.getState().setActiveWorkspace(first.id)
+    expect(selectFocusedTerminalId(store.getState())).toBe(collectLeaves(first.layout)[0].terminalId)
+  })
+
+  it('returns undefined when there is no workspace', () => {
+    expect(selectFocusedTerminalId(freshStore().getState())).toBeUndefined()
   })
 })
 
