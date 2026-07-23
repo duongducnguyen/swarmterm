@@ -14,7 +14,8 @@
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 12, "y": 20 },
         "visible": false,
-        "backgroundColor": "#09090b"
+        "backgroundColor": "#09090b",
+        "theme": "Dark"
       }
     ]
   }
