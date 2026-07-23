@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { useAppStore, type Workspace as WorkspaceModel } from '@/store/app-store'
+import {
+  useAppStore,
+  selectFocusedTerminalId,
+  type Workspace as WorkspaceModel
+} from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
-import { disposeOrphanTerminals } from '@/lib/terminal-registry'
+import { disposeOrphanTerminals, focusTerminal } from '@/lib/terminal-registry'
+import {
+  describeFocusedElement,
+  shouldReturnFocus,
+  FOCUS_RETURN_ATTR
+} from '@/lib/terminal-focus'
 import { FileDropListener } from '@/components/FileDropListener'
 import { RightPanel } from '@/components/RightPanel/RightPanel'
 import { Navbar } from '@/components/Navbar/Navbar'
@@ -105,6 +114,82 @@ export default function App(): ReactElement {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
+
+  // --- keyboard focus belongs to the terminal -----------------------------
+  // The shell owns the keyboard; app chrome only borrows it. dnd-kit makes its
+  // drag nodes focusable (tabIndex 0 on tabs, navbar items, pane roots), so a
+  // click parks DOM focus on chrome and every keystroke is dropped until the
+  // user clicks back into the pane — and a Tab (shell completion) walks the
+  // focus ring across the tab titles instead. These three effects hand focus
+  // back; see `lib/terminal-focus.ts`.
+
+  // Read inside the window listeners below, which are registered once and must
+  // not capture a stale value.
+  const settingsOpenRef = useRef(settingsOpen)
+  settingsOpenRef.current = settingsOpen
+
+  /** Focus the active workspace's focused terminal, unless something is typing. */
+  const returnFocusToTerminal = useCallback(() => {
+    // Settings is a modal without a focus trap: its Esc handler lives on the
+    // document, so it keeps working — but pulling focus behind it would type
+    // the user's keystrokes into the shell while they look at the dialog.
+    if (settingsOpenRef.current) return
+    if (useAppStore.getState().welcomeFocused) return
+    if (!shouldReturnFocus(describeFocusedElement(document.activeElement))) return
+    const terminalId = selectFocusedTerminalId(useAppStore.getState())
+    if (terminalId) focusTerminal(terminalId)
+  }, [])
+
+  /**
+   * Same, but scheduled to land after everyone else's focus work: Radix menus
+   * and the rename input claim focus on a timeout, and dnd-kit re-focuses the
+   * dragged node in a requestAnimationFrame when a drag ends. Running last is
+   * what lets the activeElement check above be trusted — if a menu or an input
+   * legitimately took the keyboard, it already holds it by now.
+   */
+  const deferReturnFocusToTerminal = useCallback(() => {
+    requestAnimationFrame(() => setTimeout(returnFocusToTerminal, 0))
+  }, [returnFocusToTerminal])
+
+  // 1. Landing on a workspace: switching tabs, leaving Welcome, closing
+  //    Settings. Workspaces stay mounted (see the render below), so the target
+  //    pane never remounts and TerminalPane's isFocused effect never re-runs —
+  //    nothing else would pull focus off the tab that was clicked. Deferred so
+  //    it also beats Radix restoring focus to the Settings trigger on close.
+  useEffect(() => {
+    if (showWelcome || settingsOpen) return
+    deferReturnFocusToTerminal()
+  }, [activeWorkspaceId, showWelcome, settingsOpen, deferReturnFocusToTerminal])
+
+  // 2. Pointer gestures on chrome that has no keyboard use of its own — every
+  //    region marked `data-focus-return`: title bar, sidebar, tab strip, panes
+  //    and their split separators. `pointerup` (not just `click`)
+  //    because a finished drag swallows the click — and dnd-kit's own
+  //    focus-restore would otherwise leave the keyboard on the dragged tab.
+  //    `click` is kept alongside it for keyboard-activated buttons, which fire
+  //    no pointer events; a double return-focus is a harmless no-op.
+  useEffect(() => {
+    const onPointerUp = (event: Event): void => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest(`[${FOCUS_RETURN_ATTR}]`) === null) return
+      deferReturnFocusToTerminal()
+    }
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('click', onPointerUp)
+    return () => {
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('click', onPointerUp)
+    }
+  }, [deferReturnFocusToTerminal])
+
+  // 3. Regaining the window — close-to-tray, Cmd+Tab, or a click on the title
+  //    bar. The webview restores focus to whatever held it last, which after a
+  //    tray round-trip is the document body.
+  useEffect(() => {
+    window.addEventListener('focus', deferReturnFocusToTerminal)
+    return () => window.removeEventListener('focus', deferReturnFocusToTerminal)
+  }, [deferReturnFocusToTerminal])
 
   // Kill orphaned PTYs and close previews when terminals leave all layouts.
   useEffect(

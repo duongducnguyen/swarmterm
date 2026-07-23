@@ -253,6 +253,9 @@ export function TerminalPane({
         }
         setFocusedLeaf(leafId)
       }}
+      // Clicking pane chrome (header, borders) blurs xterm; App.tsx returns the
+      // keyboard to the terminal on the way back up (lib/terminal-focus.ts).
+      data-focus-return
       data-terminal-id={terminalId}
       data-leaf-id={leafId}
       data-shell-flavor={paneShellFlavor}

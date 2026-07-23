@@ -98,6 +98,11 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings, onOpenA
     <nav
       aria-hidden={!visible}
       inert={!visible}
+      // The whole sidebar hands the keyboard back to the terminal after a click
+      // — workspace items, the terminal list, New workspace, Account, Settings.
+      // Anything that legitimately claims focus (the rename input, a dropdown,
+      // the Settings dialog) is exempt by lib/terminal-focus.ts's own check.
+      data-focus-return
       style={{ width: visible ? 224 : 0 }}
       className="h-full shrink-0 overflow-hidden border-r border-border bg-card transition-[width] duration-200 ease-in-out motion-reduce:transition-none"
     >
@@ -236,6 +241,9 @@ function WorkspaceItem({
       style={style}
       {...attributes}
       {...listeners}
+      // Out of the tab order for the same reason as the workspace tabs — the
+      // item has no keyboard action, and a stray Tab belongs to the shell.
+      tabIndex={-1}
       className={cn(isDragging && 'opacity-40')}
     >
       <div

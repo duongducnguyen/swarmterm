@@ -63,6 +63,10 @@ export function TitleBar(): ReactElement {
   return (
     <div
       data-tauri-drag-region
+      // Toggling a panel here must not strand the keyboard on the button that
+      // was clicked — App.tsx hands it back (lib/terminal-focus.ts). The recents
+      // search input is exempt automatically: it holds focus legitimately.
+      data-focus-return
       className={cn(
         'flex h-9 shrink-0 items-center justify-between border-b border-border bg-card pl-1.5',
         isMac && 'pl-20'

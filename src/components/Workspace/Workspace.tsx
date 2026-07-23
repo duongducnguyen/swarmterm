@@ -102,7 +102,10 @@ export function Workspace({ workspace }: WorkspaceProps): ReactElement {
       }}
       onDragCancel={() => setDraggingLeafId(null)}
     >
-      <div className="flex h-full w-full flex-col bg-canvas">
+      {/* data-focus-return: dragging a split separator (or clicking the gap
+          between panes) leaves DOM focus on chrome; App.tsx hands the keyboard
+          back to the focused terminal — see lib/terminal-focus.ts. */}
+      <div data-focus-return className="flex h-full w-full flex-col bg-canvas">
         <BroadcastBanner workspace={workspace} />
         <div className="min-h-0 flex-1 p-2">{renderNode(workspace.layout)}</div>
       </div>

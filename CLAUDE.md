@@ -112,6 +112,17 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 - **UTF-8 chunk boundaries.** `take_valid_utf8` buffers a split trailing multibyte
   sequence across reads to avoid mojibake (emoji/box-drawing). Don't "simplify" it
   into a lossy decode.
+- **Keyboard focus belongs to the terminal.** dnd-kit stamps `tabIndex: 0` on
+  every drag node (workspace tabs, navbar items, pane headers), so a click parks
+  DOM focus on chrome and keystrokes are dropped — and a Tab (shell completion)
+  walks the focus ring across the tab titles. Those nodes are pinned to
+  `tabIndex={-1}`, and `App.tsx` hands focus back to
+  `selectFocusedTerminalId(...)` after clicks inside any `data-focus-return`
+  region, on workspace switch, and on window re-focus. The decision lives in
+  `lib/terminal-focus.ts` — it stands down for inputs, contenteditable, and open
+  menus/dialogs. New chrome that swallows clicks should carry
+  `data-focus-return`; anything that owns the keyboard (Welcome, Settings, the
+  right panel) must not.
 - **Close-to-tray vs Quit.** Closing the window hides it to the tray (pty stays
   alive); `on_window_event` calls `prevent_close()` unless `AppState.quitting` is
   set (tray → Quit). Killing the app for real must set that flag.

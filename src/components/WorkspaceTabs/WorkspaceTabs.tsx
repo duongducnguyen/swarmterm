@@ -80,7 +80,12 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
   }
 
   return (
-    <div className="flex h-12 shrink-0 items-stretch border-b border-border bg-card">
+    // data-focus-return: clicking a tab must not leave the keyboard stranded on
+    // chrome — App.tsx hands it back to the active terminal (lib/terminal-focus.ts).
+    <div
+      data-focus-return
+      className="flex h-12 shrink-0 items-stretch border-b border-border bg-card"
+    >
       <div className="flex items-stretch overflow-x-auto">
         {welcomeOpen && (
           <WelcomeTab
@@ -223,6 +228,10 @@ function SortableWorkspaceTab({
       style={style}
       {...(renaming ? {} : attributes)}
       {...(renaming ? {} : listeners)}
+      // dnd-kit stamps tabIndex 0 on its drag nodes. A workspace tab has no
+      // keyboard action, so leaving it in the tab order only lets a Tab meant
+      // for the shell park the focus ring here (see lib/terminal-focus.ts).
+      tabIndex={-1}
       onClick={onSelect}
       onDoubleClick={onStartRename}
       className={cn(TAB_BASE, 'cursor-pointer', tabStateClass(active), isDragging && 'opacity-40')}
