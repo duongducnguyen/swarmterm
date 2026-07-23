@@ -38,6 +38,16 @@ tính năng iteration 1 được giữ nguyên.
   `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
   không xoá worktree.
 
+- **Link trong terminal** — URL bấm thẳng một cái là mở ở cột web-preview bên
+  cạnh (không rời app, không mở trình duyệt OS); đường dẫn file bấm
+  Cmd/Ctrl+click là mở trong editor đúng dòng (`src/foo.ts:42:9`, kể cả dạng
+  `src/foo.ts(42,9)` của tsc và `File "x.py", line 42` của Python). Hai gesture
+  khác nhau là cố ý: mở URL gần như miễn phí, còn mở editor thì cướp focus khỏi
+  app nên phải chủ đích. Đường dẫn không tồn tại thì không thành link (Rust
+  validate trên FS trước). Nhận cả OSC 8 hyperlink mà Claude Code phát ra.
+  **Không link nào mở bằng app mặc định của OS** — click nhầm file `.sh`/`.exe`
+  không bao giờ chạy nó.
+
 Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
 ## Tech stack
@@ -194,6 +204,20 @@ Sau `npm run tauri dev`:
 - [ ] Đóng cửa sổ → ẩn xuống tray (pty vẫn sống); tray → Show mở lại;
       tray → Quit tắt hẳn và kill mọi pty.
 - [ ] Mở app lần 2 → chỉ focus cửa sổ cũ (single-instance).
+- [ ] Link — URL: `echo https://example.com` → hover thấy gạch chân + con trỏ
+      pointer; **bấm thường** một cái → cột web-preview mở ra bên cạnh, KHÔNG có
+      cửa sổ trình duyệt OS nào bật lên.
+- [ ] Link — bôi đen: kéo chuột qua URL đó → chọn được text, preview KHÔNG mở.
+- [ ] Link — path tuyệt đối: `ls $PWD/package.json` → bấm thường không có gì xảy
+      ra; Cmd/Ctrl+click → file mở trong editor.
+- [ ] Link — path tương đối + dòng: `echo "src/lib/terminal-links.ts:15:1"` →
+      Cmd/Ctrl+click mở editor đúng dòng 15. Rồi `cd src`, `echo
+      "lib/terminal-links.ts:15"` → vẫn resolve được (bash, hoặc zsh trên macOS;
+      PowerShell thì không — xem Giới hạn đã biết).
+- [ ] Link — path không tồn tại: `echo "src/lib/does-not-exist.ts:9"` → hover
+      KHÔNG gạch chân, click không làm gì.
+- [ ] Link — OSC 8 từ agent: chạy `claude` trong pane, bảo nó đọc một file để nó
+      in đường dẫn ra → Cmd/Ctrl+click mở đúng file đó.
 - [ ] Titlebar tự vẽ hiển thị; kéo vùng titlebar di chuyển cửa sổ; kéo viền resize được
       (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
 - [ ] Nút minimize / maximize-restore hoạt động; icon nút maximize đổi đúng trạng thái
@@ -221,6 +245,12 @@ Sau `npm run tauri dev`:
 ## Giới hạn đã biết (iteration 1)
 
 - Không lưu/khôi phục trạng thái giữa các lần mở app (đúng phạm vi).
+- **Link trong terminal**: PowerShell không có hook môi trường để inject OSC 7,
+  nên path *tương đối* hết resolve sau khi `cd` (path tuyệt đối — gồm mọi thứ
+  Claude Code in ra — vẫn chạy). Tên file trần không có dấu `/` (`foo.ts:42`)
+  không thành link; phải có separator (`src/foo.ts:42`) — đây là biện pháp
+  chính chống false positive. Ký tự rộng (CJK) cùng dòng với path có thể làm
+  lệch vị trí gạch chân vài ô. Commit hash / số issue chưa được linkify.
 - Khi reload renderer thủ công lúc dev, pty cũ vẫn chạy cho đến khi cửa sổ
   đóng (xterm reconnect chưa được implement).
 - Code editor, file browser, kanban, AI agent, Settings là phạm vi của các
