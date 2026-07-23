@@ -307,6 +307,23 @@ pub fn spawn_terminal(
     }
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM", "xterm-256color");
+    // Ask the shell to report its working directory on every prompt (OSC 7), so
+    // relative path links stay resolvable after a `cd`. bash is the only shell we
+    // have to arrange this for via the environment: macOS zsh already emits OSC 7
+    // from /etc/zshrc and fish does it natively. PowerShell has no environment
+    // hook — it falls back to the spawn cwd, so relative links there stop
+    // resolving once the user cds away. Prepend rather than replace so a
+    // user-configured PROMPT_COMMAND still runs.
+    if shell.to_lowercase().contains("bash") {
+        let osc7 = r#"printf '\033]7;file://%s%s\033\\' "${HOSTNAME:-}" "$PWD""#;
+        let existing = std::env::var("PROMPT_COMMAND").unwrap_or_default();
+        let combined = if existing.is_empty() {
+            osc7.to_string()
+        } else {
+            format!("{osc7}; {existing}")
+        };
+        cmd.env("PROMPT_COMMAND", combined);
+    }
     // Identify this session to in-terminal processes so an in-terminal agent
     // can call Swarmterm's MCP server. `id` is the terminalId — a random UUID
     // that only this shell's env sees — and doubles as the unguessable bearer

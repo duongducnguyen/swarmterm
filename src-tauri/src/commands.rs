@@ -162,3 +162,70 @@ pub async fn ensure_repo_with_commit(app: AppHandle, path: String) -> Result<(),
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// Resolve a path candidate the renderer found in terminal output. Returns the
+/// canonical path as a string, or `None` when it does not name an existing file
+/// — in which case the renderer does not draw a link.
+#[tauri::command]
+pub fn resolve_path_link(cwd: String, candidate: String) -> Option<String> {
+    crate::links::resolve_candidate(std::path::Path::new(&cwd), &candidate)
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// First of `candidates` (an allowlisted editor id) found on PATH. The renderer
+/// asks once and caches; `None` means fall back to revealing in the file manager.
+#[tauri::command]
+pub fn find_available_editor(candidates: Vec<String>) -> Option<String> {
+    let allowed: Vec<String> = candidates
+        .into_iter()
+        .filter(|c| crate::links::is_allowed_editor(c))
+        .collect();
+    let path_var = std::env::var("PATH").unwrap_or_default();
+    crate::links::find_editor(&path_var, &allowed)
+}
+
+/// Launch an editor by argv. Never goes through a shell, so nothing in `args`
+/// can be reinterpreted as shell syntax, and `bin` is re-checked against the
+/// allowlist because the renderer is not a trust boundary.
+#[tauri::command]
+pub fn open_in_editor(bin: String, args: Vec<String>) -> Result<(), String> {
+    if !crate::links::is_allowed_editor(&bin) {
+        return Err(format!("editor not allowed: {bin}"));
+    }
+    std::process::Command::new(&bin)
+        .args(&args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Show the file in the OS file manager. Used when no allowlisted editor is on
+/// PATH. Reveal-only: the file is selected, never opened, so this can't execute
+/// anything.
+#[tauri::command]
+pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg("-R").arg(&path);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("explorer");
+        c.arg(format!("/select,{path}"));
+        c
+    };
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let mut cmd = {
+        // No portable "reveal" on Linux; open the containing directory instead.
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| ".".to_string());
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(parent);
+        c
+    };
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}

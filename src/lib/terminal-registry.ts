@@ -1,4 +1,4 @@
-import { Terminal, type ITheme } from '@xterm/xterm'
+import { Terminal, type ILink, type ILinkHandler, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -12,8 +12,22 @@ import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
-import { shouldFollowLink } from '@/lib/terminal-links'
-import { openUrl } from '@/tauri/opener'
+import {
+  isDragNotClick,
+  shouldFollowLink,
+  type ClickPoint,
+  type LinkKind
+} from '@/lib/terminal-links'
+import { parseFileUrl } from '@/lib/file-url'
+import { detectPathCandidates, parsePathSuffix } from '@/lib/path-link-parse'
+import { classifyOscLink, openPathLocation } from '@/lib/terminal-link-actions'
+import { useBrowserStore } from '@/store/browser-store'
+import {
+  findAvailableEditor,
+  openInEditor,
+  resolvePathLink,
+  revealInFileManager
+} from '@/tauri/links'
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { imeTextFromKeyEvent } from '@/lib/ime-input'
@@ -72,6 +86,14 @@ interface Entry {
   host: HTMLDivElement
   session: TerminalSession
   config: AttachConfig
+  /**
+   * The shell's live working directory, used to resolve relative path links.
+   * Seeded from the spawn cwd and updated on every OSC 7 report, because `cd`
+   * makes the spawn value wrong within seconds.
+   */
+  cwd: string
+  /** Where the last press began, for the drag-vs-click guard. */
+  lastMouseDown?: ClickPoint
   opened: boolean
   observer?: ResizeObserver
 }
@@ -172,6 +194,17 @@ function getOrCreate(id: string): Entry {
     if (trimmed) store.setTitle(id, trimmed.slice(0, 120))
     else store.clearTitle(id)
   })
+  // OSC 7 is how a shell reports its working directory ("ESC ] 7 ; file://host/path
+  // BEL") — the same mechanism VS Code, kitty and WezTerm use. Handled here rather
+  // than in Rust because the value is only consumed on this side, and because it
+  // keeps the hot read_loop streaming path untouched. Returning true marks the
+  // sequence handled so xterm doesn't pass it on.
+  term.parser.registerOscHandler(7, (data) => {
+    const dir = parseFileUrl(data)
+    const entry = entries.get(id)
+    if (dir && entry) entry.cwd = dir
+    return true
+  })
   // Fan out to the broadcast group when this terminal is an armed member;
   // otherwise this is the only target, so behaviour is unchanged. onData fires
   // only for the terminal the user is typing in, so `id` is the source. Paste
@@ -195,17 +228,90 @@ function getOrCreate(id: string): Entry {
   // handled action also calls preventDefault(). Ctrl+C with no selection
   // returns true so the shell still receives SIGINT.
   const isMac = isMacPlatform()
-  // Make http/https URLs clickable. Mirror VS Code: only follow on Cmd+click
-  // (mac) / Ctrl+click (win/linux) so a plain click still selects text. Route to
-  // the OS default browser via the opener plugin; WebLinksAddon's regex only
-  // matches well-formed http(s), so openUrl always gets a valid URL. Loaded here
-  // (not beside FitAddon above) so the handler closure can capture `isMac`.
-  term.loadAddon(
-    new WebLinksAddon((event, uri) => {
-      if (!shouldFollowLink(event, isMac)) return
-      openUrl(uri).catch(console.warn)
-    })
-  )
+  const linkDeps = { findAvailableEditor, openInEditor, revealInFileManager }
+
+  // Record where each press began. xterm's Linkifier already refuses a mouseup on
+  // a different link than the mousedown, so dragging AWAY is handled; what it
+  // misses is a drag that selects text inside one link's own bounds.
+  host.addEventListener('mousedown', (e) => {
+    const entry = entries.get(id)
+    if (entry) entry.lastMouseDown = { clientX: e.clientX, clientY: e.clientY }
+  })
+
+  /**
+   * The single activation path for every link kind and every source (OSC 8,
+   * WebLinksAddon, the path provider). URLs open the in-app preview column on a
+   * PLAIN click; paths need Cmd/Ctrl because launching an external editor takes
+   * OS focus away from the app. Nothing here ever reaches the OS default opener.
+   */
+  const followLink = (event: MouseEvent, kind: LinkKind, target: string): void => {
+    const entry = entries.get(id)
+    if (isDragNotClick(entry?.lastMouseDown, event)) return
+    if (!shouldFollowLink(event, isMac, kind)) return
+
+    if (kind === 'url') {
+      useBrowserStore.getState().openPreview(id, target)
+      return
+    }
+    const { path, line, col } = parsePathSuffix(target)
+    void resolvePathLink(getTerminalCwd(id) ?? '', path)
+      .then((resolved) => {
+        if (resolved) return openPathLocation(linkDeps, resolved, line, col)
+      })
+      .catch(console.warn)
+  }
+
+  // OSC 8 hyperlinks — what Claude Code emits since v2.1.x. Without a linkHandler
+  // xterm's OscLinkProvider DROPS every non-http target (so file:// links never
+  // appear at all) and sends http ones to a defaultActivate that calls confirm()
+  // then window.open() — both wrong inside a Tauri webview. allowNonHttpProtocols
+  // is what lets file:// through; classifyOscLink is the protection that permission
+  // requires, refusing everything except http(s) and file.
+  const linkHandler: ILinkHandler = {
+    allowNonHttpProtocols: true,
+    activate: (event, text) => {
+      const classified = classifyOscLink(text)
+      if (classified) followLink(event, classified.kind, classified.target)
+    }
+  }
+  term.options.linkHandler = linkHandler
+
+  // Bare http(s) URLs in plain text. Kept on WebLinksAddon (its regex is well
+  // tested) but retargeted from the OS browser to the preview column beside the
+  // pane, matching what the browser.open_preview MCP tool does for agents.
+  term.loadAddon(new WebLinksAddon((event, uri) => followLink(event, 'url', uri)))
+
+  // Plain-text file paths — stack traces, tsc/eslint/pytest output. Async because
+  // each candidate has to be checked against the filesystem in Rust before it is
+  // allowed to become a link; a candidate that doesn't resolve is dropped, so
+  // prose that merely looks path-shaped never underlines itself.
+  term.registerLinkProvider({
+    provideLinks(y, callback) {
+      const lineText = term.buffer.active.getLine(y - 1)?.translateToString(true)
+      if (!lineText) return callback(undefined)
+      const candidates = detectPathCandidates(lineText)
+      if (candidates.length === 0) return callback(undefined)
+
+      const cwd = getTerminalCwd(id) ?? ''
+      void Promise.all(
+        candidates.map(async (c) => {
+          const { path } = parsePathSuffix(c.text)
+          const resolved = await resolvePathLink(cwd, path).catch(() => null)
+          if (!resolved) return null
+          const link: ILink = {
+            // xterm buffer ranges are 1-based and inclusive; candidate indices
+            // are 0-based with an exclusive end.
+            range: { start: { x: c.start + 1, y }, end: { x: c.end, y } },
+            text: c.text,
+            activate: (event, text) => followLink(event, 'path', text)
+          }
+          return link
+        })
+      )
+        .then((links) => callback(links.filter((l): l is ILink => l !== null)))
+        .catch(() => callback(undefined))
+    }
+  })
   term.attachCustomKeyEventHandler((event) => {
     // A bộ gõ re-inserting a corrected word delivers several characters in one
     // keydown; xterm's keypress path can only carry the first (see ime-input.ts).
@@ -253,7 +359,7 @@ function getOrCreate(id: string): Entry {
     { createTerminal, killTerminal }
   )
 
-  const entry: Entry = { term, fit, host, session, config: {}, opened: false }
+  const entry: Entry = { term, fit, host, session, config: {}, cwd: '', opened: false }
   entries.set(id, entry)
   return entry
 }
@@ -272,6 +378,11 @@ export function attachTerminal(id: string, container: HTMLElement, config: Attac
     // out from under the user.
     shellId: entry.config.shellId ?? config.shellId
   }
+  // Seed the link-resolution cwd from the spawn config. OSC 7 overwrites this as
+  // soon as the shell draws its first prompt; until then (and forever, in shells
+  // that don't report it) the spawn directory is the best answer available.
+  // `||` not `??` so an earlier OSC 7 value isn't clobbered by a later remount.
+  entry.cwd = entry.cwd || config.cwd || ''
   container.appendChild(entry.host)
 
   if (!entry.opened) {
@@ -393,6 +504,11 @@ export function awaitTerminalRelocated(id: string, timeoutMs = 4000): Promise<vo
 
 export function getTerminalStatus(id: string): TerminalStatus {
   return entries.get(id)?.session.getStatus() ?? NO_STATUS
+}
+
+/** The terminal's live cwd — OSC 7 if the shell reports it, else the spawn cwd. */
+export function getTerminalCwd(id: string): string | undefined {
+  return entries.get(id)?.cwd || undefined
 }
 
 export function subscribeTerminalStatus(id: string, listener: () => void): () => void {
