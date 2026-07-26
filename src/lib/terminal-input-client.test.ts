@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffToEdit, encodeEdit } from './terminal-input-client'
+import { diffToEdit, encodeEdit, ownsKeydown, ownsInputEvent, breaksSegment } from './terminal-input-client'
 
 describe('diffToEdit', () => {
   it('reports a pure insertion when the text only grew', () => {
@@ -49,5 +49,51 @@ describe('encodeEdit', () => {
 
   it('encodes a no-op edit as the empty string so callers can skip the write', () => {
     expect(encodeEdit({ deletions: 0, insert: '' })).toBe('')
+  })
+})
+
+describe('ownsKeydown', () => {
+  it('owns the IME placeholder keycode so xterm never runs its own diff', () => {
+    // keyCode 229 means "the IME is handling this". xterm reacts by scheduling
+    // CompositionHelper._handleAnyTextareaChanges, whose diff sends one DEL for
+    // any number of deletions. Both layers firing = every keystroke sent twice.
+    expect(ownsKeydown({ keyCode: 229, isComposing: false })).toBe(true)
+  })
+
+  it('leaves real keys to xterm, whose escape sequences are correct', () => {
+    expect(ownsKeydown({ keyCode: 8, isComposing: false })).toBe(false) // Backspace
+    expect(ownsKeydown({ keyCode: 13, isComposing: false })).toBe(false) // Enter
+    expect(ownsKeydown({ keyCode: 68, isComposing: false })).toBe(false) // D
+    expect(ownsKeydown({ keyCode: 37, isComposing: false })).toBe(false) // ArrowLeft
+  })
+
+  it('leaves everything alone while a composition is active', () => {
+    expect(ownsKeydown({ keyCode: 229, isComposing: true })).toBe(false)
+  })
+})
+
+describe('ownsInputEvent', () => {
+  it('owns text changes outside composition', () => {
+    expect(ownsInputEvent({ isComposing: false })).toBe(true)
+  })
+
+  it('leaves composition to xterm — CJK is unverified and must not be touched', () => {
+    expect(ownsInputEvent({ isComposing: true })).toBe(false)
+  })
+})
+
+describe('breaksSegment', () => {
+  it('ends the segment for any key xterm handles itself', () => {
+    // xterm cancels every key it emits for, so the textarea keeps stale text
+    // while the pty line has already moved on. Restart rather than diff against it.
+    for (const key of ['Enter', 'Backspace', 'Tab', 'Escape', 'ArrowLeft', 'a', ' ']) {
+      expect(breaksSegment({ key }), key).toBe(true)
+    }
+  })
+
+  it('survives a bare modifier press, which changes nothing', () => {
+    for (const key of ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph']) {
+      expect(breaksSegment({ key }), key).toBe(false)
+    }
   })
 })
