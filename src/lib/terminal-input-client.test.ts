@@ -379,6 +379,19 @@ describe('nextSuppressState / shouldSuppressInput', () => {
     expect(shouldSuppressInput(state)).toBe(false)
   })
 
+  it('treats blur as a keyup-equivalent, so clicking away mid-keystroke does not leave the arm stuck', () => {
+    // Repro: hold a letter down (armed; xterm cancels its keydown, so no
+    // `input` follows), then mouse-click into another pane before releasing
+    // the key. The keyup fires on the newly focused element, not this host,
+    // so this pane never observes it — terminal-registry.ts's `blur`
+    // listener feeds the same `keyup` transition instead, since focus loss
+    // ends the segment the same way a real keyup would have.
+    let state: SuppressState = 'idle'
+    state = nextSuppressState(state, { type: 'keydown', owns: true })
+    state = nextSuppressState(state, { type: 'keyup' }) // fed from blur, not a real keyup event
+    expect(shouldSuppressInput(state)).toBe(false)
+  })
+
   it('never arms for a keydown it does not own, so a later bare input is never suppressed', () => {
     let state: SuppressState = 'idle'
     state = nextSuppressState(state, { type: 'keydown', owns: false })

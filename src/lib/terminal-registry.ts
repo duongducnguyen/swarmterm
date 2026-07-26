@@ -442,6 +442,17 @@ function getOrCreate(id: string): Entry {
       // textarea clear too, not just the composition-safe baseline reset).
       compositionOpen = false
       resetSegment()
+      // Also close out an armed-but-unconsumed suppression, the same way a
+      // `keyup` would: hold a letter down (armed; xterm cancels its keydown,
+      // so no `input` follows), mouse-click into another pane before
+      // releasing the key, and the keyup fires on the newly focused element
+      // — this host never sees it, so `suppressState` would otherwise stay
+      // `armed` until whatever keydown happens next. In between, Dictation
+      // or the Emoji & Symbols picker used right after clicking back in
+      // would have its `insertText` wrongly swallowed. Blur is not a keyup,
+      // but it ends the segment the same way, so it drives the same
+      // transition.
+      suppressState = nextSuppressState(suppressState, { type: 'keyup' })
     },
     true
   )
