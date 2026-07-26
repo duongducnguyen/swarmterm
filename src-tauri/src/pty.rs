@@ -171,6 +171,9 @@ pub struct AppState {
     /// server failed to bind the cell stays empty and `spawn_terminal` skips
     /// the env injection (browser preview via MCP just won't work).
     pub mcp_url: OnceLock<Arc<str>>,
+    /// War Room membership + inboxes. Its own lock (never nested with
+    /// `terminals`) so MCP tools keep the lock-read-drop-before-await rule.
+    pub war_room: Mutex<crate::warroom::WarRoom>,
 }
 
 impl Default for AppState {
@@ -179,6 +182,7 @@ impl Default for AppState {
             terminals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             mcp_url: OnceLock::new(),
+            war_room: Mutex::new(crate::warroom::WarRoom::default()),
         }
     }
 }

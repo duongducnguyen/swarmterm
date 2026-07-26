@@ -8,6 +8,7 @@ mod links;
 mod pty;
 mod shell;
 mod tray;
+mod warroom;
 mod window_fit;
 
 use pty::AppState;
