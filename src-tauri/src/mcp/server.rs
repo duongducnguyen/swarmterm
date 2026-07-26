@@ -70,7 +70,9 @@ impl SwarmtermMcpServer {
         // `#[tool_handler]` sees the union of both groups' `#[tool]` methods.
         Self {
             app,
-            tool_router: Self::tool_router_browser() + Self::tool_router_worktree(),
+            tool_router: Self::tool_router_browser()
+                + Self::tool_router_worktree()
+                + Self::tool_router_warroom(),
         }
     }
 
@@ -154,7 +156,11 @@ impl ServerHandler for SwarmtermMcpServer {
                  you may rename that branch to match your actual task (git branch -m \
                  <new-name>) — but never move or rename the worktree DIRECTORY (session \
                  state is keyed by its path). Use worktree.remove to clean up after a branch \
-                 is merged.",
+                 is merged. When the user has dragged panes into the War Room (right panel), the \
+                 war_room.* tools connect the agents in those panes: list_peers shows who is \
+                 present, send carries a message (mode \"probe\") or hands a peer a prompt to \
+                 run (mode \"execute\"), read_inbox fetches what peers sent you — read it and \
+                 reply promptly when nudged.",
             )
     }
 
