@@ -105,6 +105,8 @@ pub fn run() {
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,
+            commands::war_room_join,
+            commands::war_room_leave,
             commands::list_available_shells,
             commands::list_available_agents,
             commands::resolve_path_link,

@@ -8,6 +8,14 @@ use std::collections::{HashMap, VecDeque};
 use rmcp::schemars;
 use serde::Serialize;
 
+/// ms since epoch. Lives here so commands and MCP tools stamp identically.
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageMode {
@@ -354,5 +362,11 @@ mod tests {
         assert_eq!(seq_of(&out.event), 3);
         let leave = r.leave("t2", 10).unwrap();
         assert_eq!(seq_of(&leave), 4);
+    }
+
+    #[test]
+    fn now_ms_returns_epoch_millis() {
+        let ts = now_ms();
+        assert!(ts > 1_700_000_000_000);
     }
 }

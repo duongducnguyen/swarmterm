@@ -446,6 +446,11 @@ fn read_loop(
     // the exit event must find the id free, since create rejects a duplicate live id.
     if let Some(state) = app.try_state::<AppState>() {
         state.terminals.lock().unwrap().remove(&id);
+        let left = state.war_room.lock().unwrap().leave(&id, crate::warroom::now_ms());
+        if let Some(event) = left {
+            use tauri::Emitter;
+            let _ = app.emit("warroom:event", &event);
+        }
     }
     let _ = on_data.send(PtyOut::Exit { exit_code });
 }

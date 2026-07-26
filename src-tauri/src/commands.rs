@@ -1,7 +1,7 @@
 use portable_pty::PtySize;
 use std::io::Write;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::pty::{AppState, CreateTerminalOptions, CreateTerminalResult, PtyOut};
 
@@ -32,7 +32,7 @@ pub fn resize_terminal(state: State<'_, AppState>, id: String, cols: u16, rows: 
 }
 
 #[tauri::command]
-pub fn kill_terminal(state: State<'_, AppState>, id: String) {
+pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     // Take the terminal OUT of the map so its master PTY handle is dropped here,
     // rather than lingering until the reader thread cleans up. This makes the
     // reader observe EOF promptly on every platform:
@@ -51,6 +51,13 @@ pub fn kill_terminal(state: State<'_, AppState>, id: String) {
     if let Some(mut t) = removed {
         t.kill();
         // Dropping `t` (and its master PTY) at end of scope forces the reader's EOF.
+    }
+    // A dead pane must not linger as a War Room ghost: peers would still see
+    // it in list_peers and queue messages for a terminal that can never read
+    // them. leave() is idempotent, so racing read_loop's cleanup is harmless.
+    let left = state.war_room.lock().unwrap().leave(&id, crate::warroom::now_ms());
+    if let Some(event) = left {
+        let _ = app.emit("warroom:event", &event);
     }
 }
 
@@ -228,4 +235,44 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
         c
     };
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Frontend drags a pane into the War Room. Metadata is a frontend snapshot:
+/// the leaf's explicit agentId and the registry's live cwd — the Rust terminal
+/// map deliberately stores neither.
+#[tauri::command]
+pub fn war_room_join(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    terminal_id: String,
+    agent_id: Option<String>,
+    cwd: String,
+    display_name: String,
+) -> Result<(), String> {
+    if !state.terminals.lock().unwrap().contains_key(&terminal_id) {
+        return Err(format!("terminal \"{terminal_id}\" is not live"));
+    }
+    // Without the MCP server the room's tools are unreachable — joining would
+    // look successful while nothing works. Fail loudly instead (spec §failure
+    // modes); the renderer logs it and the pane simply doesn't join.
+    if state.mcp_url.get().is_none() {
+        return Err("MCP server failed to start this run — War Room is unavailable".into());
+    }
+    let event = state.war_room.lock().unwrap().join(
+        terminal_id,
+        agent_id,
+        cwd,
+        display_name,
+        crate::warroom::now_ms(),
+    );
+    let _ = app.emit("warroom:event", &event);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn war_room_leave(app: AppHandle, state: State<'_, AppState>, terminal_id: String) {
+    let left = state.war_room.lock().unwrap().leave(&terminal_id, crate::warroom::now_ms());
+    if let Some(event) = left {
+        let _ = app.emit("warroom:event", &event);
+    }
 }
