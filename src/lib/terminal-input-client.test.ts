@@ -73,12 +73,29 @@ describe('ownsKeydown', () => {
 })
 
 describe('ownsInputEvent', () => {
-  it('owns text changes outside composition', () => {
-    expect(ownsInputEvent({ isComposing: false })).toBe(true)
+  it('owns an ordinary keystroke outside composition', () => {
+    expect(ownsInputEvent({ isComposing: false, inputType: 'insertText' })).toBe(true)
+  })
+
+  it('owns a macOS Telex/VNI word replacement outside composition', () => {
+    // WKWebView's delivery for Input Method Kit's `insertText:replacementRange:`
+    // (see the design spec) — stock xterm's `_inputEvent` never accepted this
+    // inputType at all, so this module exists specifically to carry it through.
+    expect(ownsInputEvent({ isComposing: false, inputType: 'insertReplacementText' })).toBe(true)
   })
 
   it('leaves composition to xterm — CJK is unverified and must not be touched', () => {
-    expect(ownsInputEvent({ isComposing: true })).toBe(false)
+    expect(ownsInputEvent({ isComposing: true, inputType: 'insertText' })).toBe(false)
+  })
+
+  it('refuses paste, drop, and undo/redo — already delivered by another path, or not a pty edit at all', () => {
+    // A native paste `decideClipboardAction` doesn't suppress (menu bar Edit >
+    // Paste, a Services action) is sent by xterm's own handlePasteEvent; a copy
+    // from this layer's diff on the input event that follows would double-send.
+    // historyUndo/historyRedo don't correspond to a pty edit at all.
+    for (const inputType of ['insertFromPaste', 'insertFromDrop', 'historyUndo', 'historyRedo']) {
+      expect(ownsInputEvent({ isComposing: false, inputType }), inputType).toBe(false)
+    }
   })
 })
 

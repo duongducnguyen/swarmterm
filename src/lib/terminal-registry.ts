@@ -103,6 +103,18 @@ interface Entry {
   lastMouseDown?: ClickPoint
   opened: boolean
   observer?: ResizeObserver
+  /**
+   * Clears the IME input segment's `committed` baseline and the textarea it
+   * tracks. Exists on `Entry` — rather than staying a closure private to
+   * `getOrCreate` — because paste, respawn, and retry all move the pty line
+   * from outside the textarea `input` event this segment is diffed against:
+   * `pasteIntoTerminal` writes straight to the pty via `term.paste` (which
+   * also clears the textarea itself, but not `committed`), and
+   * `respawnTerminal`/`retryTerminal` replace the pty under the same pane.
+   * Left stale, the next real keystroke diffs against committed text the pty
+   * no longer has and sends deletions for characters the new pty never saw.
+   */
+  resetInputSegment: () => void
 }
 
 /** Live terminals keyed by terminalId, owned outside React's render tree. */
@@ -239,12 +251,23 @@ function getOrCreate(id: string): Entry {
   // registration order — only an ancestor can see the event first.
   let committed = ''
 
-  // Restarts the segment. Clearing the textarea matters: xterm cancels every
-  // key it handles, so after (say) a real Backspace the pty line has moved but
-  // the textarea still holds the old word. Diffing against that would send
-  // corrections for text the shell no longer has.
-  const resetSegment = (): void => {
+  // Discards the open segment without touching the textarea. The only caller
+  // is compositionstart (see below) — composition is xterm's alone, and this
+  // layer may not write to the textarea while one is active.
+  const resetSegmentBaseline = (): void => {
     committed = ''
+  }
+
+  // Restarts the segment AND clears the textarea. Clearing matters here: xterm
+  // cancels every key it handles, so after (say) a real Backspace the pty line
+  // has moved but the textarea still holds the old word, and diffing against
+  // that would send corrections for text the shell no longer has. Also reused
+  // as `Entry.resetInputSegment` (assigned below) for paste/respawn/retry,
+  // which move the pty line from entirely outside this textarea's `input`
+  // event and so need the same invalidation. Never call this from a
+  // composition handler — see `resetSegmentBaseline`.
+  const resetSegment = (): void => {
+    resetSegmentBaseline()
     if (term.textarea) term.textarea.value = ''
   }
 
@@ -277,10 +300,18 @@ function getOrCreate(id: string): Entry {
     true
   )
 
-  // Composition belongs to xterm end to end. Adopt whatever it left in the
-  // textarea as the new baseline rather than clearing it — clearing would race
-  // xterm's setTimeout-based finalize and swallow the composed text.
-  host.addEventListener('compositionstart', () => resetSegment(), true)
+  // Composition belongs to xterm end to end — including the textarea itself.
+  // xterm's own compositionstart/update/end listeners are bound WITHOUT
+  // capture (bubble phase; see CompositionHelper), so this capture-phase
+  // listener runs BEFORE `CompositionHelper.compositionstart()` reads
+  // `_compositionPosition.start = textarea.value.length`. Writing to
+  // `.value` here — even to clear it — changes what that read sees and is
+  // exactly the kind of mutation-during-composition WebKit responds to by
+  // aborting the composition outright. So only the baseline resets; the
+  // textarea is left for xterm to read and drive. The same "adopt what xterm
+  // leaves rather than overwrite it" argument the compositionend handler below
+  // already makes applies here too — it just applies one event earlier.
+  host.addEventListener('compositionstart', () => resetSegmentBaseline(), true)
   host.addEventListener(
     'compositionend',
     () => {
@@ -431,7 +462,16 @@ function getOrCreate(id: string): Entry {
     { createTerminal, killTerminal }
   )
 
-  const entry: Entry = { term, fit, host, session, config: {}, cwd: '', opened: false }
+  const entry: Entry = {
+    term,
+    fit,
+    host,
+    session,
+    config: {},
+    cwd: '',
+    opened: false,
+    resetInputSegment: resetSegment
+  }
   entries.set(id, entry)
   return entry
 }
@@ -514,10 +554,18 @@ export function focusTerminal(id: string): void {
  * `onData`, so it picks up the broadcast fan-out above for free instead of
  * duplicating that rule here. Also gets bracketed-paste framing, so a shell
  * treats the text as literal input and never runs it on its own.
+ *
+ * Resets the IME input segment first (see `Entry.resetInputSegment`):
+ * `term.paste` writes straight to the pty and clears xterm's textarea itself,
+ * which would otherwise leave the segment's `committed` baseline describing
+ * text the pty no longer has.
  * No-op when the terminal is not live.
  */
 export function pasteIntoTerminal(id: string, text: string): void {
-  entries.get(id)?.term.paste(text)
+  const entry = entries.get(id)
+  if (!entry) return
+  entry.resetInputSegment()
+  entry.term.paste(text)
 }
 
 /** Re-spawn the pty after exit/error, clearing the screen first. */
@@ -525,6 +573,8 @@ export function retryTerminal(id: string): void {
   const entry = entries.get(id)
   if (!entry) return
   entry.term.reset()
+  // The pty this segment's committed baseline described is gone.
+  entry.resetInputSegment()
   safeFit(entry)
   entry.session.retry({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
@@ -539,6 +589,8 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   if (!entry) return
   entry.config = { ...entry.config, ...config }
   entry.term.reset()
+  // The pty this segment's committed baseline described is gone.
+  entry.resetInputSegment()
   safeFit(entry)
   entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }

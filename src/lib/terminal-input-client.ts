@@ -70,9 +70,30 @@ export function ownsKeydown(event: { keyCode: number; isComposing: boolean }): b
   return event.keyCode === IME_KEYCODE
 }
 
+/**
+ * `input` event `inputType` values this layer treats as the user typing, and
+ * therefore diffs the textarea for. `insertText` is a plain keystroke.
+ * `insertReplacementText` is what WKWebView delivers for Input Method Kit's
+ * `insertText:replacementRange:` — the mechanism macOS' own Telex/VNI uses to
+ * replace a word in place — and xterm's own `_inputEvent` never accepted that
+ * inputType at all, which is exactly the gap this module exists to close.
+ *
+ * Everything else is refused. In particular `insertFromPaste` / `insertFromDrop`:
+ * xterm binds its own paste handler to both the textarea and the host element
+ * without calling preventDefault, so a native paste this app's clipboard
+ * shortcut handling doesn't suppress (the macOS Edit menu, a Services action)
+ * is already sent to the pty by xterm before the browser's default insertion
+ * fires this `input` event — diffing it here would send it a second time.
+ * `historyUndo` / `historyRedo` don't correspond to a pty edit at all.
+ *
+ * An allow-list, not a deny-list: an inputType this module has never seen is
+ * refused by default rather than risking an accidental double-send.
+ */
+const TYPING_INPUT_TYPES = new Set(['insertText', 'insertReplacementText'])
+
 /** True when this layer owns the resulting text change. */
-export function ownsInputEvent(event: { isComposing: boolean }): boolean {
-  return !event.isComposing
+export function ownsInputEvent(event: { isComposing: boolean; inputType: string }): boolean {
+  return !event.isComposing && TYPING_INPUT_TYPES.has(event.inputType)
 }
 
 /**
