@@ -208,10 +208,12 @@ export function isOrdinaryCharKey(event: {
 
 /**
  * True for the modifier shape xterm's own `_isThirdLevelShift` recognises as
- * "this chord types a character, not a shortcut": Option+key on macOS (with
- * `macOptionIsMeta` false — this app's default, and the only value it ever
- * sets), or AltGr on Windows, reported either as Ctrl+Alt together or as a
- * distinct `getModifierState("AltGraph")`. Verified against
+ * "this chord types a character, not a shortcut": Option+key on macOS when
+ * `macOptionIsMeta` is off (this app's default, and the only value it ever
+ * sets in its `new Terminal({...})` call — but taken as a live parameter
+ * rather than assumed, so this predicate can't silently drift out of sync if
+ * that ever changes), or AltGr on Windows, reported either as Ctrl+Alt
+ * together or as a distinct `getModifierState("AltGraph")`. Verified against
  * @xterm/xterm 6.0.0: `_keyDown` calls `_isThirdLevelShift` first and
  * returns immediately when it is true — BEFORE the `if (result.cancel)
  * this.cancel(event, true)` line — so the keydown is never preventDefaulted.
@@ -235,10 +237,10 @@ export function isThirdLevelShiftKey(
     keyCode: number
     altGraph: boolean
   },
-  platform: { isMac: boolean; isWindows: boolean }
+  platform: { isMac: boolean; isWindows: boolean; macOptionIsMeta: boolean }
 ): boolean {
   const shift =
-    (platform.isMac && event.altKey && !event.ctrlKey && !event.metaKey) ||
+    (platform.isMac && !platform.macOptionIsMeta && event.altKey && !event.ctrlKey && !event.metaKey) ||
     (platform.isWindows && event.altKey && event.ctrlKey && !event.metaKey) ||
     (platform.isWindows && event.altGraph)
   return shift && (!event.keyCode || event.keyCode > 47)
@@ -281,4 +283,63 @@ export function ownsInputEvent(event: { isComposing: boolean; inputType: string 
  */
 export function breaksSegment(event: { key: string }): boolean {
   return !BARE_MODIFIERS.has(event.key)
+}
+
+/**
+ * State machine for whether this layer must suppress the very next owned
+ * `input` event, because xterm's own keyboard path already wrote this
+ * keystroke's character (see `isOrdinaryCharKey` and `isThirdLevelShiftKey`).
+ *
+ * This exists as pure, tested state because two earlier, less careful
+ * attempts at the same idea got the event ordering wrong — most recently a
+ * plain boolean cleared via `queueMicrotask`, which runs at the next
+ * microtask checkpoint (JS stack empty), and that checkpoint happens BEFORE
+ * the browser's default action for the keydown — the action that produces
+ * `beforeinput`/`input` — ever runs. So the flag was always clear again by
+ * the time the `input` listener read it, silently undoing both Space's fix
+ * and Option/AltGr's. A `setTimeout(…, 0)` callback, by contrast, is a task,
+ * and tasks run after a pending default action's own task — but the
+ * dependency on wall-clock ordering is exactly the kind of thing that
+ * "obviously works" until a browser's internals change. `keyup` is not a
+ * timer at all: it is the one event guaranteed to fire strictly after
+ * `input` for the same physical keystroke (default action, if any, is
+ * processed before the key is released), so it is the mechanism used here.
+ *
+ * The event order one keystroke produces:
+ *
+ *   keydown -> [ browser default action, maybe -> beforeinput -> input ] -> keyup
+ *
+ * `armed` must survive from the keydown that sets it until whichever comes
+ * first for THAT keystroke — the `input` it was armed for (consumed, see
+ * `shouldSuppressInput`), or, if xterm cancelled the default and no `input`
+ * ever comes (an ordinary letter, most of the time), the `keyup` that ends
+ * it — and must never survive past that point: a later, keyboard-less
+ * `insertText` (Dictation, the Emoji & Symbols picker) has no keydown of its
+ * own and must never be swallowed by a stale arm left over from the previous
+ * real keystroke.
+ */
+export type SuppressState = 'idle' | 'armed'
+
+export type SuppressEvent = { type: 'keydown'; owns: boolean } | { type: 'input' } | { type: 'keyup' }
+
+/**
+ * Advances the state machine. Every transition happens to be fully
+ * determined by the incoming event alone (a `keydown` always sets the state
+ * fresh; `input` and `keyup` always clear it) — `state` is part of the
+ * signature anyway to keep this read as the reducer it is, and because a
+ * future transition might need it even though none currently do.
+ */
+export function nextSuppressState(_state: SuppressState, event: SuppressEvent): SuppressState {
+  switch (event.type) {
+    case 'keydown':
+      return event.owns ? 'armed' : 'idle'
+    case 'input':
+    case 'keyup':
+      return 'idle'
+  }
+}
+
+/** True when an owned `input` event arriving right now must be swallowed. */
+export function shouldSuppressInput(state: SuppressState): boolean {
+  return state === 'armed'
 }

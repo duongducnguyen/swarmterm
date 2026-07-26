@@ -7,7 +7,10 @@ import {
   isOrdinaryCharKey,
   isThirdLevelShiftKey,
   ownsInputEvent,
-  breaksSegment
+  breaksSegment,
+  nextSuppressState,
+  shouldSuppressInput,
+  type SuppressState
 } from './terminal-input-client'
 
 /** A minimal KeyboardEvent stand-in — only the fields these functions read. */
@@ -226,9 +229,9 @@ describe('isOrdinaryCharKey', () => {
 })
 
 describe('isThirdLevelShiftKey', () => {
-  const mac = { isMac: true, isWindows: false }
-  const win = { isMac: false, isWindows: true }
-  const linux = { isMac: false, isWindows: false }
+  const mac = { isMac: true, isWindows: false, macOptionIsMeta: false }
+  const win = { isMac: false, isWindows: true, macOptionIsMeta: false }
+  const linux = { isMac: false, isWindows: false, macOptionIsMeta: false }
 
   const shiftEvent = (
     mods: Partial<{
@@ -289,6 +292,16 @@ describe('isThirdLevelShiftKey', () => {
   it('treats a falsy keyCode as passing the gate, matching the literal xterm formula', () => {
     expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, keyCode: 0 }), mac)).toBe(true)
   })
+
+  it('refuses Option+letter when macOptionIsMeta is enabled — Option is a real modifier there, not a shift', () => {
+    // This app never sets macOptionIsMeta (see the `new Terminal({...})` call
+    // in terminal-registry.ts), so this is a hypothetical today — but the
+    // predicate takes the live option rather than assuming its default so it
+    // can't silently drift out of sync if that ever changes.
+    expect(
+      isThirdLevelShiftKey(shiftEvent({ altKey: true }), { ...mac, macOptionIsMeta: true })
+    ).toBe(false)
+  })
 })
 
 describe('ownsInputEvent', () => {
@@ -335,5 +348,61 @@ describe('breaksSegment', () => {
     for (const key of ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph']) {
       expect(breaksSegment({ key }), key).toBe(false)
     }
+  })
+})
+
+describe('nextSuppressState / shouldSuppressInput', () => {
+  // The physical event order this state machine depends on, for a single
+  // keystroke: keydown -> [ browser default action, maybe -> beforeinput ->
+  // input ] -> keyup. Getting this wrong twice already (a plain boolean
+  // cleared on a `queueMicrotask`, which runs BEFORE the default action that
+  // produces `input`, not after) is why the transition table is pure and
+  // tested here rather than inlined as a mutable flag in terminal-registry.ts.
+
+  it('suppresses the input event a keydown it owns produces, then stops suppressing', () => {
+    let state: SuppressState = 'idle'
+    state = nextSuppressState(state, { type: 'keydown', owns: true })
+    expect(shouldSuppressInput(state)).toBe(true)
+    state = nextSuppressState(state, { type: 'input' })
+    expect(shouldSuppressInput(state)).toBe(false)
+  })
+
+  it('does not suppress an input once keyup has closed out an armed, unconsumed keydown', () => {
+    // An ordinary letter: xterm cancels its own default, so no `input` ever
+    // follows THIS keydown — keyup ends the segment instead. A later,
+    // unrelated `input` (Dictation, the Emoji & Symbols picker) must not be
+    // swallowed just because the last real keystroke happened to be one this
+    // layer would otherwise have owned.
+    let state: SuppressState = 'idle'
+    state = nextSuppressState(state, { type: 'keydown', owns: true })
+    state = nextSuppressState(state, { type: 'keyup' })
+    expect(shouldSuppressInput(state)).toBe(false)
+  })
+
+  it('never arms for a keydown it does not own, so a later bare input is never suppressed', () => {
+    let state: SuppressState = 'idle'
+    state = nextSuppressState(state, { type: 'keydown', owns: false })
+    expect(shouldSuppressInput(state)).toBe(false)
+  })
+
+  it('lets a later keydown override an earlier one that was never consumed or expired', () => {
+    let state: SuppressState = 'idle'
+    state = nextSuppressState(state, { type: 'keydown', owns: true })
+    state = nextSuppressState(state, { type: 'keydown', owns: false })
+    expect(shouldSuppressInput(state)).toBe(false)
+  })
+
+  it('suppresses independently across repeated keydown/input pairs, as key auto-repeat produces', () => {
+    let state: SuppressState = 'idle'
+    for (let i = 0; i < 3; i++) {
+      state = nextSuppressState(state, { type: 'keydown', owns: true })
+      expect(shouldSuppressInput(state)).toBe(true)
+      state = nextSuppressState(state, { type: 'input' })
+      expect(shouldSuppressInput(state)).toBe(false)
+    }
+  })
+
+  it('never suppresses with nothing armed — the baseline for every keyboard-less insertText', () => {
+    expect(shouldSuppressInput('idle')).toBe(false)
   })
 })
