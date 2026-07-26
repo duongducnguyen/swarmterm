@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // "lib" is ahead of "target" on purpose: ES2022 is needed only for
+    // Intl.Segmenter's type declarations (terminal-input-client.ts's
+    // grapheme counting) — target stays ES2020 for the emitted syntax, and
+    // the type-only lib bump doesn't change runtime behavior or output.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 
