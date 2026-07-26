@@ -5,6 +5,7 @@ import {
   ownsKeydown,
   ownsMultiCharKey,
   isOrdinaryCharKey,
+  isThirdLevelShiftKey,
   ownsInputEvent,
   breaksSegment
 } from './terminal-input-client'
@@ -50,7 +51,10 @@ describe('diffToEdit', () => {
     expect(diffToEdit('ba', `b${nfd}`)).toEqual({ deletions: 1, insert: nfd })
   })
 
-  it('counts an astral emoji as one grapheme', () => {
+  it('counts an astral emoji as one unit despite being a surrogate pair', () => {
+    // Unlike the NFD case above, 😀 is a single codepoint — this shows graphemes
+    // agree with codepoints here, not that they differ from them. The real
+    // codepoints-vs-graphemes distinction is the NFD "ạ" test above.
     expect(diffToEdit('hi😀', 'hi')).toEqual({ deletions: 1, insert: '' })
     expect(diffToEdit('hi', 'hi😀')).toEqual({ deletions: 0, insert: '😀' })
   })
@@ -90,6 +94,8 @@ describe('ownsKeydown', () => {
 
   it('leaves everything alone while a composition is active', () => {
     expect(ownsKeydown({ keyCode: 229, isComposing: true })).toBe(false)
+    // isComposing is checked before keyCode, so it wins regardless of keyCode.
+    expect(ownsKeydown({ keyCode: 65, isComposing: true })).toBe(false)
   })
 })
 
@@ -216,6 +222,72 @@ describe('isOrdinaryCharKey', () => {
   it('refuses a multi-character key — that case belongs to ownsMultiCharKey', () => {
     expect(isOrdinaryCharKey(key('Enter'))).toBe(false)
     expect(isOrdinaryCharKey(key('ạn'))).toBe(false)
+  })
+})
+
+describe('isThirdLevelShiftKey', () => {
+  const mac = { isMac: true, isWindows: false }
+  const win = { isMac: false, isWindows: true }
+  const linux = { isMac: false, isWindows: false }
+
+  const shiftEvent = (
+    mods: Partial<{
+      altKey: boolean
+      ctrlKey: boolean
+      metaKey: boolean
+      keyCode: number
+      altGraph: boolean
+    }> = {}
+  ) => ({
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    keyCode: 79, // 'O'
+    altGraph: false,
+    ...mods
+  })
+
+  it('owns Option+letter on macOS — repro: US layout, Option+O must send "ø", not "øø"', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true }), mac)).toBe(true)
+  })
+
+  it('owns AltGr+letter on Windows via the ctrlKey+altKey chord AltGr synthesises', () => {
+    // Repro: German layout, AltGr+Q must send "@", not "@@".
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, ctrlKey: true, keyCode: 81 }), win)).toBe(
+      true
+    )
+  })
+
+  it('owns AltGr reported via getModifierState("AltGraph"), independent of altKey/ctrlKey', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altGraph: true }), win)).toBe(true)
+  })
+
+  it('refuses plain Alt on Windows — that is not AltGr', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true }), win)).toBe(false)
+  })
+
+  it('refuses Option combined with Ctrl or Cmd on macOS — those are chords, not third-level shift', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, ctrlKey: true }), mac)).toBe(false)
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, metaKey: true }), mac)).toBe(false)
+  })
+
+  it('refuses Option/Alt entirely off macOS and Windows', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true }), linux)).toBe(false)
+  })
+
+  it('refuses when nothing is held', () => {
+    expect(isThirdLevelShiftKey(shiftEvent(), mac)).toBe(false)
+    expect(isThirdLevelShiftKey(shiftEvent(), win)).toBe(false)
+  })
+
+  it('respects the keyCode > 47 gate _keyDown itself applies at the keydown stage', () => {
+    // Below 48 the printable-key gate this mirrors does not clear even when
+    // the modifier shape matches — Space stays isOrdinaryCharKey's case.
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, keyCode: 32 }), mac)).toBe(false)
+  })
+
+  it('treats a falsy keyCode as passing the gate, matching the literal xterm formula', () => {
+    expect(isThirdLevelShiftKey(shiftEvent({ altKey: true, keyCode: 0 }), mac)).toBe(true)
   })
 })
 

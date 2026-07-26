@@ -11,6 +11,7 @@ import { resolveBroadcastTargets } from '@/lib/broadcast-input'
 import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
+import { isWindowsPlatform } from '@/lib/platform'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
 import {
   isDragNotClick,
@@ -35,6 +36,7 @@ import {
   diffToEdit,
   encodeEdit,
   isOrdinaryCharKey,
+  isThirdLevelShiftKey,
   ownsInputEvent,
   ownsKeydown,
   ownsMultiCharKey
@@ -114,6 +116,9 @@ interface Entry {
    * `respawnTerminal`/`retryTerminal` replace the pty under the same pane.
    * Left stale, the next real keystroke diffs against committed text the pty
    * no longer has and sends deletions for characters the new pty never saw.
+   * Composition-safe: the textarea itself is left untouched if a composition
+   * happens to be open when this is called, since none of these three
+   * callers has any way to know that.
    */
   resetInputSegment: () => void
 }
@@ -240,6 +245,13 @@ function getOrCreate(id: string): Entry {
   }
   term.onData(sendInput)
 
+  // Hoisted above the input adapter below (which needs them for
+  // `isThirdLevelShiftKey`) as well as the clipboard/link handling further
+  // down (which already needed `isMac`) — one platform read per terminal,
+  // not one per keystroke.
+  const isMac = isMacPlatform()
+  const isWindows = isWindowsPlatform()
+
   // Text input the macOS way. A native terminal is handed whole strings by
   // NSTextInputClient; in a webview the same insertion only shows up as a
   // change to xterm's hidden textarea, and xterm's keyboard path carries just a
@@ -252,15 +264,33 @@ function getOrCreate(id: string): Entry {
   // registration order — only an ancestor can see the event first.
   let committed = ''
 
-  // Armed by the keydown listener when `isOrdinaryCharKey` says xterm's own
-  // path — `_keyDown`'s cancel-and-send, or `_keyPress`'s single-char
-  // fallback for the one key `_keyDown` skips (Space) — is already the
+  // Armed by the keydown listener when `isOrdinaryCharKey` or
+  // `isThirdLevelShiftKey` says xterm's own path — `_keyDown`'s cancel-and-
+  // send, or `_keyPress`'s single-char fallback for a key `_keyDown` leaves
+  // alone (Space; Option/AltGr chords, whose own `_isThirdLevelShift` check
+  // makes `_keyDown` bail before it ever reaches `cancel()`) — is already the
   // complete, correct write for this keystroke. If an `input` event shows up
-  // anyway (guaranteed for Space; see `isOrdinaryCharKey`) it must be
-  // swallowed here, not diffed and sent a second time. Reset at the top of
-  // every keydown so a stale `true` can never survive to suppress an
-  // unrelated later event.
+  // anyway (guaranteed for Space, and for Option/AltGr since nothing
+  // prevents their keydown either) it must be swallowed here, not diffed and
+  // sent a second time.
+  //
+  // Reset at the top of every keydown so a stale `true` can't survive to
+  // suppress a later keydown's event — but an ordinary letter's `_keyDown`
+  // cancels its default, so no `input` ever follows to consume the flag that
+  // arms for it, and it would otherwise stay armed indefinitely: a
+  // keyboard-less `insertText` arriving later from Dictation or the Emoji &
+  // Symbols picker would then be wrongly swallowed. The `input` event a
+  // keystroke's own default action produces is dispatched synchronously,
+  // before this task yields to the microtask queue, so clearing on a
+  // microtask bounds the suppression to exactly the keystroke that armed it.
   let suppressNextInput = false
+
+  // True from `compositionstart` until the deferred read in `compositionend`
+  // (below) resolves. Spans every point at which this layer must not mutate
+  // the textarea or trust `term.textarea.value` — whether from a keydown's
+  // `resetSegment`, an `input` event's diff, or an external trigger like
+  // paste/respawn/retry racing in from entirely outside any event.
+  let compositionOpen = false
 
   // Discards the open segment without touching the textarea. The only caller
   // is compositionstart (see below) — composition is xterm's alone, and this
@@ -272,15 +302,18 @@ function getOrCreate(id: string): Entry {
   // Restarts the segment AND clears the textarea. For most keys left to xterm
   // it cancels its own default handling entirely, so the textarea never
   // actually changes and this clear is just bookkeeping ahead of that — but
-  // Space is the exception (see `isOrdinaryCharKey`), and diffing against
-  // stale text there would send corrections for text the shell no longer has.
-  // Also reused as `Entry.resetInputSegment` (assigned below) for
-  // paste/respawn/retry, which move the pty line from entirely outside this
-  // textarea's `input` event and so need the same invalidation. Never call
-  // this from a composition handler — see `resetSegmentBaseline`.
+  // Space and Option/AltGr chords are exceptions (see `isOrdinaryCharKey` and
+  // `isThirdLevelShiftKey`), and diffing against stale text there would send
+  // corrections for text the shell no longer has. Also reused as
+  // `Entry.resetInputSegment` (assigned below) for paste/respawn/retry, which
+  // move the pty line from entirely outside this textarea's `input` event and
+  // so need the same invalidation — including, for a file drop mid-
+  // composition, the same "never touch the textarea while composing" rule
+  // `compositionOpen` enforces below, since none of those three callers have
+  // any way to know a composition happens to be open when they're called.
   const resetSegment = (): void => {
     resetSegmentBaseline()
-    if (term.textarea) term.textarea.value = ''
+    if (!compositionOpen && term.textarea) term.textarea.value = ''
   }
 
   host.addEventListener(
@@ -311,7 +344,23 @@ function getOrCreate(id: string): Entry {
       }
       if (breaksSegment(event)) {
         resetSegment()
-        suppressNextInput = isOrdinaryCharKey(event)
+        // Built explicitly, not spread: KeyboardEvent's fields are inherited
+        // prototype getters, not own properties, so `{ ...event }` silently
+        // drops them all.
+        const shiftEvent = {
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          keyCode: event.keyCode,
+          altGraph: event.getModifierState('AltGraph')
+        }
+        suppressNextInput =
+          isOrdinaryCharKey(event) || isThirdLevelShiftKey(shiftEvent, { isMac, isWindows })
+        if (suppressNextInput) {
+          queueMicrotask(() => {
+            suppressNextInput = false
+          })
+        }
       }
     },
     true
@@ -324,14 +373,22 @@ function getOrCreate(id: string): Entry {
       if (!ownsInputEvent(inputEvent)) return
       event.stopPropagation()
 
+      if (compositionOpen) {
+        // A leftover of the composition that just ended: xterm's own
+        // deferred send (see the `compositionend` listener below) is about
+        // to handle the real commit on the same tick this resolves on.
+        // Diffing this now would read `committed` before that tick sets it.
+        return
+      }
+
       if (suppressNextInput) {
-        // xterm's own keydown/keypress path already sent this ordinary
-        // character correctly (see `isOrdinaryCharKey`) — this `input` event
-        // is just the browser's default text insertion running alongside it,
-        // which nothing cancelled. Swallow it rather than diffing a second,
-        // possibly corrupted copy: WebKit substitutes U+00A0 NBSP for a bare
-        // space bar press in the textarea, and the pty must get the real
-        // U+0020 xterm already sent, not a second, wrong byte.
+        // xterm's own keydown/keypress path already sent this character
+        // correctly (see `isOrdinaryCharKey` / `isThirdLevelShiftKey`) — this
+        // `input` event is just the browser's default text insertion running
+        // alongside it, which nothing cancelled. Swallow it rather than
+        // diffing a second, possibly corrupted copy: WebKit substitutes
+        // U+00A0 NBSP for a bare space bar press in the textarea, and the pty
+        // must get the real byte xterm already sent, not a second, wrong one.
         suppressNextInput = false
         resetSegment()
         return
@@ -345,6 +402,17 @@ function getOrCreate(id: string): Entry {
     true
   )
 
+  // xterm's own `_handleTextAreaBlur` clears the textarea on focus loss
+  // (`this.textarea.value = ""`), same as this layer's `resetSegment` does —
+  // so mirroring it here on `host` (a click into another pane's header, a
+  // workspace switch, a split collapse that re-appends `host` to a new
+  // parent) introduces no new risk, only closes a gap: without it `committed`
+  // keeps describing a segment the textarea has already lost, and the first
+  // keystroke after refocusing is diffed against it. Concretely: type "bạn",
+  // click away and back, type "m" — `diffToEdit('bạn', 'm')` would erase all
+  // three characters the shell already has before "m" ever lands.
+  host.addEventListener('blur', () => resetSegment(), true)
+
   // Composition belongs to xterm end to end — including the textarea itself.
   // xterm's own compositionstart/update/end listeners are bound WITHOUT
   // capture (bubble phase; see CompositionHelper), so this capture-phase
@@ -353,14 +421,37 @@ function getOrCreate(id: string): Entry {
   // `.value` here — even to clear it — changes what that read sees and is
   // exactly the kind of mutation-during-composition WebKit responds to by
   // aborting the composition outright. So only the baseline resets; the
-  // textarea is left for xterm to read and drive. The same "adopt what xterm
-  // leaves rather than overwrite it" argument the compositionend handler below
-  // already makes applies here too — it just applies one event earlier.
-  host.addEventListener('compositionstart', () => resetSegmentBaseline(), true)
+  // textarea is left for xterm to read and drive.
+  host.addEventListener(
+    'compositionstart',
+    () => {
+      compositionOpen = true
+      resetSegmentBaseline()
+    },
+    true
+  )
   host.addEventListener(
     'compositionend',
     () => {
-      committed = term.textarea?.value ?? ''
+      // xterm's own CompositionHelper explicitly refuses to read the textarea
+      // synchronously here — its comment: composition events fire before the
+      // textarea changes on most browsers — and defers the read (and its own
+      // send) to `setTimeout(…, 0)`. Reading `term.textarea.value` right now
+      // would risk capturing a stale, pre-commit value on exactly the same
+      // browsers that comment is about; mirror xterm's own timing rather than
+      // guess at something better. `compositionOpen` stays true until this
+      // tick resolves, so the `input` listener above ignores any leftover
+      // `input` event xterm's own deferred send is about to also handle —
+      // without that, WKWebView delivering the post-commit `input` as
+      // `inputType: "insertText"` with `isComposing: false` would let this
+      // layer diff a stale `committed` and send the composed text a second
+      // time, alongside xterm's own pending send. CJK cannot be verified on
+      // this machine, so matching xterm's own mechanism exactly is the goal,
+      // not a bespoke alternative.
+      setTimeout(() => {
+        compositionOpen = false
+        committed = term.textarea?.value ?? ''
+      }, 0)
     },
     true
   )
@@ -372,7 +463,6 @@ function getOrCreate(id: string): Entry {
   // which xterm pastes into the pty a second time (double-paste). So every
   // handled action also calls preventDefault(). Ctrl+C with no selection
   // returns true so the shell still receives SIGINT.
-  const isMac = isMacPlatform()
   const linkDeps = { findAvailableEditor, openInEditor, revealInFileManager }
 
   // Record where each press began. xterm's Linkifier already refuses a mouseup on

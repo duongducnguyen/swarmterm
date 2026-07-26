@@ -207,6 +207,44 @@ export function isOrdinaryCharKey(event: {
 }
 
 /**
+ * True for the modifier shape xterm's own `_isThirdLevelShift` recognises as
+ * "this chord types a character, not a shortcut": Option+key on macOS (with
+ * `macOptionIsMeta` false — this app's default, and the only value it ever
+ * sets), or AltGr on Windows, reported either as Ctrl+Alt together or as a
+ * distinct `getModifierState("AltGraph")`. Verified against
+ * @xterm/xterm 6.0.0: `_keyDown` calls `_isThirdLevelShift` first and
+ * returns immediately when it is true — BEFORE the `if (result.cancel)
+ * this.cancel(event, true)` line — so the keydown is never preventDefaulted.
+ * `_keyPress` then sends the character (its own `this.cancel(ev)` call is a
+ * no-op: `cancelEvents` defaults to `false` and this app never overrides it).
+ * The browser's un-prevented default text insertion still fires an `input`
+ * event, and this layer must swallow it exactly as it does for
+ * `isOrdinaryCharKey` — US layout Option+O must reach the pty as "ø", not
+ * "øø"; German layout AltGr+Q as "@", not "@@".
+ *
+ * The `keyCode > 47` gate matches `_isThirdLevelShift`'s own keydown-time
+ * formula exactly (its keypress-time formula omits it) — mirroring
+ * `_keyDown`'s literal decision boundary rather than assuming "a chord never
+ * produces text", which is false for this specific chord shape.
+ */
+export function isThirdLevelShiftKey(
+  event: {
+    altKey: boolean
+    ctrlKey: boolean
+    metaKey: boolean
+    keyCode: number
+    altGraph: boolean
+  },
+  platform: { isMac: boolean; isWindows: boolean }
+): boolean {
+  const shift =
+    (platform.isMac && event.altKey && !event.ctrlKey && !event.metaKey) ||
+    (platform.isWindows && event.altKey && event.ctrlKey && !event.metaKey) ||
+    (platform.isWindows && event.altGraph)
+  return shift && (!event.keyCode || event.keyCode > 47)
+}
+
+/**
  * `input` event `inputType` values this layer treats as the user typing, and
  * therefore diffs the textarea for. `insertText` is a plain keystroke.
  * `insertReplacementText` is what WKWebView delivers for Input Method Kit's
