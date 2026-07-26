@@ -31,6 +31,13 @@ import {
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { imeTextFromKeyEvent } from '@/lib/ime-input'
+import {
+  breaksSegment,
+  diffToEdit,
+  encodeEdit,
+  ownsInputEvent,
+  ownsKeydown
+} from '@/lib/terminal-input-client'
 
 export type { TerminalStatus }
 
@@ -219,6 +226,68 @@ function getOrCreate(id: string): Entry {
     for (const target of targets) void writeTerminal(target, data)
   }
   term.onData(sendInput)
+
+  // Text input the macOS way. A native terminal is handed whole strings by
+  // NSTextInputClient; in a webview the same insertion only shows up as a
+  // change to xterm's hidden textarea, and xterm's keyboard path carries just a
+  // subset of those through. So the textarea is treated as the input client:
+  // `committed` is what this pane has already written to the pty for the
+  // current segment, and every change to the textarea is reconciled against it.
+  //
+  // Listeners sit on `host`, not on the textarea, because xterm's own capture
+  // listeners are registered first and same-element capture order is
+  // registration order — only an ancestor can see the event first.
+  let committed = ''
+
+  // Restarts the segment. Clearing the textarea matters: xterm cancels every
+  // key it handles, so after (say) a real Backspace the pty line has moved but
+  // the textarea still holds the old word. Diffing against that would send
+  // corrections for text the shell no longer has.
+  const resetSegment = (): void => {
+    committed = ''
+    if (term.textarea) term.textarea.value = ''
+  }
+
+  host.addEventListener(
+    'keydown',
+    (event) => {
+      if (ownsKeydown(event)) {
+        // Keep it away from CompositionHelper, whose own textarea diff would
+        // send a second, wrong copy of everything below.
+        event.stopPropagation()
+        return
+      }
+      if (!event.isComposing && breaksSegment(event)) resetSegment()
+    },
+    true
+  )
+
+  host.addEventListener(
+    'input',
+    (event) => {
+      const inputEvent = event as InputEvent
+      if (!ownsInputEvent(inputEvent)) return
+      event.stopPropagation()
+
+      const next = term.textarea?.value ?? ''
+      const data = encodeEdit(diffToEdit(committed, next))
+      committed = next
+      if (data) sendInput(data)
+    },
+    true
+  )
+
+  // Composition belongs to xterm end to end. Adopt whatever it left in the
+  // textarea as the new baseline rather than clearing it — clearing would race
+  // xterm's setTimeout-based finalize and swallow the composed text.
+  host.addEventListener('compositionstart', () => resetSegment(), true)
+  host.addEventListener(
+    'compositionend',
+    () => {
+      committed = term.textarea?.value ?? ''
+    },
+    true
+  )
 
   // Match VS Code: Ctrl+C copies the selection (Cmd+C on mac), Ctrl+V pastes.
   // Returning false stops xterm from forwarding the key to the pty, but does
