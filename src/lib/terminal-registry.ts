@@ -30,13 +30,14 @@ import {
 } from '@/tauri/links'
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
-import { imeTextFromKeyEvent } from '@/lib/ime-input'
 import {
   breaksSegment,
   diffToEdit,
   encodeEdit,
+  isOrdinaryCharKey,
   ownsInputEvent,
-  ownsKeydown
+  ownsKeydown,
+  ownsMultiCharKey
 } from '@/lib/terminal-input-client'
 
 export type { TerminalStatus }
@@ -251,6 +252,16 @@ function getOrCreate(id: string): Entry {
   // registration order — only an ancestor can see the event first.
   let committed = ''
 
+  // Armed by the keydown listener when `isOrdinaryCharKey` says xterm's own
+  // path — `_keyDown`'s cancel-and-send, or `_keyPress`'s single-char
+  // fallback for the one key `_keyDown` skips (Space) — is already the
+  // complete, correct write for this keystroke. If an `input` event shows up
+  // anyway (guaranteed for Space; see `isOrdinaryCharKey`) it must be
+  // swallowed here, not diffed and sent a second time. Reset at the top of
+  // every keydown so a stale `true` can never survive to suppress an
+  // unrelated later event.
+  let suppressNextInput = false
+
   // Discards the open segment without touching the textarea. The only caller
   // is compositionstart (see below) — composition is xterm's alone, and this
   // layer may not write to the textarea while one is active.
@@ -258,14 +269,15 @@ function getOrCreate(id: string): Entry {
     committed = ''
   }
 
-  // Restarts the segment AND clears the textarea. Clearing matters here: xterm
-  // cancels every key it handles, so after (say) a real Backspace the pty line
-  // has moved but the textarea still holds the old word, and diffing against
-  // that would send corrections for text the shell no longer has. Also reused
-  // as `Entry.resetInputSegment` (assigned below) for paste/respawn/retry,
-  // which move the pty line from entirely outside this textarea's `input`
-  // event and so need the same invalidation. Never call this from a
-  // composition handler — see `resetSegmentBaseline`.
+  // Restarts the segment AND clears the textarea. For most keys left to xterm
+  // it cancels its own default handling entirely, so the textarea never
+  // actually changes and this clear is just bookkeeping ahead of that — but
+  // Space is the exception (see `isOrdinaryCharKey`), and diffing against
+  // stale text there would send corrections for text the shell no longer has.
+  // Also reused as `Entry.resetInputSegment` (assigned below) for
+  // paste/respawn/retry, which move the pty line from entirely outside this
+  // textarea's `input` event and so need the same invalidation. Never call
+  // this from a composition handler — see `resetSegmentBaseline`.
   const resetSegment = (): void => {
     resetSegmentBaseline()
     if (term.textarea) term.textarea.value = ''
@@ -274,13 +286,33 @@ function getOrCreate(id: string): Entry {
   host.addEventListener(
     'keydown',
     (event) => {
+      suppressNextInput = false
       if (ownsKeydown(event)) {
         // Keep it away from CompositionHelper, whose own textarea diff would
         // send a second, wrong copy of everything below.
         event.stopPropagation()
         return
       }
-      if (!event.isComposing && breaksSegment(event)) resetSegment()
+      if (event.isComposing) return
+      if (ownsMultiCharKey(event)) {
+        // XKey's CGEvent mode / macOS Telex's tone application: a correction
+        // arriving as one multi-character keydown. `committed` must survive
+        // this event untouched — the browser's default text insertion is
+        // about to update the textarea, and the `input` listener below needs
+        // the pre-correction baseline to compute real deletions. (This used
+        // to be `ime-input.ts`'s job: it sent this text directly with zero
+        // deletions, which only happened to be correct for XKey, whose own
+        // real Backspace keydowns do the deleting separately — and was wrong
+        // for macOS Telex, producing "banạn" instead of "bạn". See
+        // `ownsMultiCharKey`, and the `attachCustomKeyEventHandler` callback
+        // further below, which stops xterm's own truncated echo of this same
+        // event at the `keypress` stage.)
+        return
+      }
+      if (breaksSegment(event)) {
+        resetSegment()
+        suppressNextInput = isOrdinaryCharKey(event)
+      }
     },
     true
   )
@@ -291,6 +323,19 @@ function getOrCreate(id: string): Entry {
       const inputEvent = event as InputEvent
       if (!ownsInputEvent(inputEvent)) return
       event.stopPropagation()
+
+      if (suppressNextInput) {
+        // xterm's own keydown/keypress path already sent this ordinary
+        // character correctly (see `isOrdinaryCharKey`) — this `input` event
+        // is just the browser's default text insertion running alongside it,
+        // which nothing cancelled. Swallow it rather than diffing a second,
+        // possibly corrupted copy: WebKit substitutes U+00A0 NBSP for a bare
+        // space bar press in the textarea, and the pty must get the real
+        // U+0020 xterm already sent, not a second, wrong byte.
+        suppressNextInput = false
+        resetSegment()
+        return
+      }
 
       const next = term.textarea?.value ?? ''
       const data = encodeEdit(diffToEdit(committed, next))
@@ -416,18 +461,22 @@ function getOrCreate(id: string): Entry {
     }
   })
   term.attachCustomKeyEventHandler((event) => {
-    // A bộ gõ re-inserting a corrected word delivers several characters in one
-    // keydown; xterm's keypress path can only carry the first (see ime-input.ts).
-    // Send the whole string ourselves and preventDefault() so the browser never
-    // fires the keypress/input events that would re-send a truncated copy.
-    if (event.type === 'keydown') {
-      const text = imeTextFromKeyEvent(event)
-      if (text !== null) {
-        event.preventDefault()
-        sendInput(text)
-        return false
-      }
-    }
+    // xterm calls this same callback from `_keyDown`, `_keyPress` AND `_keyUp`
+    // — not just keydown. For a multi-character correction (`ownsMultiCharKey`,
+    // shared with the `keydown` listener above) the keydown stage needs no
+    // help: `evaluateKeyboardEvent` has no branch for `key.length > 1`, so
+    // `_keyDown` already leaves it alone. But because `_keyDown` never handled
+    // it, `_keyPress` runs next and falls back to
+    // `String.fromCharCode(ev.charCode)` — a single code unit — which would
+    // truncate the correction to its first character and send that as an
+    // unwanted extra write. Returning `false` here for the matching `keypress`
+    // event stops `_keyPress` before it sends (it bails on exactly this check,
+    // before it calls `cancel()`) WITHOUT calling `preventDefault()` — so the
+    // browser's default text insertion, and the `input` event the adapter
+    // above diffs, still happens. That `input` event — not this handler — is
+    // this layer's one and only writer for these corrections.
+    if (event.type === 'keypress' && ownsMultiCharKey(event)) return false
+
     const action = decideClipboardAction(event, { hasSelection: term.hasSelection(), isMac })
     if (action === 'copy') {
       event.preventDefault()
