@@ -30,6 +30,10 @@ pub async fn start(app: AppHandle) -> Result<Arc<str>, String> {
         .set(url.clone())
         .map_err(|_| "mcp: mcp_url already set (start called twice?)".to_string())?;
 
+    // Codex reads MCP servers from config.toml at session start and cannot
+    // expand env vars in `url`, so the concrete URL is (re)written every boot.
+    config::register_codex(&app, &url);
+
     let router = server::axum_router(app.clone());
     tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, router).await {
