@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import {
+  DndContext,
+  DragOverlay,
+  pointerWithin,
+  useSensor,
+  useSensors
+} from '@dnd-kit/core'
+import {
   useAppStore,
   selectFocusedTerminalId,
   type Workspace as WorkspaceModel
@@ -11,18 +18,24 @@ import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
 import { nextSystemChromeReveal, systemChromeOffset } from '@/lib/titlebar-chrome'
 import { onFullscreenChanged } from '@/tauri/window'
-import { disposeOrphanTerminals, focusTerminal } from '@/lib/terminal-registry'
+import { disposeOrphanTerminals, focusTerminal, getTerminalCwd } from '@/lib/terminal-registry'
 import {
   describeFocusedElement,
   shouldReturnFocus,
   FOCUS_RETURN_ATTR
 } from '@/lib/terminal-focus'
+import { GuardedPointerSensor } from '@/lib/dnd-sensors'
+import { resolveDragEnd, MEMBER_DRAG_PREFIX } from '@/lib/war-room-drop'
+import { buildIntroText } from '@/lib/war-room-nudge'
+import { startWarRoomDelivery } from '@/lib/war-room-delivery'
+import { resolvePaneTitle } from '@/lib/pane-title'
+import { DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { FileDropListener } from '@/components/FileDropListener'
 import { RightPanel } from '@/components/RightPanel/RightPanel'
 import { Navbar } from '@/components/Navbar/Navbar'
 import { SettingsView } from '@/components/Settings/SettingsView'
 import { TitleBar } from '@/components/TitleBar/TitleBar'
-import { Workspace } from '@/components/Workspace/Workspace'
+import { Workspace, PaneDragGhost } from '@/components/Workspace/Workspace'
 import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
@@ -32,6 +45,8 @@ import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { useWarRoomStore } from '@/store/war-room-store'
+import { warRoomJoin, warRoomLeave, onWarRoomEvent, onWarRoomDeliver } from '@/tauri/warroom'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
@@ -69,6 +84,78 @@ export default function App(): ReactElement {
   const gitPanelOpen = useGitStore((s) => s.panelOpen)
 
   const rightPanelVisible = gitPanelOpen
+
+  // --- pane drag-and-drop: hoisted here (from Workspace.tsx) so the right
+  // panel — a sibling of the workspace, not a descendant — can host the War
+  // Room drop zone. See lib/war-room-drop.ts for the join/leave/reorder rule.
+  const reorderPane = useAppStore((s) => s.reorderPane)
+  const [draggingLeafId, setDraggingLeafId] = useState<string | null>(null)
+  // Restore the right panel exactly as it was when a drag reveals it and the
+  // drop lands elsewhere — revealing the zone must not permanently flip tabs.
+  const panelBeforeDragRef = useRef<{ open: boolean; mode: 'browser' | 'git' | 'warroom' } | null>(null)
+  const dndSensors = useSensors(
+    useSensor(GuardedPointerSensor, { activationConstraint: { distance: 5 } })
+  )
+  const activeWs = workspaces.find((w) => w.id === activeWorkspaceId)
+  const draggingLeaf =
+    draggingLeafId && !draggingLeafId.startsWith(MEMBER_DRAG_PREFIX) && activeWs
+      ? findLeaf(activeWs.layout, draggingLeafId)
+      : null
+
+  const joinWarRoom = useCallback((leafId: string): void => {
+    const st = useAppStore.getState()
+    const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
+    const leaf = ws ? findLeaf(ws.layout, leafId) : null
+    if (!ws || !leaf) return
+    const resolvedAgent = leaf.agentId ?? DEFAULT_TEMPLATE_ID
+    // 'terminal' is the plain shell template — a member, but never nudged and
+    // never an execute target (the backend enforces the latter).
+    const agentId = resolvedAgent === DEFAULT_TEMPLATE_ID ? undefined : resolvedAgent
+    const displayName = resolvePaneTitle(
+      resolvedAgent,
+      useTerminalTitleStore.getState().titles[leaf.terminalId]
+    )
+    const cwd = getTerminalCwd(leaf.terminalId) ?? leaf.cwd ?? ws.cwd
+    const peers = useWarRoomStore.getState().members
+      .filter((m) => m.terminalId !== leaf.terminalId)
+      .map((m) => m.name)
+    void warRoomJoin({ terminalId: leaf.terminalId, agentId, cwd, displayName })
+      .then(() => {
+        if (agentId) useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(peers))
+        useGitStore.getState().setMode('warroom')
+        panelBeforeDragRef.current = null // drop landed — keep the panel on War Room
+      })
+      .catch((e) => console.warn('war room join failed:', e))
+  }, [])
+
+  function handleDragStart(id: string): void {
+    setDraggingLeafId(id)
+    if (id.startsWith(MEMBER_DRAG_PREFIX)) return
+    const git = useGitStore.getState()
+    panelBeforeDragRef.current = { open: git.panelOpen, mode: git.mode }
+    git.setMode('warroom') // reveal the drop zone while the pane is in flight
+  }
+
+  function restorePanelIfNoDrop(): void {
+    const prior = panelBeforeDragRef.current
+    panelBeforeDragRef.current = null
+    if (!prior) return
+    const git = useGitStore.getState()
+    git.setMode(prior.mode === 'warroom' ? 'warroom' : prior.mode)
+    git.setPanelOpen(prior.open)
+  }
+
+  function handleDragEnd(activeId: string, overId: string | null): void {
+    setDraggingLeafId(null)
+    const action = resolveDragEnd(activeId, overId)
+    if (action.kind === 'join') {
+      joinWarRoom(action.leafId)
+      return
+    }
+    restorePanelIfNoDrop()
+    if (action.kind === 'reorder') reorderPane(action.activeLeafId, action.overLeafId)
+    else if (action.kind === 'leave') void warRoomLeave(action.terminalId)
+  }
 
   const noWorkspaces = workspaces.length === 0
   // Welcome shows when explicitly focused, or forced (uncloseable) when none exist.
@@ -295,6 +382,19 @@ export default function App(): ReactElement {
     }
   }, [])
 
+  // War Room: transcript/membership events feed the store; deliver events queue
+  // nudges/prompts typed into idle panes by the delivery wiring.
+  useEffect(() => {
+    const stopDelivery = startWarRoomDelivery()
+    const unEvent = onWarRoomEvent((e) => useWarRoomStore.getState().applyEvent(e))
+    const unDeliver = onWarRoomDeliver((d) => useWarRoomStore.getState().enqueue(d))
+    return () => {
+      stopDelivery()
+      void unEvent.then((f) => f())
+      void unDeliver.then((f) => f())
+    }
+  }, [])
+
   return (
     <div
       // translateY, not padding or a spacer: those would shrink the app's height,
@@ -330,36 +430,53 @@ export default function App(): ReactElement {
             <WorkspaceTabs onNewWorkspace={openWelcome} />
 
             <div className="relative min-h-0 flex-1 bg-canvas">
-              {/* Workspace(s) left, right panel (Preview/Git) when toggled on. */}
-              <Group
-                key={rightPanelVisible ? 'split' : 'solo'}
-                orientation="horizontal"
-                className="h-full w-full"
-                defaultLayout={rightPanelVisible ? { 'app-workspace': 70, 'app-browser': 30 } : { 'app-workspace': 100 }}
+              {/* Workspace(s) left, right panel (Preview/Git/War Room) when
+                  toggled on. DndContext lives here, above both, so a pane
+                  dragged out of the workspace can be dropped on the War Room
+                  panel sitting beside it — see lib/war-room-drop.ts. */}
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={pointerWithin}
+                onDragStart={(e) => handleDragStart(String(e.active.id))}
+                onDragEnd={(e) => handleDragEnd(String(e.active.id), e.over ? String(e.over.id) : null)}
+                onDragCancel={() => {
+                  setDraggingLeafId(null)
+                  restorePanelIfNoDrop()
+                }}
               >
-                <Panel id="app-workspace" minSize="30%" className="relative h-full w-full overflow-hidden">
-                  {workspaces.map((ws) => (
-                    <div
-                      key={ws.id}
-                      className="absolute inset-0"
-                      style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
-                    >
-                      <Workspace workspace={ws} />
-                    </div>
-                  ))}
-                </Panel>
+                <Group
+                  key={rightPanelVisible ? 'split' : 'solo'}
+                  orientation="horizontal"
+                  className="h-full w-full"
+                  defaultLayout={rightPanelVisible ? { 'app-workspace': 70, 'app-browser': 30 } : { 'app-workspace': 100 }}
+                >
+                  <Panel id="app-workspace" minSize="30%" className="relative h-full w-full overflow-hidden">
+                    {workspaces.map((ws) => (
+                      <div
+                        key={ws.id}
+                        className="absolute inset-0"
+                        style={{ display: ws.id === activeWorkspaceId ? 'block' : 'none' }}
+                      >
+                        <Workspace workspace={ws} />
+                      </div>
+                    ))}
+                  </Panel>
 
-                {rightPanelVisible && (
-                  <>
-                    <Separator
-                      className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
-                    />
-                    <Panel id="app-browser" minSize="20%" maxSize="50%" className="h-full w-full overflow-hidden">
-                      <RightPanel />
-                    </Panel>
-                  </>
-                )}
-              </Group>
+                  {rightPanelVisible && (
+                    <>
+                      <Separator
+                        className="w-1 shrink-0 cursor-col-resize bg-canvas transition-colors hover:bg-ring data-[separator]:bg-canvas"
+                      />
+                      <Panel id="app-browser" minSize="20%" maxSize="50%" className="h-full w-full overflow-hidden">
+                        <RightPanel />
+                      </Panel>
+                    </>
+                  )}
+                </Group>
+                <DragOverlay>
+                  {draggingLeaf ? <PaneDragGhost leaf={draggingLeaf} /> : null}
+                </DragOverlay>
+              </DndContext>
 
               {showWelcome && (
                 <div className="absolute inset-0 z-20 overflow-y-auto bg-canvas">

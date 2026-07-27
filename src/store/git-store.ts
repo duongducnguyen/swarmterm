@@ -14,7 +14,7 @@ export type { WorktreeInfo, ChangedFile, CommitInfo }
 
 interface GitStore {
   panelOpen: boolean
-  mode: 'browser' | 'git'
+  mode: 'browser' | 'git' | 'warroom'
   currentCwd: string
   worktrees: WorktreeInfo[]
   selectedWorktreePath: string
@@ -27,7 +27,7 @@ interface GitStore {
   loading: boolean
   error: string | null
 
-  setMode: (mode: 'browser' | 'git') => void
+  setMode: (mode: 'browser' | 'git' | 'warroom') => void
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
   selectWorktree: (path: string) => void
