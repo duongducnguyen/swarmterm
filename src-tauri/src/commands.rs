@@ -249,6 +249,12 @@ pub fn war_room_join(
     cwd: String,
     display_name: String,
 ) -> Result<(), String> {
+    // TOCTOU: this liveness check and the `war_room.join` insert below take
+    // two separate mutexes with no lock held across both, so a pane that dies
+    // in the gap between them still gets inserted as a member. Accepted: it's
+    // recoverable via the chip's ✕ / leave, and the alternative (a single
+    // lock spanning both maps) isn't worth the coupling for a rare, low-cost
+    // race — leaves a ghost member, not a stuck or corrupted state.
     if !state.terminals.lock().unwrap().contains_key(&terminal_id) {
         return Err(format!("terminal \"{terminal_id}\" is not live"));
     }

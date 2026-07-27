@@ -762,7 +762,9 @@ export function deliverPromptToTerminal(id: string, text: string): void {
   const entry = entries.get(id)
   if (!entry) return
   entry.resetInputSegment()
-  const body = entry.term.modes.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~` : text
+  // Parity with term.paste's own CRLF normalization: terminals expect CR for line breaks.
+  const normalized = text.replace(/\r?\n/g, '\r')
+  const body = entry.term.modes.bracketedPasteMode ? `\x1b[200~${normalized}\x1b[201~` : normalized
   void writeTerminal(id, `${body}\r`)
 }
 

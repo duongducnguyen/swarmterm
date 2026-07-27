@@ -30,6 +30,14 @@ export function startWarRoomDelivery(): () => void {
         // Re-check at fire time: output may have restarted, or the pane may
         // have left the room (leave drops its queue).
         if (useTerminalActivityStore.getState().active[terminalId]) return
+        // Membership re-check closes a cross-thread race: the Rust MCP worker
+        // (deliver) and the command/reader thread (leave) emit independently,
+        // so a `warroom:deliver` for a terminal that just left can be applied
+        // to the store AFTER the leave — re-creating a queue for an evicted
+        // terminal. Without this, 3s later the flush would type into a
+        // revoked (or respawned-but-never-rejoined) pane. Revocation must
+        // hold even against event reordering.
+        if (!useWarRoomStore.getState().isMember(terminalId)) return
         for (const text of useWarRoomStore.getState().takeFlush(terminalId)) {
           deliverPromptToTerminal(terminalId, text)
         }

@@ -102,11 +102,26 @@ export default function App(): ReactElement {
       ? findLeaf(activeWs.layout, draggingLeafId)
       : null
 
+  const restorePanelIfNoDrop = useCallback((): void => {
+    const prior = panelBeforeDragRef.current
+    panelBeforeDragRef.current = null
+    if (!prior) return
+    const git = useGitStore.getState()
+    git.setMode(prior.mode === 'warroom' ? 'warroom' : prior.mode)
+    git.setPanelOpen(prior.open)
+  }, [])
+
   const joinWarRoom = useCallback((leafId: string): void => {
     const st = useAppStore.getState()
     const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
     const leaf = ws ? findLeaf(ws.layout, leafId) : null
-    if (!ws || !leaf) return
+    if (!ws || !leaf) {
+      restorePanelIfNoDrop() // no target pane — don't leave the panel flipped
+      return
+    }
+    // Re-dropping a pane that's already a member must not re-enqueue the
+    // execute-shaped intro: that would burn another agent turn for nothing.
+    const alreadyMember = useWarRoomStore.getState().isMember(leaf.terminalId)
     const resolvedAgent = leaf.agentId ?? DEFAULT_TEMPLATE_ID
     // 'terminal' is the plain shell template — a member, but never nudged and
     // never an execute target (the backend enforces the latter).
@@ -121,12 +136,17 @@ export default function App(): ReactElement {
       .map((m) => m.name)
     void warRoomJoin({ terminalId: leaf.terminalId, agentId, cwd, displayName })
       .then(() => {
-        if (agentId) useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(peers))
+        if (agentId && !alreadyMember) {
+          useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(peers))
+        }
         useGitStore.getState().setMode('warroom')
         panelBeforeDragRef.current = null // drop landed — keep the panel on War Room
       })
-      .catch((e) => console.warn('war room join failed:', e))
-  }, [])
+      .catch((e) => {
+        console.warn('war room join failed:', e)
+        restorePanelIfNoDrop() // join failed — don't leave the panel flipped to War Room
+      })
+  }, [restorePanelIfNoDrop])
 
   function handleDragStart(id: string): void {
     setDraggingLeafId(id)
@@ -134,15 +154,6 @@ export default function App(): ReactElement {
     const git = useGitStore.getState()
     panelBeforeDragRef.current = { open: git.panelOpen, mode: git.mode }
     git.setMode('warroom') // reveal the drop zone while the pane is in flight
-  }
-
-  function restorePanelIfNoDrop(): void {
-    const prior = panelBeforeDragRef.current
-    panelBeforeDragRef.current = null
-    if (!prior) return
-    const git = useGitStore.getState()
-    git.setMode(prior.mode === 'warroom' ? 'warroom' : prior.mode)
-    git.setPanelOpen(prior.open)
   }
 
   function handleDragEnd(activeId: string, overId: string | null): void {

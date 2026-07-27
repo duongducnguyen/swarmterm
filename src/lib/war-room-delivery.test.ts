@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NUDGE_IDLE_MS } from './war-room-nudge'
 import { useWarRoomStore } from '@/store/war-room-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import type { WarRoomEvent } from '@/tauri/warroom'
+
+// Same shape as war-room-store.test.ts's join helper.
+const join = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
+  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', ts: seq
+})
 
 const delivered: Array<{ id: string; text: string }> = []
 vi.mock('@/lib/terminal-registry', () => ({
@@ -30,6 +36,7 @@ afterEach(() => {
 
 describe('startWarRoomDelivery', () => {
   it('flushes once after sustained idle when the pane is already quiet', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS - 1)
     expect(delivered).toHaveLength(0)
@@ -43,6 +50,7 @@ describe('startWarRoomDelivery', () => {
   })
 
   it('waits out an active pane and restarts the countdown on new output', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
     useTerminalActivityStore.getState().setActive('t1', true)
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS * 3)
@@ -59,10 +67,21 @@ describe('startWarRoomDelivery', () => {
   })
 
   it('delivers executes before the merged nudge', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'execute', content: 'task' })
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS)
     expect(delivered.map((d) => d.text)[0]).toBe('task')
     expect(delivered).toHaveLength(2)
+  })
+
+  it('drops a flush for a terminal that never joined (evicted before flush-time)', () => {
+    // No join event applied for 't1' — enqueue can still race ahead of (or
+    // arrive without) membership across the Rust MCP worker vs command/reader
+    // threads. The flush-time membership guard must bail instead of typing
+    // into a pane that isn't (or is no longer) a member.
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+    vi.advanceTimersByTime(NUDGE_IDLE_MS)
+    expect(delivered).toHaveLength(0)
   })
 })
