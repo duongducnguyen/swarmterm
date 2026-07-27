@@ -1,9 +1,10 @@
 // src/components/RightPanel/RightPanel.tsx
 import type { ReactElement } from 'react'
-import { Eye, GitBranch, RotateCw, X } from 'lucide-react'
+import { Eye, GitBranch, RotateCw, Swords, X } from 'lucide-react'
 import { useGitStore } from '@/store/git-store'
 import { BrowserColumn } from '@/components/Browser/BrowserColumn'
 import { GitPanel } from '@/components/Git/GitPanel'
+import { WarRoomPanel } from '@/components/WarRoom/WarRoomPanel'
 
 function RefreshButton(): ReactElement {
   const refresh = useGitStore((s) => s.refresh)
@@ -36,6 +37,10 @@ export function RightPanel(): ReactElement {
     setMode('git')
   }
 
+  function handleWarRoomTab(): void {
+    setMode('warroom')
+  }
+
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
       {/* Mode tab strip */}
@@ -64,6 +69,18 @@ export function RightPanel(): ReactElement {
           <GitBranch className="h-3.5 w-3.5" />
           Git
         </button>
+        <button
+          onClick={handleWarRoomTab}
+          className={[
+            'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
+            mode === 'warroom'
+              ? 'border-b-2 border-[#f97316] bg-background text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          ].join(' ')}
+        >
+          <Swords className="h-3.5 w-3.5" />
+          War Room
+        </button>
         {mode === 'git' && <RefreshButton />}
         <button
           onClick={handleClose}
@@ -76,10 +93,9 @@ export function RightPanel(): ReactElement {
 
       {/* Mode content */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {mode === 'browser'
-          ? <BrowserColumn />
-          : <GitPanel />
-        }
+        {mode === 'browser' && <BrowserColumn />}
+        {mode === 'git' && <GitPanel />}
+        {mode === 'warroom' && <WarRoomPanel />}
       </div>
     </div>
   )
