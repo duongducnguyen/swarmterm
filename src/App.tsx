@@ -46,7 +46,13 @@ import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { useWarRoomStore } from '@/store/war-room-store'
-import { warRoomJoin, warRoomLeave, onWarRoomEvent, onWarRoomDeliver } from '@/tauri/warroom'
+import {
+  warRoomJoin,
+  warRoomLeave,
+  warRoomMembers,
+  onWarRoomEvent,
+  onWarRoomDeliver
+} from '@/tauri/warroom'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
@@ -346,6 +352,13 @@ export default function App(): ReactElement {
         for (const terminalId of Object.keys(titles)) {
           if (!live.has(terminalId)) clearTitle(terminalId)
         }
+        // War Room members whose terminal left every layout: the Rust
+        // auto-leave on pty death normally beats us here — this sweep is the
+        // belt-and-braces for any path that drops a pane without killing it.
+        // warRoomLeave is idempotent, so racing the backend is harmless.
+        for (const m of useWarRoomStore.getState().members) {
+          if (!live.has(m.terminalId)) void warRoomLeave(m.terminalId)
+        }
       }),
     []
   )
@@ -403,6 +416,12 @@ export default function App(): ReactElement {
     const stopDelivery = startWarRoomDelivery()
     const unEvent = onWarRoomEvent((e) => useWarRoomStore.getState().applyEvent(e))
     const unDeliver = onWarRoomDeliver((d) => useWarRoomStore.getState().enqueue(d))
+    // Membership lives Rust-side and outlives renderer reloads (dev HMR,
+    // crash-restore) — hydrate so the panel never shows an empty room while
+    // the server still routes messages.
+    void warRoomMembers()
+      .then((list) => useWarRoomStore.getState().hydrateMembers(list))
+      .catch(() => {})
     return () => {
       stopDelivery()
       void unEvent.then((f) => f())

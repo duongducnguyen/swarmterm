@@ -32,6 +32,8 @@ export function buildIntroText(peerNames: string[]): string {
   const with_ = peerNames.length > 0 ? ` with ${peerNames.join(', ')}` : ''
   return (
     `[War Room] You joined Swarmterm's War Room${with_}. ` +
+    `First call war_room.list_peers now — that confirms your connection (until then ` +
+    `peers see you as pending and cannot message you). ` +
     `Tools: war_room.list_peers (who is here), war_room.send (mode "probe" to message a peer, ` +
     `mode "execute" to hand a peer a prompt their terminal will run), war_room.read_inbox ` +
     `(read messages sent to you — you will be nudged). Coordinate through these tools and ` +

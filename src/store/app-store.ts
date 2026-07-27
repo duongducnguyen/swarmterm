@@ -90,6 +90,9 @@ export interface AppActions {
   closeWorkspace: (id: string) => void
   moveWorkspace: (fromId: string, toId: string) => void
   setFocusedLeaf: (leafId: string) => void
+  /** Jump to a terminal wherever it lives: activate its workspace AND focus
+   *  its pane. No-op for unknown ids. (War Room click-to-navigate.) */
+  revealTerminal: (terminalId: string) => void
   setDropTarget: (terminalId: string | null) => void
   splitPane: (leafId: string, direction: Direction) => void
   closePane: (leafId: string) => void
@@ -277,6 +280,19 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     set((s) =>
       mapActive(s, (w) => (findLeaf(w.layout, leafId) ? { ...w, focusedLeafId: leafId } : w))
     ),
+
+  revealTerminal: (terminalId) =>
+    set((s) => {
+      const ws = selectWorkspaceByTerminalId(s, terminalId)
+      if (!ws) return {}
+      const leaf = collectLeaves(ws.layout).find((l) => l.terminalId === terminalId)
+      if (!leaf) return {}
+      return {
+        activeWorkspaceId: ws.id,
+        welcomeFocused: false,
+        workspaces: s.workspaces.map((w) => (w.id === ws.id ? { ...w, focusedLeafId: leaf.id } : w))
+      }
+    }),
 
   setDropTarget: (terminalId) => set({ dropTargetTerminalId: terminalId }),
 

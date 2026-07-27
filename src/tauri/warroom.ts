@@ -5,8 +5,9 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 export type WarRoomMode = 'probe' | 'execute'
 
 export type WarRoomEvent =
-  | { kind: 'join'; seq: number; terminalId: string; name: string; agentId: string | null; cwd: string; ts: number }
+  | { kind: 'join'; seq: number; terminalId: string; name: string; agentId: string | null; cwd: string; connected: boolean; ts: number }
   | { kind: 'leave'; seq: number; terminalId: string; name: string; ts: number }
+  | { kind: 'connected'; seq: number; terminalId: string; name: string; ts: number }
   | {
       kind: 'message'
       seq: number
@@ -38,6 +39,17 @@ export function warRoomJoin(opts: {
 
 export const warRoomLeave = (terminalId: string): Promise<void> =>
   invoke('war_room_leave', { terminalId })
+
+/** Rust-side room snapshot — membership outlives frontend reloads. */
+export interface WarRoomMemberInfo {
+  terminalId: string
+  name: string
+  agentId: string | null
+  cwd: string
+  connected: boolean
+}
+
+export const warRoomMembers = (): Promise<WarRoomMemberInfo[]> => invoke('war_room_members')
 
 export function onWarRoomEvent(handler: (e: WarRoomEvent) => void): Promise<UnlistenFn> {
   return listen<WarRoomEvent>('warroom:event', (event) => handler(event.payload))

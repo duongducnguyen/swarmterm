@@ -853,3 +853,30 @@ describe('drop target', () => {
     expect(store.getState().dropTargetTerminalId).toBeNull()
   })
 })
+
+// --- revealTerminal -------------------------------------------------------
+
+describe('revealTerminal', () => {
+  it('activates the owning workspace and focuses the pane', () => {
+    const store = freshStore()
+    store.getState().createWorkspace({ cwd: '/one', terminalCount: 2, agentIds: panes(2) })
+    const first = activeWorkspace(store)
+    const targetLeaf = collectLeaves(first.layout)[1]
+    store.getState().createWorkspace(SINGLE_TERMINAL) // becomes active
+    expect(store.getState().activeWorkspaceId).not.toBe(first.id)
+
+    store.getState().revealTerminal(targetLeaf.terminalId)
+
+    const s = store.getState()
+    expect(s.activeWorkspaceId).toBe(first.id)
+    const ws = s.workspaces.find((w) => w.id === first.id)
+    expect(ws?.focusedLeafId).toBe(targetLeaf.id)
+  })
+
+  it('is a no-op for an unknown terminal', () => {
+    const store = storeWithWorkspace()
+    const before = store.getState().activeWorkspaceId
+    store.getState().revealTerminal('nope')
+    expect(store.getState().activeWorkspaceId).toBe(before)
+  })
+})

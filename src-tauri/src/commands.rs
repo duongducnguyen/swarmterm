@@ -275,6 +275,13 @@ pub fn war_room_join(
     Ok(())
 }
 
+/// Current room snapshot for renderer hydration (app boot / dev reload) —
+/// membership lives Rust-side and outlives frontend reloads.
+#[tauri::command]
+pub fn war_room_members(state: State<'_, AppState>) -> Vec<crate::warroom::MemberInfo> {
+    state.war_room.lock().unwrap().members_info()
+}
+
 #[tauri::command]
 pub fn war_room_leave(app: AppHandle, state: State<'_, AppState>, terminal_id: String) {
     let left = state.war_room.lock().unwrap().leave(&terminal_id, crate::warroom::now_ms());

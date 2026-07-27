@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { flushQueue, type PendingDelivery } from '@/lib/war-room-nudge'
-import type { WarRoomDeliver, WarRoomEvent } from '@/tauri/warroom'
+import type { WarRoomDeliver, WarRoomEvent, WarRoomMemberInfo } from '@/tauri/warroom'
 
 /** Bounded so a runaway agent debate can't grow renderer memory forever. */
 export const TRANSCRIPT_CAP = 500
@@ -10,6 +10,9 @@ export interface WarRoomMember {
   name: string
   agentId: string | null
   cwd: string
+  /** False until the pane's agent completes the MCP handshake (first
+   *  war_room call) — a dragged-in bare shell stays pending forever. */
+  connected: boolean
 }
 
 interface WarRoomStore {
@@ -19,6 +22,9 @@ interface WarRoomStore {
   queues: Record<string, PendingDelivery[]>
 
   applyEvent: (e: WarRoomEvent) => void
+  /** Replace members from the Rust snapshot (boot / dev-reload hydration). */
+  hydrateMembers: (list: WarRoomMemberInfo[]) => void
+  clearTranscript: () => void
   enqueue: (d: WarRoomDeliver) => void
   /** Queue the join intro as a verbatim paste (execute-shaped: full text + Enter). */
   enqueueIntro: (terminalId: string, text: string) => void
@@ -40,10 +46,19 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
           terminalId: e.terminalId,
           name: e.name,
           agentId: e.agentId,
-          cwd: e.cwd
+          cwd: e.cwd,
+          connected: e.connected
         }
         const members = [...s.members.filter((m) => m.terminalId !== e.terminalId), member]
         return { members, transcript }
+      }
+      if (e.kind === 'connected') {
+        return {
+          members: s.members.map((m) =>
+            m.terminalId === e.terminalId ? { ...m, connected: true } : m
+          ),
+          transcript
+        }
       }
       if (e.kind === 'leave') {
         const queues = { ...s.queues }
@@ -56,6 +71,19 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
       }
       return { transcript }
     }),
+
+  hydrateMembers: (list) =>
+    set({
+      members: list.map((m) => ({
+        terminalId: m.terminalId,
+        name: m.name,
+        agentId: m.agentId,
+        cwd: m.cwd,
+        connected: m.connected
+      }))
+    }),
+
+  clearTranscript: () => set({ transcript: [] }),
 
   enqueue: (d) =>
     set((s) => ({

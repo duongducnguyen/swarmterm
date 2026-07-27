@@ -6,7 +6,7 @@ import type { WarRoomEvent } from '@/tauri/warroom'
 
 // Same shape as war-room-store.test.ts's join helper.
 const join = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
-  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', ts: seq
+  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', connected: false, ts: seq
 })
 
 interface DeliveryEvent {

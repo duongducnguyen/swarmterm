@@ -3,7 +3,7 @@ import { TRANSCRIPT_CAP, useWarRoomStore } from './war-room-store'
 import type { WarRoomEvent } from '@/tauri/warroom'
 
 const join = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
-  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', ts: seq
+  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', connected: false, ts: seq
 })
 const leave = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
   kind: 'leave', seq, terminalId, name, ts: seq
@@ -64,5 +64,38 @@ describe('queues', () => {
     const s = useWarRoomStore.getState()
     s.enqueueIntro('t1', 'INTRO TEXT')
     expect(useWarRoomStore.getState().takeFlush('t1')).toEqual(['INTRO TEXT'])
+  })
+})
+
+describe('handshake + hydration + clear', () => {
+  it('join starts pending; connected event flips the flag', () => {
+    const s = useWarRoomStore.getState()
+    s.applyEvent(join('t1', 'Claude', 1))
+    expect(useWarRoomStore.getState().members[0].connected).toBe(false)
+    s.applyEvent({ kind: 'connected', seq: 2, terminalId: 't1', name: 'Claude', ts: 2 })
+    expect(useWarRoomStore.getState().members[0].connected).toBe(true)
+    expect(useWarRoomStore.getState().transcript).toHaveLength(2)
+  })
+
+  it('hydrateMembers replaces the member list from the Rust snapshot', () => {
+    const s = useWarRoomStore.getState()
+    s.applyEvent(join('stale', 'Old', 1))
+    s.hydrateMembers([
+      { terminalId: 't9', name: 'Fresh', agentId: null, cwd: '/f', connected: true }
+    ])
+    const { members } = useWarRoomStore.getState()
+    expect(members).toHaveLength(1)
+    expect(members[0]).toMatchObject({ terminalId: 't9', connected: true })
+  })
+
+  it('clearTranscript empties history but keeps members and queues', () => {
+    const s = useWarRoomStore.getState()
+    s.applyEvent(join('t1', 'Claude', 1))
+    s.enqueue({ toId: 't1', fromName: 'B', mode: 'probe', content: null })
+    s.clearTranscript()
+    const st = useWarRoomStore.getState()
+    expect(st.transcript).toHaveLength(0)
+    expect(st.members).toHaveLength(1)
+    expect(st.queues['t1']).toHaveLength(1)
   })
 })
