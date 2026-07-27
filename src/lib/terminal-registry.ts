@@ -751,6 +751,21 @@ export function pasteIntoTerminal(id: string, text: string): void {
   entry.term.paste(text)
 }
 
+/**
+ * Deliver a War Room payload straight to one pty and submit it: bracketed-paste
+ * framing when the foreground app enabled it (agent CLIs do — the text arrives
+ * as one literal block), then Enter. Deliberately NOT routed through
+ * `term.paste`/onData like pasteIntoTerminal: that path fans out to an armed
+ * broadcast group, and a room delivery must reach exactly its recipient.
+ */
+export function deliverPromptToTerminal(id: string, text: string): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  entry.resetInputSegment()
+  const body = entry.term.modes.bracketedPasteMode ? `\x1b[200~${text}\x1b[201~` : text
+  void writeTerminal(id, `${body}\r`)
+}
+
 /** Re-spawn the pty after exit/error, clearing the screen first. */
 export function retryTerminal(id: string): void {
   const entry = entries.get(id)
