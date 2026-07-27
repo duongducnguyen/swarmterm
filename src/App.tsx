@@ -25,7 +25,7 @@ import {
   FOCUS_RETURN_ATTR
 } from '@/lib/terminal-focus'
 import { GuardedPointerSensor } from '@/lib/dnd-sensors'
-import { resolveDragEnd, MEMBER_DRAG_PREFIX } from '@/lib/war-room-drop'
+import { resolveDragEnd, memberDisplayName, MEMBER_DRAG_PREFIX } from '@/lib/war-room-drop'
 import { buildIntroText } from '@/lib/war-room-nudge'
 import { startWarRoomDelivery } from '@/lib/war-room-delivery'
 import { resolvePaneTitle } from '@/lib/pane-title'
@@ -126,11 +126,15 @@ export default function App(): ReactElement {
     // 'terminal' is the plain shell template — a member, but never nudged and
     // never an execute target (the backend enforces the latter).
     const agentId = resolvedAgent === DEFAULT_TEMPLATE_ID ? undefined : resolvedAgent
-    const displayName = resolvePaneTitle(
-      resolvedAgent,
-      useTerminalTitleStore.getState().titles[leaf.terminalId]
-    )
     const cwd = getTerminalCwd(leaf.terminalId) ?? leaf.cwd ?? ws.cwd
+    // Folder-disambiguated: two joined panes running the same agent (e.g. two
+    // "Claude Code" instances) would otherwise show identical chips and
+    // "Claude Code → Claude Code" transcript rows with no way to tell them
+    // apart. Computed AFTER cwd is resolved above.
+    const displayName = memberDisplayName(
+      resolvePaneTitle(resolvedAgent, useTerminalTitleStore.getState().titles[leaf.terminalId]),
+      cwd
+    )
     const peers = useWarRoomStore.getState().members
       .filter((m) => m.terminalId !== leaf.terminalId)
       .map((m) => m.name)

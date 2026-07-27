@@ -9,21 +9,29 @@ const join = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
   kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', ts: seq
 })
 
-const delivered: Array<{ id: string; text: string }> = []
+interface DeliveryEvent {
+  kind: 'body' | 'submit'
+  id: string
+  text?: string
+}
+const events: DeliveryEvent[] = []
 vi.mock('@/lib/terminal-registry', () => ({
   deliverPromptToTerminal: (id: string, text: string) => {
-    delivered.push({ id, text })
+    events.push({ kind: 'body', id, text })
+  },
+  submitTerminalPrompt: (id: string) => {
+    events.push({ kind: 'submit', id })
   }
 }))
 
-// Import AFTER the mock so the wiring binds the mocked delivery fn.
-const { startWarRoomDelivery } = await import('./war-room-delivery')
+// Import AFTER the mock so the wiring binds the mocked delivery fns.
+const { startWarRoomDelivery, SUBMIT_DELAY_MS } = await import('./war-room-delivery')
 
 let stop: () => void
 
 beforeEach(() => {
   vi.useFakeTimers()
-  delivered.length = 0
+  events.length = 0
   useWarRoomStore.setState({ members: [], transcript: [], queues: {} })
   useTerminalActivityStore.setState({ active: {} })
   stop = startWarRoomDelivery()
@@ -35,18 +43,27 @@ afterEach(() => {
 })
 
 describe('startWarRoomDelivery', () => {
-  it('flushes once after sustained idle when the pane is already quiet', () => {
+  it('flushes once after sustained idle, then submits its Enter after SUBMIT_DELAY_MS', () => {
     useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS - 1)
-    expect(delivered).toHaveLength(0)
-    vi.advanceTimersByTime(1)
-    expect(delivered).toHaveLength(1)
-    expect(delivered[0].id).toBe('t1')
-    expect(delivered[0].text).toContain('war_room.read_inbox')
+    expect(events).toHaveLength(0)
+    // Cross the idle threshold with one tick of headroom: the payload's body
+    // write is itself a zero-delay timer scheduled from inside the idle
+    // timer's own callback, so fake timers need one more pass of the loop
+    // to run it than real timers would need.
+    vi.advanceTimersByTime(2)
+    expect(events).toHaveLength(1)
+    expect(events[0].kind).toBe('body')
+    expect(events[0].id).toBe('t1')
+    expect(events[0].text).toContain('war_room.read_inbox')
+    // Enter is a separate, later write — not glued onto the body.
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS - 1)
+    expect(events).toHaveLength(2)
+    expect(events[1]).toEqual({ kind: 'submit', id: 't1' })
     // Queue drained — no double delivery on later ticks.
     vi.advanceTimersByTime(NUDGE_IDLE_MS * 2)
-    expect(delivered).toHaveLength(1)
+    expect(events).toHaveLength(2)
   })
 
   it('waits out an active pane and restarts the countdown on new output', () => {
@@ -54,25 +71,45 @@ describe('startWarRoomDelivery', () => {
     useTerminalActivityStore.getState().setActive('t1', true)
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS * 3)
-    expect(delivered).toHaveLength(0)
+    expect(events).toHaveLength(0)
     useTerminalActivityStore.getState().setActive('t1', false)
     vi.advanceTimersByTime(NUDGE_IDLE_MS - 1)
     // A burst of output mid-countdown aborts the pending flush.
     useTerminalActivityStore.getState().setActive('t1', true)
     vi.advanceTimersByTime(NUDGE_IDLE_MS * 2)
-    expect(delivered).toHaveLength(0)
+    expect(events).toHaveLength(0)
     useTerminalActivityStore.getState().setActive('t1', false)
-    vi.advanceTimersByTime(NUDGE_IDLE_MS)
-    expect(delivered).toHaveLength(1)
+    vi.advanceTimersByTime(NUDGE_IDLE_MS + SUBMIT_DELAY_MS)
+    expect(events).toEqual([
+      { kind: 'body', id: 't1', text: expect.any(String) },
+      { kind: 'submit', id: 't1' }
+    ])
   })
 
-  it('delivers executes before the merged nudge', () => {
+  it('delivers executes before the merged nudge, fully serialized body-then-submit per payload', () => {
     useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'execute', content: 'task' })
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
-    vi.advanceTimersByTime(NUDGE_IDLE_MS)
-    expect(delivered.map((d) => d.text)[0]).toBe('task')
-    expect(delivered).toHaveLength(2)
+    vi.advanceTimersByTime(NUDGE_IDLE_MS - 1)
+    expect(events).toHaveLength(0)
+    // +1 extra tick past idle for the same reason as the previous test: the
+    // execute payload's body write is a zero-delay timer scheduled from
+    // inside the idle callback itself.
+    vi.advanceTimersByTime(2)
+    expect(events).toEqual([{ kind: 'body', id: 't1', text: 'task' }])
+    // Payload 1's body must not appear until payload 0's Enter has gone out.
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS - 1)
+    expect(events).toHaveLength(2)
+    expect(events[1]).toEqual({ kind: 'submit', id: 't1' })
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS)
+    expect(events).toHaveLength(3)
+    expect(events[2]?.kind).toBe('body')
+    expect(events[2]?.id).toBe('t1')
+    expect(events[2]?.text).toContain('war_room.read_inbox')
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS)
+    expect(events).toHaveLength(4)
+    expect(events[3]).toEqual({ kind: 'submit', id: 't1' })
+    expect(events.map((e) => e.kind)).toEqual(['body', 'submit', 'body', 'submit'])
   })
 
   it('drops a flush for a terminal that never joined (evicted before flush-time)', () => {
@@ -81,7 +118,7 @@ describe('startWarRoomDelivery', () => {
     // threads. The flush-time membership guard must bail instead of typing
     // into a pane that isn't (or is no longer) a member.
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
-    vi.advanceTimersByTime(NUDGE_IDLE_MS)
-    expect(delivered).toHaveLength(0)
+    vi.advanceTimersByTime(NUDGE_IDLE_MS + SUBMIT_DELAY_MS * 4)
+    expect(events).toHaveLength(0)
   })
 })

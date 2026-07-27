@@ -20,3 +20,24 @@ export function resolveDragEnd(activeId: string, overId: string | null): DragEnd
     return { kind: 'reorder', activeLeafId: activeId, overLeafId: overId }
   return { kind: 'none' }
 }
+
+/**
+ * Disambiguate two joined members running the same agent — two "Claude Code"
+ * panes read identically in the roster chips and in "Claude Code → Claude
+ * Code" transcript rows, with no way to tell which is which. Appending the
+ * cwd's folder basename at join time fixes both display sites for free,
+ * since they both read the stored member name.
+ *
+ * Skips the append when the basename is already present in the title (a
+ * pane titled "NotifyMe" sitting in a "NotifyMe" checkout should stay
+ * "NotifyMe", not become "NotifyMe · NotifyMe") and when the cwd has no
+ * usable segment at all (empty string, "/", or a string of only separators).
+ */
+export function memberDisplayName(baseTitle: string, cwd: string): string {
+  const basename = cwd
+    .split(/[\\/]+/)
+    .filter((segment) => segment.length > 0)
+    .pop()
+  if (!basename || baseTitle.includes(basename)) return baseTitle
+  return `${baseTitle} · ${basename}`
+}

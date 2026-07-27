@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MEMBER_DRAG_PREFIX, WAR_ROOM_DROP_ID, resolveDragEnd } from './war-room-drop'
+import { MEMBER_DRAG_PREFIX, WAR_ROOM_DROP_ID, memberDisplayName, resolveDragEnd } from './war-room-drop'
 
 describe('resolveDragEnd', () => {
   it('pane dropped on the zone joins', () => {
@@ -21,5 +21,37 @@ describe('resolveDragEnd', () => {
     expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, null)).toEqual({ kind: 'leave', terminalId: 't9' })
     expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, 'leaf-2')).toEqual({ kind: 'leave', terminalId: 't9' })
     expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, WAR_ROOM_DROP_ID)).toEqual({ kind: 'none' })
+  })
+})
+
+describe('memberDisplayName', () => {
+  it('appends the posix cwd basename', () => {
+    expect(memberDisplayName('Claude Code', '/Users/dev/projects/swarmterm')).toBe(
+      'Claude Code · swarmterm'
+    )
+  })
+
+  it('appends the windows cwd basename', () => {
+    expect(memberDisplayName('Claude Code', 'C:\\Users\\dev\\projects\\swarmterm')).toBe(
+      'Claude Code · swarmterm'
+    )
+  })
+
+  it('ignores a trailing slash', () => {
+    expect(memberDisplayName('Claude Code', '/Users/dev/projects/swarmterm/')).toBe(
+      'Claude Code · swarmterm'
+    )
+  })
+
+  it('leaves the title unchanged for a root path with no usable segment', () => {
+    expect(memberDisplayName('Claude Code', '/')).toBe('Claude Code')
+  })
+
+  it('leaves the title unchanged for an empty cwd', () => {
+    expect(memberDisplayName('Claude Code', '')).toBe('Claude Code')
+  })
+
+  it('skips the append when the title already names the folder', () => {
+    expect(memberDisplayName('NotifyMe', '/Users/dev/projects/NotifyMe')).toBe('NotifyMe')
   })
 })

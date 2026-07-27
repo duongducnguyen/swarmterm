@@ -752,11 +752,20 @@ export function pasteIntoTerminal(id: string, text: string): void {
 }
 
 /**
- * Deliver a War Room payload straight to one pty and submit it: bracketed-paste
- * framing when the foreground app enabled it (agent CLIs do — the text arrives
- * as one literal block), then Enter. Deliberately NOT routed through
- * `term.paste`/onData like pasteIntoTerminal: that path fans out to an armed
- * broadcast group, and a room delivery must reach exactly its recipient.
+ * Deliver a War Room payload's BODY to one pty: bracketed-paste framing when
+ * the foreground app enabled it (agent CLIs do — the text arrives as one
+ * literal block). Deliberately NOT routed through `term.paste`/onData like
+ * pasteIntoTerminal: that path fans out to an armed broadcast group, and a
+ * room delivery must reach exactly its recipient.
+ *
+ * Writes ONLY the body — no trailing Enter. Agent TUIs (Claude Code
+ * included) deliberately ignore an Enter that arrives in the same stdin
+ * flush as a bracketed paste — that's the guard that stops a pasted body's
+ * own embedded newlines from self-submitting the paste early — so a `\r`
+ * glued directly onto the paste's closing marker is swallowed by that guard
+ * and the prompt is left sitting, unsubmitted, in the composer. The Enter
+ * must arrive as its own later write instead: see `submitTerminalPrompt`,
+ * which the War Room delivery scheduler calls after a delay.
  */
 export function deliverPromptToTerminal(id: string, text: string): void {
   const entry = entries.get(id)
@@ -765,7 +774,23 @@ export function deliverPromptToTerminal(id: string, text: string): void {
   // Parity with term.paste's own CRLF normalization: terminals expect CR for line breaks.
   const normalized = text.replace(/\r?\n/g, '\r')
   const body = entry.term.modes.bracketedPasteMode ? `\x1b[200~${normalized}\x1b[201~` : normalized
-  void writeTerminal(id, `${body}\r`)
+  void writeTerminal(id, body)
+}
+
+/**
+ * Submit a War Room prompt previously written by `deliverPromptToTerminal`:
+ * writes just Enter, as its own stdin flush arriving later so the TUI treats
+ * it as a real keypress rather than part of the paste (see that function's
+ * doc comment for why a glued CR gets eaten). No-op for an unknown or
+ * since-disposed terminal, same guard as every other entry point here. No
+ * `resetInputSegment` call — nothing has been typed into this pane's
+ * textarea between the body write and this call for that baseline to need
+ * invalidating.
+ */
+export function submitTerminalPrompt(id: string): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  void writeTerminal(id, '\r')
 }
 
 /** Re-spawn the pty after exit/error, clearing the screen first. */
