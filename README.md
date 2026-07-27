@@ -38,6 +38,9 @@ tính năng iteration 1 được giữ nguyên.
   `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
   không xoá worktree.
 
+- **War Room** — kéo pane vào tab War Room để các agent nhắn tin/tranh luận/giao
+  việc cho nhau qua MCP; kéo ra để thu hồi quyền.
+
 - **Link trong terminal** — URL bấm thẳng một cái là mở bằng trình duyệt mặc
   định của hệ điều hành (cột web-preview trong app dành riêng cho MCP
   `browser.open_preview`, tức trang do agent chủ động mở); đường dẫn file bấm
@@ -242,6 +245,11 @@ Sau `npm run tauri dev`:
       không bị cướp. Pane chưa có preview → empty state, gõ URL vào address
       bar tạo preview cho đúng pane. Agent gọi tool lần 2 → điều hướng,
       back/forward hoạt động, không sinh thêm gì.
+- [ ] **War Room:** Kéo 2 pane agent vào tab War Room → chip thành viên hiện, intro được gõ vào từng pane.
+- [ ] **War Room — probe:** Agent A gửi probe → transcript hiện tin, agent B (đang idle) nhận nudge và đọc inbox.
+- [ ] **War Room — execute:** Agent A gửi execute → prompt chạy trong pane B, transcript đánh dấu màu cam.
+- [ ] **War Room — revocation:** Kéo chip ra / bấm ✕ → tool call tiếp theo từ pane đó bị từ chối "not in the War Room".
+- [ ] **War Room — PTY death:** Đóng pane thành viên → transcript ghi rời phòng, list_peers không còn ghost.
 
 ## Giới hạn đã biết (iteration 1)
 

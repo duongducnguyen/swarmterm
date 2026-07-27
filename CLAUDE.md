@@ -138,6 +138,19 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   terminal map). To add a tool: drop it into `src-tauri/src/mcp/tools/` and
   add one `mod` line — see the spec at
   `docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`.
+- **War Room.** One app-wide room on `AppState.war_room` (`warroom.rs`). Drag a
+  pane onto the right panel's War Room tab → frontend calls `war_room_join`
+  with a metadata snapshot (agentId/cwd/title — the Rust terminal map stores
+  neither); drag the member chip out (or ✕) → `war_room_leave`. The
+  `war_room.*` MCP tools are always registered but gate per-call on live
+  membership, so revocation is the map removal itself. PTY death auto-leaves
+  (both `kill_terminal` and `read_loop`) — membership does NOT survive a
+  same-id respawn; re-drag. Probe messages live in server-side inboxes; only a
+  short nudge is typed into an idle pane (sustained idle, `NUDGE_IDLE_MS`),
+  via `deliverPromptToTerminal` which bypasses broadcast fan-out on purpose.
+  `mode: "execute"` pastes + runs a full prompt and is server-rejected toward
+  plain-shell members. Codex enrollment rewrites `~/.codex/config.toml` with
+  the concrete URL on every boot (`mcp/config.rs::register_codex`).
 - **Worktree-per-agent.** The composer's "Isolate features in git worktrees"
   toggle now provisions isolation upfront: every agent pane is created inside
   its own `<repo>.worktrees/<slug>` worktree on branch `swarm/<agent>-<n>`
