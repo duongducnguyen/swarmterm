@@ -16,6 +16,15 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// The human user's seat in the room. Seeded at construction and never
+/// joined or left, so the transcript never opens with "Moderator joined" and
+/// no `Join` seq is burned on it. Making it an ordinary member is what keeps
+/// this feature small: every rule in `send` — sender must be a member,
+/// execute needs a target, execute only toward agent panes, broadcast skips
+/// pending members — applies to it unchanged.
+pub const MODERATOR_ID: &str = "__moderator__";
+pub const MODERATOR_NAME: &str = "Moderator";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageMode {
@@ -115,10 +124,28 @@ pub struct SendOutcome {
     pub deliveries: Vec<WarRoomDeliver>,
 }
 
-#[derive(Default)]
 pub struct WarRoom {
     members: HashMap<String, RoomMember>,
     seq: u64,
+}
+
+impl Default for WarRoom {
+    fn default() -> Self {
+        let mut members = HashMap::new();
+        members.insert(
+            MODERATOR_ID.to_string(),
+            RoomMember {
+                agent_id: None,
+                cwd: String::new(),
+                display_name: MODERATOR_NAME.to_string(),
+                // Connected from birth: there is no MCP handshake to wait for,
+                // and a pending Moderator could never become connected.
+                connected: true,
+                inbox: VecDeque::new(),
+            },
+        );
+        Self { members, seq: 0 }
+    }
 }
 
 impl WarRoom {
@@ -183,10 +210,13 @@ impl WarRoom {
         Some(WarRoomEvent::Connected { seq, terminal_id: terminal_id.into(), name, ts })
     }
 
-    /// Renderer snapshot, sorted like `peers()`.
+    /// Renderer snapshot, sorted like `peers()`. The Moderator is excluded:
+    /// that seat is the user themself, and a roster chip would carry a ✕ that
+    /// kicks the user from their own room.
     pub fn members_info(&self) -> Vec<MemberInfo> {
         self.peers()
             .into_iter()
+            .filter(|(id, _)| id != MODERATOR_ID)
             .map(|(id, m)| MemberInfo {
                 terminal_id: id,
                 name: m.display_name.clone(),
@@ -198,6 +228,11 @@ impl WarRoom {
     }
 
     pub fn leave(&mut self, terminal_id: &str, ts: u64) -> Option<WarRoomEvent> {
+        // The seat is the user, not a pane; there is nothing to revoke and no
+        // way back in if it were removed.
+        if terminal_id == MODERATOR_ID {
+            return None;
+        }
         let member = self.members.remove(terminal_id)?;
         let seq = self.next_seq();
         Some(WarRoomEvent::Leave { seq, terminal_id: terminal_id.into(), name: member.display_name, ts })
@@ -236,11 +271,15 @@ impl WarRoom {
                     ));
                 }
                 if mode == MessageMode::Execute && target.agent_id.is_none() {
-                    return Err(
+                    return Err(if t == MODERATOR_ID {
+                        "mode \"execute\" cannot target the Moderator — that seat is the human \
+                         user driving Swarmterm, not a terminal. Use mode \"probe\" to ask them."
+                            .into()
+                    } else {
                         "mode \"execute\" is only allowed toward panes running a coding agent — \
                          pasting a prompt into a plain shell would execute arbitrary commands"
-                            .into(),
-                    );
+                            .to_string()
+                    });
                 }
                 vec![t.to_string()]
             }
@@ -279,7 +318,10 @@ impl WarRoom {
         let mut deliveries = Vec::new();
         for tid in &target_ids {
             let target = self.members.get_mut(tid).expect("validated above");
-            if mode == MessageMode::Probe {
+            // The Moderator reads the Discussion transcript, which already
+            // carries this content — pushing here would grow a VecDeque that
+            // nothing ever drains.
+            if mode == MessageMode::Probe && tid != MODERATOR_ID {
                 target.inbox.push_back(RoomMessage {
                     seq,
                     from_id: from_id.into(),
@@ -361,8 +403,11 @@ mod tests {
         solo.join("a".into(), Some("codex".into()), "/a".into(), "A".into(), 1);
         solo.mark_connected("a", 1);
         solo.join("b".into(), Some("codex".into()), "/b".into(), "B".into(), 2);
-        // Only pending peers around → broadcast has nobody to reach.
-        assert!(solo.send("a", None, "x", MessageMode::Probe, 3).is_err());
+        // Pending peer b is skipped, but the Moderator seat is always
+        // connected — so a broadcast now always has somewhere to go. It just
+        // produces no delivery, because the Moderator has no terminal.
+        let out = solo.send("a", None, "x", MessageMode::Probe, 3).unwrap();
+        assert!(out.deliveries.is_empty());
     }
 
     #[test]
@@ -382,8 +427,12 @@ mod tests {
         let ev = r.join("t1".into(), None, "/a".into(), "Term".into(), 1);
         assert!(matches!(ev, WarRoomEvent::Join { .. }));
         r.join("t1".into(), Some("codex".into()), "/b".into(), "Codex".into(), 2);
-        assert_eq!(r.peers().len(), 1);
-        assert_eq!(r.peers()[0].1.agent_id.as_deref(), Some("codex"));
+        assert_eq!(r.peers().len(), 2); // t1 + the seeded Moderator
+        assert_eq!(r.members_info().len(), 1); // roster excludes the Moderator
+        assert_eq!(
+            r.peers().iter().find(|(id, _)| id == "t1").unwrap().1.agent_id.as_deref(),
+            Some("codex")
+        );
     }
 
     #[test]
@@ -434,7 +483,8 @@ mod tests {
         assert!(r.send("t1", Some("t3"), "x", MessageMode::Execute, 1).is_err()); // execute into plain shell
         let mut solo = WarRoom::default();
         solo.join("t1".into(), None, "/a".into(), "A".into(), 1);
-        assert!(solo.send("t1", None, "x", MessageMode::Probe, 1).is_err()); // broadcast with no peers
+        // Was "broadcast with no peers" — the Moderator is now always a peer.
+        assert!(solo.send("t1", None, "x", MessageMode::Probe, 1).is_ok());
     }
 
     #[test]
@@ -503,5 +553,71 @@ mod tests {
     fn now_ms_returns_epoch_millis() {
         let ts = now_ms();
         assert!(ts > 1_700_000_000_000);
+    }
+
+    #[test]
+    fn moderator_is_seeded_and_visible_to_agents_only() {
+        let r = WarRoom::default();
+        assert!(r.is_member(MODERATOR_ID));
+        // peers() feeds MCP list_peers — agents must see the human.
+        assert!(r.peers().iter().any(|(id, _)| id == MODERATOR_ID));
+        // members_info() feeds the renderer roster — the user needs no chip.
+        assert!(r.members_info().iter().all(|m| m.terminal_id != MODERATOR_ID));
+        let (_, m) = r.peers().into_iter().find(|(id, _)| id == MODERATOR_ID).unwrap();
+        assert_eq!(m.display_name, MODERATOR_NAME);
+        assert!(m.connected);
+        assert!(m.agent_id.is_none());
+    }
+
+    #[test]
+    fn moderator_seat_cannot_be_vacated() {
+        let mut r = WarRoom::default();
+        assert!(r.leave(MODERATOR_ID, 1).is_none());
+        assert!(r.is_member(MODERATOR_ID));
+    }
+
+    #[test]
+    fn probe_to_moderator_skips_the_inbox() {
+        let mut r = room_with_two();
+        let out = r.send("t1", Some(MODERATOR_ID), "need a call on this", MessageMode::Probe, 5).unwrap();
+        // Transcript event only: no terminal to nudge, no inbox to drain.
+        assert!(out.deliveries.is_empty());
+        assert!(r.drain_inbox(MODERATOR_ID).unwrap().is_empty());
+    }
+
+    #[test]
+    fn execute_to_moderator_is_rejected_by_name() {
+        let mut r = room_with_two();
+        let err = r.send("t1", Some(MODERATOR_ID), "do it", MessageMode::Execute, 5).unwrap_err();
+        assert!(err.contains("Moderator"));
+    }
+
+    #[test]
+    fn moderator_broadcast_reaches_connected_agents_and_not_itself() {
+        let mut r = room_with_two();
+        let out = r.send(MODERATOR_ID, None, "all hands", MessageMode::Probe, 6).unwrap();
+        assert_eq!(out.deliveries.len(), 2);
+        assert!(out.deliveries.iter().all(|d| d.to_id != MODERATOR_ID));
+        assert_eq!(r.drain_inbox("t1").unwrap().len(), 1);
+        assert_eq!(r.drain_inbox("t2").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn moderator_send_carries_its_display_name() {
+        let mut r = room_with_two();
+        let out = r.send(MODERATOR_ID, Some("t1"), "hi", MessageMode::Probe, 7).unwrap();
+        let j = serde_json::to_value(&out.event).unwrap();
+        assert_eq!(j["fromName"], MODERATOR_NAME);
+        assert_eq!(j["fromId"], MODERATOR_ID);
+    }
+
+    #[test]
+    fn agent_broadcast_reaches_the_moderator_without_a_delivery() {
+        let mut r = room_with_two();
+        let out = r.send("t1", None, "status?", MessageMode::Probe, 8).unwrap();
+        // t2 gets a delivery; the Moderator gets neither a delivery nor an inbox entry.
+        assert_eq!(out.deliveries.len(), 1);
+        assert_eq!(out.deliveries[0].to_id, "t2");
+        assert!(r.drain_inbox(MODERATOR_ID).unwrap().is_empty());
     }
 }
