@@ -745,6 +745,29 @@ export function focusTerminal(id: string): void {
 }
 
 /**
+ * True when DOM focus is on some live terminal's own hidden input (xterm's
+ * `textarea` — the same element `focusTerminal`/a click into the pane puts
+ * focus on), i.e. a terminal genuinely owns the keyboard right now.
+ *
+ * Exists for callers that need to tell that apart from some OTHER app
+ * textarea/input/select that happens to share the same DOM tag name.
+ * `terminal-focus.ts`'s `shouldReturnFocus` can't make that distinction — it
+ * only ever sees `document.activeElement.tagName`, and xterm's helper
+ * textarea reports `TEXTAREA` exactly like a real app input does (see
+ * App.tsx's Escape handler, the one caller so far: a naive
+ * `shouldReturnFocus` check alone would also swallow Escape while a terminal
+ * — the overwhelmingly common case for that shortcut — has focus).
+ */
+export function isAnyTerminalFocused(): boolean {
+  const active = document.activeElement
+  if (active === null) return false
+  for (const entry of entries.values()) {
+    if (entry.term.textarea === active) return true
+  }
+  return false
+}
+
+/**
  * Type `text` into a terminal as if the user pasted it. Routed through
  * `term.paste` rather than `writeTerminal` on purpose: paste flows through
  * `onData`, so it picks up the broadcast fan-out above for free instead of

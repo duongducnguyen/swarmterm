@@ -18,7 +18,12 @@ import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
 import { nextSystemChromeReveal, systemChromeOffset } from '@/lib/titlebar-chrome'
 import { onFullscreenChanged } from '@/tauri/window'
-import { disposeOrphanTerminals, focusTerminal, getTerminalCwd } from '@/lib/terminal-registry'
+import {
+  disposeOrphanTerminals,
+  focusTerminal,
+  getTerminalCwd,
+  isAnyTerminalFocused
+} from '@/lib/terminal-registry'
 import {
   describeFocusedElement,
   shouldReturnFocus,
@@ -205,6 +210,25 @@ export default function App(): ReactElement {
     const onKeyDown = (e: KeyboardEvent): void => {
       // Esc exits broadcast mode (which clears the group).
       if (e.key === 'Escape') {
+        // ModeratorComposer also treats Escape as its own gesture (blur, hand
+        // the keyboard back to the terminal) — but this listener is capture-
+        // phase on `window`, so it runs BEFORE the composer's own keydown
+        // handler and a `stopPropagation()` there can't stop it. Without this
+        // guard, pressing Esc to leave the composer would also blow away a
+        // hand-built broadcast group with no undo.
+        //
+        // shouldReturnFocus alone is not enough: it treats every <textarea>
+        // as owning the keyboard (see terminal-focus.ts), and xterm's own
+        // hidden input IS a <textarea> — so gating on it alone would ALSO
+        // swallow Escape while a terminal has focus, which is the ordinary,
+        // overwhelmingly common way this shortcut gets used (you exit
+        // broadcast mode from inside the terminal you were typing into).
+        // isAnyTerminalFocused() carves that one case back out; every OTHER
+        // editable widget (the composer, a rename field, an open menu) still
+        // blocks the toggle exactly as shouldReturnFocus already decides.
+        if (!isAnyTerminalFocused() && !shouldReturnFocus(describeFocusedElement(document.activeElement))) {
+          return
+        }
         const st = useAppStore.getState()
         const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
         if (ws?.broadcastActive) {
