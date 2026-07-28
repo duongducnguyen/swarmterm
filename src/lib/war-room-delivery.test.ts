@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NUDGE_IDLE_MS } from './war-room-nudge'
 import { useWarRoomStore } from '@/store/war-room-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { useTerminalTypingStore } from '@/store/terminal-typing-store'
 import type { WarRoomEvent } from '@/tauri/warroom'
 
 // Same shape as war-room-store.test.ts's join helper.
@@ -25,7 +26,7 @@ vi.mock('@/lib/terminal-registry', () => ({
 }))
 
 // Import AFTER the mock so the wiring binds the mocked delivery fns.
-const { startWarRoomDelivery, SUBMIT_DELAY_MS } = await import('./war-room-delivery')
+const { startWarRoomDelivery, SUBMIT_DELAY_MS, HOLD_RECHECK_MS } = await import('./war-room-delivery')
 
 let stop: () => void
 
@@ -34,6 +35,7 @@ beforeEach(() => {
   events.length = 0
   useWarRoomStore.setState({ members: [], transcript: [], queues: {}, held: {} })
   useTerminalActivityStore.setState({ active: {} })
+  useTerminalTypingStore.setState({ lastKeyAt: {}, dirty: {} })
   stop = startWarRoomDelivery()
 })
 
@@ -120,5 +122,57 @@ describe('startWarRoomDelivery', () => {
     useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
     vi.advanceTimersByTime(NUDGE_IDLE_MS + SUBMIT_DELAY_MS * 4)
     expect(events).toHaveLength(0)
+  })
+})
+
+describe('nudge typing guard', () => {
+  it('holds the flush while a line is unsubmitted, then delivers once it clears', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
+    useTerminalTypingStore.getState().noteInput('t1', 'half a sentence')
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+
+    // The idle window passes, but nothing is typed into the pane.
+    vi.advanceTimersByTime(NUDGE_IDLE_MS + HOLD_RECHECK_MS * 4)
+    expect(events).toHaveLength(0)
+    expect(useWarRoomStore.getState().held['t1']).toBe(true)
+    // Held, not dropped.
+    expect(useWarRoomStore.getState().queues['t1']).toHaveLength(1)
+
+    // Pressing Enter clears the line; the delivery follows.
+    useTerminalTypingStore.getState().noteInput('t1', '\r')
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS * 2)
+    expect(events[0]?.kind).toBe('body')
+    expect(useWarRoomStore.getState().held['t1']).toBeUndefined()
+  })
+
+  it('releases a hold when the Deliver-now button clears the typing signal', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
+    useTerminalTypingStore.getState().noteInput('t1', 'x')
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+    vi.advanceTimersByTime(NUDGE_IDLE_MS + 2)
+    expect(events).toHaveLength(0)
+
+    useTerminalTypingStore.getState().clearTyping('t1')
+    vi.advanceTimersByTime(SUBMIT_DELAY_MS * 2)
+    expect(events).toHaveLength(2)
+  })
+
+  it('does not hold for an unfocused pane whose line was submitted', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
+    useTerminalTypingStore.getState().noteInput('t1', 'done\r')
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+    vi.advanceTimersByTime(NUDGE_IDLE_MS + SUBMIT_DELAY_MS * 2)
+    expect(events).toHaveLength(2)
+  })
+
+  it('a keystroke in another pane does not wake a queue still inside its idle window', () => {
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+    vi.advanceTimersByTime(NUDGE_IDLE_MS - 500)
+    // t2 is a different pane; this must not short-circuit t1's idle countdown.
+    useTerminalTypingStore.getState().noteInput('t2', 'a')
+    expect(events).toHaveLength(0)
+    vi.advanceTimersByTime(600)
+    expect(events).toHaveLength(1)
   })
 })
