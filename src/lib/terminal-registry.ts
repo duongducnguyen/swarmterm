@@ -31,6 +31,7 @@ import {
 } from '@/tauri/links'
 import { ActivityTracker } from '@/lib/activity-tracker'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { useTerminalTypingStore } from '@/store/terminal-typing-store'
 import {
   breaksSegment,
   diffToEdit,
@@ -239,6 +240,13 @@ function getOrCreate(id: string): Entry {
   // (term.paste) flows through onData too, so it fans out for free. Each target
   // pty echoes independently — this is real broadcast, not a text mirror.
   const sendInput = (data: string): void => {
+    // Recorded here because this is the one hook that sees genuine user input:
+    // War Room deliveries go through `writeTerminal` directly and bypass
+    // `onData`, so a nudge can never mark its own recipient as "user typing".
+    // Recorded against `id` (the pane being typed in) rather than the
+    // broadcast targets — a fan-out target the user is not looking at has no
+    // half-typed line of its own.
+    useTerminalTypingStore.getState().noteInput(id, data)
     const state = useAppStore.getState()
     const ws = selectWorkspaceByTerminalId(state, id)
     const targets = ws
@@ -718,6 +726,7 @@ export function disposeTerminal(id: string): void {
   // store entry — order matters so the timer can't re-add a cleared id.
   activityTracker.cancel(id)
   useTerminalActivityStore.getState().clear(id)
+  useTerminalTypingStore.getState().clearTyping(id)
 }
 
 /** Dispose every terminal whose id is not in `keep` (its leaf was removed). */
