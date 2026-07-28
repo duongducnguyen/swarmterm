@@ -151,6 +151,18 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   `mode: "execute"` pastes + runs a full prompt and is server-rejected toward
   plain-shell members. Codex enrollment rewrites `~/.codex/config.toml` with
   the concrete URL on every boot (`mcp/config.rs::register_codex`).
+  The user has a seat: `MODERATOR_ID` (`"__moderator__"`) is seeded into the
+  members map at construction — never joins or leaves, is excluded from
+  `members_info()` (the renderer roster) but present in `peers()` (MCP
+  `list_peers`), takes no inbox pushes, and cannot be `leave`d. The Discussion
+  tab's composer sends through `war_room_moderator_send`. Deliveries are also
+  gated on user typing, not just pty output: `shouldDeferDelivery` holds a
+  queue while a pane has an unsubmitted line (`dirty`, tracked from
+  `onData` in `terminal-registry`) or was typed in within `TYPING_QUIET_MS`
+  while focused. A held queue is never dropped — it re-arms every
+  `HOLD_RECHECK_MS`, shows an in-pane pill plus a panel badge, and both
+  "Deliver now" affordances release it by clearing the typing signal rather
+  than bypassing the scheduler. There is deliberately no maximum hold.
 - **Worktree-per-agent.** The composer's "Isolate features in git worktrees"
   toggle now provisions isolation upfront: every agent pane is created inside
   its own `<repo>.worktrees/<slug>` worktree on branch `swarm/<agent>-<n>`

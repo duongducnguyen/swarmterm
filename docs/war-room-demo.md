@@ -23,3 +23,29 @@ MCP configs are registered (`~/.claude.json`, `~/.codex/config.toml`).
 7. Drag one member chip out of the panel (or press its ✕). Ask the remaining
    agent to send another war_room message — the tool call now fails with
    "not in the War Room", proving revocation.
+
+## v2 smoke: Moderator seat + nudge typing guard
+
+Two agent panes in the room, both showing `connected`.
+
+**Moderator**
+1. Broadcast a probe from the composer → both panes get nudged; the transcript
+   shows one `Moderator → everyone` group with a crown avatar.
+2. Direct probe to one member → only that pane is nudged.
+3. Switch to Execute → the `Everyone` row disappears and the input turns
+   orange; send a short prompt → it is pasted and run in that pane only.
+4. Ask an agent to `war_room.send` to `__moderator__` → the reply lands in
+   Discussion and nothing is typed into any pane.
+5. Ask an agent to send `mode: "execute"` to `__moderator__` → the tool call is
+   rejected with a message naming the Moderator.
+
+**Typing guard**
+6. Type a half line into pane A without pressing Enter, then probe pane A from
+   the composer → nothing is typed, the half line is intact, the pill appears
+   bottom-right in pane A, and the Members sub-tab shows `⏸1`.
+7. Press Enter in pane A → the nudge arrives right afterwards.
+8. Repeat step 6, then click the pill instead → the nudge is delivered
+   immediately.
+9. Repeat step 6, then click into pane B → pane A's pill stays. An unsubmitted
+   line holds regardless of focus.
+10. Close pane A while its delivery is held → no stray text, no orphan badge.
