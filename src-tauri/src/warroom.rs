@@ -485,6 +485,10 @@ mod tests {
         solo.join("t1".into(), None, "/a".into(), "A".into(), 1);
         // Was "broadcast with no peers" — the Moderator is now always a peer.
         assert!(solo.send("t1", None, "x", MessageMode::Probe, 1).is_ok());
+        // The "no connected peers" branch IS still reachable, just from the
+        // other direction: a Moderator broadcast into a room with no agent
+        // panes at all finds no connected peer once it filters itself out.
+        assert!(WarRoom::default().send(MODERATOR_ID, None, "x", MessageMode::Probe, 1).is_err());
     }
 
     #[test]
