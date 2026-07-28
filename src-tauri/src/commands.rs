@@ -289,3 +289,36 @@ pub fn war_room_leave(app: AppHandle, state: State<'_, AppState>, terminal_id: S
         let _ = app.emit("warroom:event", &event);
     }
 }
+
+/// The user speaking as the Moderator, from the Discussion tab's composer.
+/// `to: None` broadcasts. Mirrors `mcp/tools/warroom.rs`'s lock-then-emit
+/// discipline: `emit` re-enters Tauri and must never run under the room mutex.
+/// Returns the delivery count so the composer can confirm reach; the error
+/// string is `WarRoom::send`'s own message, shown inline in the composer.
+#[tauri::command]
+pub fn war_room_moderator_send(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    to: Option<String>,
+    content: String,
+    mode: Option<String>,
+) -> Result<usize, String> {
+    let mode = crate::warroom::MessageMode::parse(mode.as_deref())?;
+    let (event, deliveries) = {
+        let mut room = state.war_room.lock().unwrap();
+        let out = room.send(
+            crate::warroom::MODERATOR_ID,
+            to.as_deref(),
+            &content,
+            mode,
+            crate::warroom::now_ms(),
+        )?;
+        (out.event, out.deliveries)
+    };
+    let delivered = deliveries.len();
+    let _ = app.emit("warroom:event", &event);
+    for d in deliveries {
+        let _ = app.emit("warroom:deliver", &d);
+    }
+    Ok(delivered)
+}

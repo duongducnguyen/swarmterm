@@ -135,7 +135,9 @@ impl SwarmtermMcpServer {
             peers,
             note: "Message a peer with war_room.send (mode \"probe\"), or hand one a task \
                    with mode \"execute\". Peers inspect their own codebase — ask them \
-                   instead of requesting their files."
+                   instead of requesting their files. The peer \"Moderator\" is the human \
+                   user: probe them for a decision, never send them mode \"execute\" (they \
+                   have no terminal)."
                 .into(),
         }))
     }

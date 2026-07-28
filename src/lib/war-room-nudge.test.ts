@@ -31,6 +31,12 @@ describe('buildIntroText', () => {
   it('still reads sensibly with no peers yet', () => {
     expect(buildIntroText([])).toContain('war_room.list_peers')
   })
+
+  it('tells agents the Moderator is the human user and is reachable', () => {
+    const t = buildIntroText(['Codex'])
+    expect(t).toContain('Moderator')
+    expect(t).toContain('__moderator__')
+  })
 })
 
 describe('flushQueue', () => {

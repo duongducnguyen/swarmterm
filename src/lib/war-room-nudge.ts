@@ -36,8 +36,13 @@ export function buildIntroText(peerNames: string[]): string {
     `peers see you as pending and cannot message you). ` +
     `Tools: war_room.list_peers (who is here), war_room.send (mode "probe" to message a peer, ` +
     `mode "execute" to hand a peer a prompt their terminal will run), war_room.read_inbox ` +
-    `(read messages sent to you — you will be nudged). Coordinate through these tools and ` +
-    `keep message bodies out of the terminal.`
+    `(read messages sent to you — you will be nudged). ` +
+    // The human is a peer like any other, so agents must be told the id and
+    // that this one peer has no terminal to be nudged in.
+    `The peer "Moderator" (terminalId "__moderator__") is the human user driving Swarmterm: ` +
+    `war_room.send to them when you need a decision. They read everything in the panel and ` +
+    `have no terminal, so never send them mode "execute". ` +
+    `Coordinate through these tools and keep message bodies out of the terminal.`
   )
 }
 

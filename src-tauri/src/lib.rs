@@ -108,6 +108,7 @@ pub fn run() {
             commands::war_room_join,
             commands::war_room_leave,
             commands::war_room_members,
+            commands::war_room_moderator_send,
             commands::list_available_shells,
             commands::list_available_agents,
             commands::resolve_path_link,
