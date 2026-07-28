@@ -28,6 +28,12 @@ export function ModeratorComposer(): ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const areaRef = useRef<HTMLTextAreaElement>(null)
+  // `sending` (state) drives the display; this ref is the actual send guard.
+  // Native key-repeat on a held Enter can dispatch a second keydown before
+  // React flushes the state update from the first, so a state read in the
+  // handler can still see stale `false` — the ref is written synchronously
+  // and can't be stale.
+  const inFlightRef = useRef(false)
 
   // Membership and mode both invalidate a selection; reconciling in an effect
   // (rather than at render) keeps the select a controlled component with a
@@ -49,10 +55,12 @@ export function ModeratorComposer(): ReactElement {
   }
 
   async function send(): Promise<void> {
+    if (inFlightRef.current) return
     if (!validation.ok) {
       setError(validation.reason)
       return
     }
+    inFlightRef.current = true
     setSending(true)
     try {
       await warRoomModeratorSend({
@@ -67,6 +75,7 @@ export function ModeratorComposer(): ReactElement {
     } catch (e) {
       setError(String(e))
     } finally {
+      inFlightRef.current = false
       setSending(false)
     }
   }
