@@ -7,6 +7,7 @@ import { useAppStore, type ClearTarget } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { Button } from '@/components/ui/button'
+import { HeldDeliveryPill } from '@/components/TerminalPane/HeldDeliveryPill'
 import { PaneHeader } from './PaneHeader'
 import {
   ContextMenu,
@@ -308,6 +309,8 @@ export function TerminalPane({
 
       <div className="relative flex-1 overflow-hidden">
         <div ref={containerRef} className="absolute inset-0" />
+
+        <HeldDeliveryPill terminalId={terminalId} />
 
         {status.kind === 'error' && (
           <StatusOverlay

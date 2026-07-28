@@ -1,8 +1,9 @@
 import { type ReactElement } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { X } from 'lucide-react'
-import { type WarRoomMember } from '@/store/war-room-store'
+import { useWarRoomStore, type WarRoomMember } from '@/store/war-room-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { useTerminalTypingStore } from '@/store/terminal-typing-store'
 import { warRoomLeave } from '@/tauri/warroom'
 import { MEMBER_DRAG_PREFIX } from '@/lib/war-room-drop'
 import { memberColor } from '@/lib/war-room-identity'
@@ -16,6 +17,9 @@ const MANUAL_HINT =
 
 function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
   const active = useTerminalActivityStore((s) => s.active[member.terminalId] ?? false)
+  const heldCount = useWarRoomStore((s) =>
+    s.held[member.terminalId] === true ? (s.queues[member.terminalId]?.length ?? 0) : 0
+  )
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
     id: `${MEMBER_DRAG_PREFIX}${member.terminalId}`
   })
@@ -61,6 +65,19 @@ function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
         >
           pending
         </span>
+      )}
+      {heldCount > 0 && (
+        <button
+          data-no-dnd
+          onClick={(e) => {
+            e.stopPropagation() // the row click would jump to the pane instead
+            useTerminalTypingStore.getState().clearTyping(member.terminalId)
+          }}
+          title="Held — you're typing in this pane. Click to deliver now."
+          className="shrink-0 rounded bg-[#f97316]/15 px-1 py-0.5 text-[10px] text-[#f97316]"
+        >
+          ⏸ {heldCount}
+        </button>
       )}
       <button
         data-no-dnd
