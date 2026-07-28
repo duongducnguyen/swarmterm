@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NUDGE_IDLE_MS } from './war-room-nudge'
+import { NUDGE_IDLE_MS, TYPING_QUIET_MS } from './war-room-nudge'
+import { useAppStore } from '@/store/app-store'
 import { useWarRoomStore } from '@/store/war-room-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { useTerminalTypingStore } from '@/store/terminal-typing-store'
@@ -36,6 +37,7 @@ beforeEach(() => {
   useWarRoomStore.setState({ members: [], transcript: [], queues: {}, held: {} })
   useTerminalActivityStore.setState({ active: {} })
   useTerminalTypingStore.setState({ lastKeyAt: {}, dirty: {} })
+  useAppStore.setState({ workspaces: [], activeWorkspaceId: '' })
   stop = startWarRoomDelivery()
 })
 
@@ -174,5 +176,71 @@ describe('nudge typing guard', () => {
     expect(events).toHaveLength(0)
     vi.advanceTimersByTime(600)
     expect(events).toHaveLength(1)
+  })
+})
+
+describe('the focused-and-recent arm (no terminal is focused anywhere else in this suite)', () => {
+  // shouldDeferDelivery's `focused && recency` arm is the safety net for input
+  // a TUI consumes off the `onData` path without ever setting `dirty` (see its
+  // doc comment). Every other test above leaves useAppStore's workspaces empty,
+  // so selectFocusedTerminalId always returns undefined and `focused` is always
+  // false — this arm has never actually been exercised end-to-end. Seed a real
+  // single-leaf workspace so the delivery scheduler's own focus read (not a
+  // mock of the selector) resolves to `terminalId`.
+  function focusTerminalInStore(terminalId: string): void {
+    const leafId = 'leaf-1'
+    useAppStore.setState({
+      workspaces: [
+        {
+          id: 'ws-1',
+          name: 'ws',
+          cwd: '/x',
+          layout: { type: 'leaf', id: leafId, terminalId },
+          focusedLeafId: leafId,
+          broadcastActive: false,
+          broadcastLeafIds: [],
+          worktreeMode: false
+        }
+      ],
+      activeWorkspaceId: 'ws-1'
+    })
+  }
+
+  it('holds a focused, recently-typed-in, non-dirty pane, then releases once the quiet window elapses', () => {
+    // The current constants divide evenly (750 × 4 = 3000 = TYPING_QUIET_MS −
+    // NUDGE_IDLE_MS); guard the arithmetic below so a future constant change
+    // fails loudly here instead of silently landing the release assertion on
+    // the wrong poll.
+    expect(TYPING_QUIET_MS - NUDGE_IDLE_MS).toBe(HOLD_RECHECK_MS * 4)
+
+    useWarRoomStore.getState().applyEvent(join('t1', 'Claude', 1))
+    focusTerminalInStore('t1')
+    // A nav keystroke (arrow key) stamps lastKeyAt WITHOUT setting dirty —
+    // exactly the state only the focused-and-recent arm can catch. If that arm
+    // were removed, `dirty` alone would let this delivery through immediately
+    // at the first idle fire below instead of holding it.
+    useTerminalTypingStore.getState().noteInput('t1', '\x1b[A')
+    useWarRoomStore.getState().enqueue({ toId: 't1', fromName: 'Codex', mode: 'probe', content: null })
+
+    vi.advanceTimersByTime(NUDGE_IDLE_MS)
+    expect(events).toHaveLength(0)
+    expect(useWarRoomStore.getState().held['t1']).toBe(true)
+
+    // Still short of TYPING_QUIET_MS since the nav keystroke — stays held
+    // through the periodic re-checks.
+    vi.advanceTimersByTime(HOLD_RECHECK_MS * 3)
+    expect(useWarRoomStore.getState().held['t1']).toBe(true)
+    expect(events).toHaveLength(0)
+
+    // Crossing TYPING_QUIET_MS since the last keystroke releases it on the
+    // next periodic re-check, with no further typing required.
+    vi.advanceTimersByTime(HOLD_RECHECK_MS)
+    // The flush's own body write is a zero-delay timer scheduled from inside
+    // this fire — same nuance noted on the very first test in this file —
+    // so it needs one more pass to actually run.
+    vi.advanceTimersByTime(2)
+    expect(useWarRoomStore.getState().held['t1']).toBeUndefined()
+    expect(events).toHaveLength(1)
+    expect(events[0].kind).toBe('body')
   })
 })
