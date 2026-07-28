@@ -235,24 +235,28 @@ function getOrCreate(id: string): Entry {
     return true
   })
   // Fan out to the broadcast group when this terminal is an armed member;
-  // otherwise this is the only target, so behaviour is unchanged. onData fires
-  // only for the terminal the user is typing in, so `id` is the source. Paste
-  // (term.paste) flows through onData too, so it fans out for free. Each target
-  // pty echoes independently — this is real broadcast, not a text mirror.
+  // otherwise this is the only target ([id]), so behaviour is unchanged. onData
+  // fires only for the terminal the user is typing in, so `id` is always the
+  // source of `data` — but every target pty in `targets` receives the SAME
+  // characters and ends up holding the SAME half-typed line, so the War Room
+  // typing signal has to be recorded per target, not just for the source.
+  // Recorded here (rather than from a listener on each target) because this is
+  // the one hook that sees genuine user input for the whole fan-out group: War
+  // Room deliveries go through `writeTerminal` directly and bypass `onData`,
+  // so a nudge can never mark its own recipient as "user typing". Paste
+  // (term.paste) flows through onData too, so it fans out — and gets recorded
+  // — for free. Each target pty echoes independently: this is real broadcast,
+  // not a text mirror.
   const sendInput = (data: string): void => {
-    // Recorded here because this is the one hook that sees genuine user input:
-    // War Room deliveries go through `writeTerminal` directly and bypass
-    // `onData`, so a nudge can never mark its own recipient as "user typing".
-    // Recorded against `id` (the pane being typed in) rather than the
-    // broadcast targets — a fan-out target the user is not looking at has no
-    // half-typed line of its own.
-    useTerminalTypingStore.getState().noteInput(id, data)
     const state = useAppStore.getState()
     const ws = selectWorkspaceByTerminalId(state, id)
     const targets = ws
       ? resolveBroadcastTargets(ws.layout, ws.broadcastActive, ws.broadcastLeafIds, id)
       : [id]
-    for (const target of targets) void writeTerminal(target, data)
+    for (const target of targets) {
+      useTerminalTypingStore.getState().noteInput(target, data)
+      void writeTerminal(target, data)
+    }
   }
   term.onData(sendInput)
 
