@@ -57,3 +57,36 @@ export function flushQueue(queue: PendingDelivery[]): string[] {
   if (probes.length > 0) out.push(buildNudgeText(probes.map((d) => d.fromName)))
   return out
 }
+
+/**
+ * How long after the last keystroke a focused pane still counts as "being
+ * typed in". Deliberately well above NUDGE_IDLE_MS: the two guards answer
+ * different questions (has the pty stopped talking? has the user stopped
+ * typing?) and a pane is routinely output-idle while the user is mid-sentence.
+ */
+export const TYPING_QUIET_MS = 6000
+
+export interface TypingSnapshot {
+  /** Is this the pane the keyboard currently goes to? */
+  focused: boolean
+  /** ms epoch of the last user input, or undefined if never typed in. */
+  lastKeyAt: number | undefined
+  /** A line has been typed here and not yet submitted or abandoned. */
+  dirty: boolean
+}
+
+/**
+ * Should a queued delivery be held rather than typed into this pane right now?
+ * There is no maximum hold on purpose — force-delivering after N seconds would
+ * reintroduce exactly the corruption this guards against, just more rarely.
+ * The escape is the user-facing "Deliver now" affordance, which clears the
+ * typing signal instead of bypassing this rule.
+ */
+export function shouldDeferDelivery(s: TypingSnapshot, now: number): boolean {
+  // Unfocused-but-dirty still holds: the line survives losing focus.
+  if (s.dirty) return true
+  if (!s.focused) return false
+  // Safety net for input the dirty flag can miss — a TUI consuming keystrokes
+  // through a path `onData` does not represent.
+  return s.lastKeyAt !== undefined && now - s.lastKeyAt < TYPING_QUIET_MS
+}
