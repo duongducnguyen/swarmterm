@@ -18,24 +18,37 @@ export interface TerminalTypingStore {
   /** True while a line has been typed and not yet submitted or abandoned. */
   dirty: Record<string, boolean>
   noteInput: (terminalId: string, data: string) => void
-  /** "Done typing here" — used both by the Deliver-now buttons and by pane
-   *  disposal, which want the same thing: drop this terminal's entries. */
+  /** "Done typing here" — used by the Deliver-now buttons, by pane disposal,
+   *  and by `noteInput` itself on a submit, all of which want the same thing:
+   *  drop this terminal's entries. */
   clearTyping: (terminalId: string) => void
 }
 
-export const useTerminalTypingStore = create<TerminalTypingStore>((set) => ({
+export const useTerminalTypingStore = create<TerminalTypingStore>((set, get) => ({
   lastKeyAt: {},
   dirty: {},
 
-  noteInput: (terminalId, data) =>
+  noteInput: (terminalId, data) => {
+    const kind = classifyInput(data)
+    if (kind === 'submit') {
+      // "The line is done, nothing pending in this pane" is exactly what
+      // clearTyping means, so share its logic rather than duplicating it.
+      // Clearing lastKeyAt (not just dirty) matters: leaving it stamped would
+      // mean the user — who is by definition focused in this pane right after
+      // pressing Enter — re-arms shouldDeferDelivery's focused-and-recent arm
+      // on every submit, holding the pane for a further TYPING_QUIET_MS when
+      // the line it was guarding no longer exists.
+      get().clearTyping(terminalId)
+      return
+    }
     set((s) => {
-      const kind = classifyInput(data)
       const lastKeyAt = { ...s.lastKeyAt, [terminalId]: Date.now() }
       // Navigation moves the cursor without changing the line, so it refreshes
       // recency but must not clear a half-typed line.
       if (kind === 'nav') return { lastKeyAt }
-      return { lastKeyAt, dirty: { ...s.dirty, [terminalId]: kind === 'edit' } }
-    }),
+      return { lastKeyAt, dirty: { ...s.dirty, [terminalId]: true } }
+    })
+  },
 
   clearTyping: (terminalId) =>
     set((s) => {

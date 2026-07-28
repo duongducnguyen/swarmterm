@@ -19,14 +19,19 @@ describe('noteInput', () => {
     expect(s.lastKeyAt['t1']).toBe(Date.now())
   })
 
-  it('clears dirty on a submit but keeps the timestamp', () => {
+  it('clears both dirty and the timestamp on a submit', () => {
+    // Deliberately changed behaviour: an earlier version kept lastKeyAt on
+    // submit, which meant shouldDeferDelivery's focused-and-recent arm held a
+    // delivery for a further TYPING_QUIET_MS after every Enter — pressing
+    // Enter never actually released a hold. Submit must look exactly like
+    // clearTyping: nothing pending, no recency to re-check.
     const s = useTerminalTypingStore.getState()
     s.noteInput('t1', 'abc')
     vi.advanceTimersByTime(1000)
     s.noteInput('t1', '\r')
     const after = useTerminalTypingStore.getState()
-    expect(after.dirty['t1']).toBe(false)
-    expect(after.lastKeyAt['t1']).toBe(Date.now())
+    expect(after.dirty['t1']).toBeUndefined()
+    expect(after.lastKeyAt['t1']).toBeUndefined()
   })
 
   it('leaves dirty untouched on navigation but refreshes the timestamp', () => {
@@ -42,10 +47,12 @@ describe('noteInput', () => {
   it('keeps terminals independent', () => {
     const s = useTerminalTypingStore.getState()
     s.noteInput('t1', 'a')
+    // A submit with no prior entry is a no-op (same as clearTyping on a
+    // terminal that never typed) — no dirty flag is created for it.
     s.noteInput('t2', '\r')
     const after = useTerminalTypingStore.getState()
     expect(after.dirty['t1']).toBe(true)
-    expect(after.dirty['t2']).toBe(false)
+    expect(after.dirty['t2']).toBeUndefined()
   })
 })
 
