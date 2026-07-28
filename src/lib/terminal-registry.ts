@@ -836,6 +836,11 @@ export function retryTerminal(id: string): void {
   entry.term.reset()
   // The pty this segment's committed baseline described is gone.
   entry.resetInputSegment()
+  // Same reasoning applies to the War Room typing signal: a half-typed line
+  // held over from the dead pty would hold this pane's future deliveries
+  // (dirty survives until the user types and submits, or clicks Deliver now)
+  // for a line that no longer exists anywhere.
+  useTerminalTypingStore.getState().clearTyping(id)
   safeFit(entry)
   entry.session.retry({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
@@ -852,6 +857,11 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   entry.term.reset()
   // The pty this segment's committed baseline described is gone.
   entry.resetInputSegment()
+  // Same reasoning applies to the War Room typing signal: a half-typed line
+  // held over from the dead pty would hold this pane's future deliveries
+  // (dirty survives until the user types and submits, or clicks Deliver now)
+  // for a line that no longer exists anywhere.
+  useTerminalTypingStore.getState().clearTyping(id)
   safeFit(entry)
   entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
