@@ -32,7 +32,7 @@ let stop: () => void
 beforeEach(() => {
   vi.useFakeTimers()
   events.length = 0
-  useWarRoomStore.setState({ members: [], transcript: [], queues: {} })
+  useWarRoomStore.setState({ members: [], transcript: [], queues: {}, held: {} })
   useTerminalActivityStore.setState({ active: {} })
   stop = startWarRoomDelivery()
 })

@@ -14,7 +14,7 @@ const message = (seq: number): WarRoomEvent => ({
 })
 
 beforeEach(() => {
-  useWarRoomStore.setState({ members: [], transcript: [], queues: {} })
+  useWarRoomStore.setState({ members: [], transcript: [], queues: {}, held: {} })
 })
 
 describe('applyEvent', () => {
@@ -97,5 +97,41 @@ describe('handshake + hydration + clear', () => {
     expect(st.transcript).toHaveLength(0)
     expect(st.members).toHaveLength(1)
     expect(st.queues['t1']).toHaveLength(1)
+  })
+})
+
+describe('held', () => {
+  it('sets and clears the flag, deleting the key on clear', () => {
+    const s = useWarRoomStore.getState()
+    s.setHeld('t1', true)
+    expect(useWarRoomStore.getState().held['t1']).toBe(true)
+    s.setHeld('t1', false)
+    expect(useWarRoomStore.getState().held['t1']).toBeUndefined()
+  })
+
+  it('does not churn state when nothing changes', () => {
+    const before = useWarRoomStore.getState().held
+    useWarRoomStore.getState().setHeld('t1', false)
+    expect(useWarRoomStore.getState().held).toBe(before)
+  })
+
+  it('clears on flush — a delivered queue is no longer held', () => {
+    const s = useWarRoomStore.getState()
+    s.applyEvent(join('t1', 'Claude', 1))
+    s.enqueue({ toId: 't1', fromName: 'B', mode: 'probe', content: null })
+    s.setHeld('t1', true)
+    useWarRoomStore.getState().takeFlush('t1')
+    expect(useWarRoomStore.getState().held['t1']).toBeUndefined()
+  })
+
+  it('clears on leave alongside the queue', () => {
+    const s = useWarRoomStore.getState()
+    s.applyEvent(join('t1', 'Claude', 1))
+    s.enqueue({ toId: 't1', fromName: 'B', mode: 'probe', content: null })
+    s.setHeld('t1', true)
+    s.applyEvent(leave('t1', 'Claude', 2))
+    const after = useWarRoomStore.getState()
+    expect(after.held['t1']).toBeUndefined()
+    expect(after.queues['t1']).toBeUndefined()
   })
 })

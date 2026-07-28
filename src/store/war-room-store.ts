@@ -20,6 +20,10 @@ interface WarRoomStore {
   transcript: WarRoomEvent[]
   /** Pending deliveries per recipient terminalId, flushed on sustained idle. */
   queues: Record<string, PendingDelivery[]>
+  /** Terminals whose queue the delivery scheduler is withholding because the
+   *  user is typing there. Surfaced by the in-pane pill and the panel badge;
+   *  the scheduler owns writing it (see war-room-delivery.ts). */
+  held: Record<string, boolean>
 
   applyEvent: (e: WarRoomEvent) => void
   /** Replace members from the Rust snapshot (boot / dev-reload hydration). */
@@ -28,6 +32,7 @@ interface WarRoomStore {
   enqueue: (d: WarRoomDeliver) => void
   /** Queue the join intro as a verbatim paste (execute-shaped: full text + Enter). */
   enqueueIntro: (terminalId: string, text: string) => void
+  setHeld: (terminalId: string, held: boolean) => void
   /** Drain a terminal's queue into ordered paste payloads. */
   takeFlush: (terminalId: string) => string[]
   isMember: (terminalId: string) => boolean
@@ -37,6 +42,7 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
   members: [],
   transcript: [],
   queues: {},
+  held: {},
 
   applyEvent: (e) =>
     set((s) => {
@@ -62,11 +68,14 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
       }
       if (e.kind === 'leave') {
         const queues = { ...s.queues }
+        const held = { ...s.held }
         delete queues[e.terminalId]
+        delete held[e.terminalId]
         return {
           members: s.members.filter((m) => m.terminalId !== e.terminalId),
           transcript,
-          queues
+          queues,
+          held
         }
       }
       return { transcript }
@@ -107,13 +116,26 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
       }
     })),
 
+  setHeld: (terminalId, held) =>
+    set((s) => {
+      if ((s.held[terminalId] ?? false) === held) return s
+      const next = { ...s.held }
+      // Deleting rather than storing `false` keeps the map small and lets the
+      // panel's badge total iterate keys without filtering.
+      if (held) next[terminalId] = true
+      else delete next[terminalId]
+      return { held: next }
+    }),
+
   takeFlush: (terminalId) => {
     const queue = get().queues[terminalId]
     if (!queue || queue.length === 0) return []
     set((s) => {
       const queues = { ...s.queues }
+      const held = { ...s.held }
       delete queues[terminalId]
-      return { queues }
+      delete held[terminalId]
+      return { queues, held }
     })
     return flushQueue(queue)
   },
