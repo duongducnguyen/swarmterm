@@ -10,6 +10,7 @@ import { memberColor } from '@/lib/war-room-identity'
 import { tokenizeMarkdown } from '@/lib/war-room-markdown'
 import { cn } from '@/lib/utils'
 import { Avatar, jumpToTerminal } from './Avatar'
+import { ModeratorComposer } from './ModeratorComposer'
 
 function Markdown({ text }: { text: string }): ReactElement {
   return (
@@ -180,24 +181,26 @@ export function DiscussionTab({ items }: { items: TranscriptItem[] }): ReactElem
     if (nearBottomRef.current) bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [lastSeq])
 
-  if (items.length === 0) {
-    return (
-      <div className="m-2 rounded border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
-        No messages yet. Once connected agents start talking, the whole
-        conversation shows up here.
-      </div>
-    )
-  }
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto p-1">
-      {items.map((item) =>
-        item.kind === 'system' ? (
-          <SystemLine key={item.seq} item={item} />
-        ) : (
-          <MessageGroup key={item.firstSeq} item={item} />
-        )
+    <div className="flex min-h-0 flex-1 flex-col">
+      {items.length === 0 ? (
+        <div className="m-2 flex-1 rounded border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+          No messages yet. Send one below as Moderator, or drag panes in and let their
+          agents talk.
+        </div>
+      ) : (
+        <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto p-1">
+          {items.map((item) =>
+            item.kind === 'system' ? (
+              <SystemLine key={item.seq} item={item} />
+            ) : (
+              <MessageGroup key={item.firstSeq} item={item} />
+            )
+          )}
+          <div ref={bottomRef} />
+        </div>
       )}
-      <div ref={bottomRef} />
+      <ModeratorComposer />
     </div>
   )
 }
