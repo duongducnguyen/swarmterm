@@ -58,3 +58,18 @@ export function onWarRoomEvent(handler: (e: WarRoomEvent) => void): Promise<Unli
 export function onWarRoomDeliver(handler: (d: WarRoomDeliver) => void): Promise<UnlistenFn> {
   return listen<WarRoomDeliver>('warroom:deliver', (event) => handler(event.payload))
 }
+
+/** The human user's seat — mirrors MODERATOR_ID in src-tauri/src/warroom.rs. */
+export const MODERATOR_ID = '__moderator__'
+
+/** Send as the Moderator. `to: null` broadcasts. Resolves to the number of
+ *  panes that will be typed into — which is not the number of recipients: a
+ *  member without an agent CLI still gets the message, it just is never
+ *  nudged. Rejects with the room's own error message. */
+export function warRoomModeratorSend(opts: {
+  to: string | null
+  content: string
+  mode: WarRoomMode
+}): Promise<number> {
+  return invoke('war_room_moderator_send', opts)
+}
