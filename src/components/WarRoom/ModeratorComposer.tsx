@@ -43,8 +43,24 @@ export function ModeratorComposer(): ReactElement {
   }, [members, mode])
 
   const targets = composerTargets(members, mode)
+  // In execute mode, reconcileTarget's last resort is EVERYONE (see its own
+  // doc comment: deliberately invalid, so validateComposer reports the real
+  // reason — "execute needs one target" — instead of this hook inventing a
+  // recipient). composerTargets never emits an EVERYONE row for execute, so
+  // without a synthetic row here the <select> would have no option matching
+  // `targetId` and render blank (selectedIndex -1), contradicting the option
+  // list below always containing the current value. A disabled placeholder
+  // keeps the select non-blank; the real reason still shows under the input.
+  const selectRows =
+    mode === 'execute' && !targets.some((t) => t.id === targetId)
+      ? [
+          { id: targetId, label: 'No eligible target', disabled: 'No pane in the War Room can run an execute.' },
+          ...targets
+        ]
+      : targets
   const validation = validateComposer({ text, targetId, mode, members })
   const canSend = validation.ok && !sending
+  const hasConnectedMember = members.some((m) => m.connected)
 
   function grow(): void {
     const el = areaRef.current
@@ -89,7 +105,7 @@ export function ModeratorComposer(): ReactElement {
           className="min-w-0 flex-1 truncate rounded border border-border bg-card px-1.5 py-0.5 text-[11px] text-foreground"
           aria-label="Send to"
         >
-          {targets.map((t) => (
+          {selectRows.map((t) => (
             <option key={t.id} value={t.id} disabled={t.disabled !== null} title={t.disabled ?? undefined}>
               {t.label}
               {t.disabled !== null ? ' (unavailable)' : ''}
@@ -119,8 +135,11 @@ export function ModeratorComposer(): ReactElement {
         ref={areaRef}
         rows={1}
         value={text}
+        // Nobody can receive anything yet — disable rather than merely hint
+        // via the placeholder, matching the design (spec §Composer UI).
+        disabled={!hasConnectedMember}
         placeholder={
-          members.some((m) => m.connected)
+          hasConnectedMember
             ? mode === 'execute'
               ? 'Prompt to run in that agent’s terminal…'
               : 'Message the room as Moderator…'
@@ -145,7 +164,7 @@ export function ModeratorComposer(): ReactElement {
           }
         }}
         className={cn(
-          'w-full resize-none rounded border bg-card px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground',
+          'w-full resize-none rounded border bg-card px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60',
           mode === 'execute' ? 'border-[#f97316]/50' : 'border-border focus:border-[#00b0f4]'
         )}
       />
