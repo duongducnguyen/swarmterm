@@ -10,6 +10,7 @@ const message = (
   overrides: Partial<Extract<WarRoomEvent, { kind: 'message' }>> = {}
 ): WarRoomEvent => ({
   kind: 'message',
+  roomId: 'default',
   seq,
   fromId,
   fromName,
@@ -23,11 +24,11 @@ const message = (
 
 describe('formatEvent', () => {
   it('join/leave/connected read as membership changes', () => {
-    const join: WarRoomEvent = { kind: 'join', seq: 1, terminalId: 't1', name: 'Claude', agentId: 'claude-code', cwd: '/x', connected: false, ts: 0 }
+    const join: WarRoomEvent = { kind: 'join', roomId: 'default', seq: 1, terminalId: 't1', name: 'Claude', agentId: 'claude-code', cwd: '/x', connected: false, ts: 0 }
     expect(formatEvent(join)).toEqual({ seq: 1, icon: 'join', headline: 'Claude joined the War Room', body: undefined })
-    const leave: WarRoomEvent = { kind: 'leave', seq: 2, terminalId: 't1', name: 'Claude', ts: 0 }
+    const leave: WarRoomEvent = { kind: 'leave', roomId: 'default', seq: 2, terminalId: 't1', name: 'Claude', ts: 0 }
     expect(formatEvent(leave).headline).toBe('Claude left the War Room')
-    const connected: WarRoomEvent = { kind: 'connected', seq: 3, terminalId: 't1', name: 'Claude', ts: 0 }
+    const connected: WarRoomEvent = { kind: 'connected', roomId: 'default', seq: 3, terminalId: 't1', name: 'Claude', ts: 0 }
     expect(formatEvent(connected)).toEqual({ seq: 3, icon: 'connected', headline: 'Claude connected', body: undefined })
   })
 
@@ -62,7 +63,7 @@ describe('groupTranscript', () => {
   it('a system event breaks the group', () => {
     const items = groupTranscript([
       message(1, 'a', 'Claude', 1000),
-      { kind: 'leave', seq: 2, terminalId: 't9', name: 'Codex', ts: 1500 },
+      { kind: 'leave', roomId: 'default', seq: 2, terminalId: 't9', name: 'Codex', ts: 1500 },
       message(3, 'a', 'Claude', 2000)
     ])
     expect(items.map((i) => i.kind)).toEqual(['group', 'system', 'group'])

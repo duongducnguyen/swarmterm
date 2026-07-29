@@ -3,13 +3,13 @@ import { TRANSCRIPT_CAP, useWarRoomStore } from './war-room-store'
 import type { WarRoomEvent } from '@/tauri/warroom'
 
 const join = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
-  kind: 'join', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', connected: false, ts: seq
+  kind: 'join', roomId: 'default', seq, terminalId, name, agentId: 'claude-code', cwd: '/x', connected: false, ts: seq
 })
 const leave = (terminalId: string, name: string, seq: number): WarRoomEvent => ({
-  kind: 'leave', seq, terminalId, name, ts: seq
+  kind: 'leave', roomId: 'default', seq, terminalId, name, ts: seq
 })
 const message = (seq: number): WarRoomEvent => ({
-  kind: 'message', seq, fromId: 't1', fromName: 'A', toId: 't2', toName: 'B',
+  kind: 'message', roomId: 'default', seq, fromId: 't1', fromName: 'A', toId: 't2', toName: 'B',
   content: 'hi', mode: 'probe', ts: seq
 })
 
@@ -72,7 +72,7 @@ describe('handshake + hydration + clear', () => {
     const s = useWarRoomStore.getState()
     s.applyEvent(join('t1', 'Claude', 1))
     expect(useWarRoomStore.getState().members[0].connected).toBe(false)
-    s.applyEvent({ kind: 'connected', seq: 2, terminalId: 't1', name: 'Claude', ts: 2 })
+    s.applyEvent({ kind: 'connected', roomId: 'default', seq: 2, terminalId: 't1', name: 'Claude', ts: 2 })
     expect(useWarRoomStore.getState().members[0].connected).toBe(true)
     expect(useWarRoomStore.getState().transcript).toHaveLength(2)
   })
