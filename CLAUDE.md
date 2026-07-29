@@ -138,14 +138,19 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   terminal map). To add a tool: drop it into `src-tauri/src/mcp/tools/` and
   add one `mod` line — see the spec at
   `docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`.
-- **War Room.** One app-wide room on `AppState.war_room` (`warroom.rs`). Drag a
-  pane onto the right panel's War Room tab → frontend calls `war_room_join`
-  with a metadata snapshot (agentId/cwd/title — the Rust terminal map stores
-  neither); drag the member chip out (or ✕) → `war_room_leave`. The
-  `war_room.*` MCP tools are always registered but gate per-call on live
-  membership, so revocation is the map removal itself. PTY death auto-leaves
-  (both `kill_terminal` and `read_loop`) — membership does NOT survive a
-  same-id respawn; re-drag. Probe messages live in server-side inboxes; only a
+- **War Room.** Multiple named rooms on `AppState.war_rooms` (`warroom.rs`:
+  `WarRooms` registry over per-room `WarRoom` instances; default room seeded
+  at boot, last room undeletable). A pane is in at most one room — drag onto
+  a room tab (or the panel body = active room) to join/move; the MCP tools
+  are unchanged and resolve the caller's room by membership (`find_room_of`).
+  Every `warroom:event` carries `roomId`; `warroom:deliver` stays
+  per-terminal, so the delivery/hold pipeline is room-agnostic. Each room has
+  its own Moderator seat; the composer sends into the active room. Drag the
+  member chip out (or ✕) → `war_room_leave`. The `war_room.*` MCP tools are
+  always registered but gate per-call on live membership, so revocation is
+  the map removal itself. PTY death auto-leaves (both `kill_terminal` and
+  `read_loop`) — membership does NOT survive a same-id respawn; re-drag.
+  Probe messages live in server-side inboxes; only a
   short nudge is typed into an idle pane (sustained idle, `NUDGE_IDLE_MS`),
   via `deliverPromptToTerminal` which bypasses broadcast fan-out on purpose.
   `mode: "execute"` pastes + runs a full prompt and is server-rejected toward

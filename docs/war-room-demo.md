@@ -49,3 +49,22 @@ Two agent panes in the room, both showing `connected`.
 9. Repeat step 6, then click into pane B → pane A's pill stays. An unsubmitted
    line holds regardless of focus.
 10. Close pane A while its delivery is held → no stray text, no orphan badge.
+
+## v3 smoke: multi-room
+
+1. Boot → one "War Room" tab; drag a pane into the body → joins it; intro
+   names the room.
+2. `+` → create "Website B"; drag a second pane onto the B tab directly →
+   joins B.
+3. `war_room.list_peers` from each pane shows only its own room's peers, and
+   `room` names it.
+4. Broadcast in one room → the other room's transcript stays silent.
+5. Drag a member chip from A onto the B tab → A logs Leave, B logs Join
+   (pending), intro re-typed, first tool call reconnects.
+6. Double-click a tab → rename inline; composer/transcript follow the
+   rename.
+7. ✕ on a populated room → two-step confirm → members disconnected, tab
+   gone, active falls back.
+8. Single remaining room shows no ✕.
+9. Held badge: queue a delivery into a pane mid-typing in room B while room A
+   is active → the B tab shows `⏸N`.

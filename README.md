@@ -40,6 +40,13 @@ tính năng iteration 1 được giữ nguyên.
 
 - **War Room** — kéo pane vào tab War Room để các agent nhắn tin/tranh luận/giao
   việc cho nhau qua MCP; kéo ra để thu hồi quyền.
+- **War Room — nhiều phòng** — panel War Room có dải tab phòng: `+` tạo phòng
+  mới, double-click đổi tên inline, ✕ xoá (xác nhận 2 bước, phòng cuối cùng
+  không xoá được). Một pane chỉ ở trong tối đa 1 phòng — kéo vào tab phòng
+  khác là chuyển phòng (rời phòng cũ, intro được gõ lại, tool call kế tiếp mới
+  kết nối lại). Mỗi phòng có transcript, danh sách thành viên và Moderator
+  riêng; badge ⏸N trên tab báo tin đang chờ gửi ở phòng đó dù đang xem phòng
+  khác.
 
 - **Link trong terminal** — URL bấm thẳng một cái là mở bằng trình duyệt mặc
   định của hệ điều hành (cột web-preview trong app dành riêng cho MCP
@@ -250,6 +257,26 @@ Sau `npm run tauri dev`:
 - [ ] **War Room — execute:** Agent A gửi execute → prompt chạy trong pane B, transcript đánh dấu màu cam.
 - [ ] **War Room — revocation:** Kéo chip ra / bấm ✕ → tool call tiếp theo từ pane đó bị từ chối "not in the War Room".
 - [ ] **War Room — PTY death:** Đóng pane thành viên → transcript ghi rời phòng, list_peers không còn ghost.
+- [ ] **War Room — nhiều phòng, join:** Mở app → sẵn 1 tab "War Room"; kéo 1
+      pane vào thân panel → join phòng đó, intro gõ vào pane đúng tên phòng.
+- [ ] **War Room — nhiều phòng, tạo phòng:** Bấm `+` tạo phòng "Website B";
+      kéo pane thứ 2 thẳng vào tab B → join B, không đụng phòng đầu.
+- [ ] **War Room — nhiều phòng, list_peers:** Gọi `war_room.list_peers` từ mỗi
+      pane → chỉ thấy peer cùng phòng, field `room` đúng tên phòng đó.
+- [ ] **War Room — nhiều phòng, cách ly transcript:** Broadcast ở phòng A →
+      transcript phòng B không nhận gì.
+- [ ] **War Room — nhiều phòng, chuyển phòng:** Kéo chip thành viên từ A sang
+      tab B → A ghi log Leave, B ghi log Join (pending), intro được gõ lại
+      vào pane, tool call kế tiếp mới reconnect.
+- [ ] **War Room — nhiều phòng, đổi tên:** Double-click tab → sửa tên inline;
+      composer và transcript hiển thị đúng tên mới ngay.
+- [ ] **War Room — nhiều phòng, xoá phòng:** Bấm ✕ trên phòng có thành viên →
+      xác nhận 2 bước → thành viên bị disconnect, tab biến mất, phòng active
+      fallback sang phòng còn lại.
+- [ ] **War Room — nhiều phòng, phòng cuối:** Chỉ còn 1 phòng → tab không có
+      nút ✕.
+- [ ] **War Room — nhiều phòng, badge chờ gửi:** Đang xem phòng A, queue một
+      tin gửi vào pane đang gõ dở ở phòng B → tab B hiện `⏸N`.
 
 ## Giới hạn đã biết (iteration 1)
 
