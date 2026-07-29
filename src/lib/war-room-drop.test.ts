@@ -1,26 +1,53 @@
 import { describe, expect, it } from 'vitest'
-import { MEMBER_DRAG_PREFIX, WAR_ROOM_DROP_ID, memberDisplayName, resolveDragEnd } from './war-room-drop'
+import { MEMBER_DRAG_PREFIX, ROOM_DROP_PREFIX, WAR_ROOM_DROP_ID, DragEndContext, memberDisplayName, resolveDragEnd } from './war-room-drop'
+
+const ctx = (activeRoomId: string | null, roomOf: Record<string, string> = {}) => ({
+  activeRoomId,
+  memberRoomId: (id: string) => roomOf[id] ?? null
+})
 
 describe('resolveDragEnd', () => {
-  it('pane dropped on the zone joins', () => {
-    expect(resolveDragEnd('leaf-1', WAR_ROOM_DROP_ID)).toEqual({ kind: 'join', leafId: 'leaf-1' })
+  it('pane on a room tab joins that room', () => {
+    expect(resolveDragEnd('leaf1', `${ROOM_DROP_PREFIX}room-2`, ctx('room-1')))
+      .toEqual({ kind: 'join', leafId: 'leaf1', roomId: 'room-2' })
   })
 
-  it('pane dropped on another pane reorders', () => {
-    expect(resolveDragEnd('leaf-1', 'leaf-2')).toEqual({
-      kind: 'reorder', activeLeafId: 'leaf-1', overLeafId: 'leaf-2'
-    })
+  it('pane on the panel body joins the active room', () => {
+    expect(resolveDragEnd('leaf1', WAR_ROOM_DROP_ID, ctx('room-1')))
+      .toEqual({ kind: 'join', leafId: 'leaf1', roomId: 'room-1' })
   })
 
-  it('pane dropped on itself or nowhere is a no-op', () => {
-    expect(resolveDragEnd('leaf-1', 'leaf-1')).toEqual({ kind: 'none' })
-    expect(resolveDragEnd('leaf-1', null)).toEqual({ kind: 'none' })
+  it('pane on the body before hydration is a no-op, never a reorder', () => {
+    expect(resolveDragEnd('leaf1', WAR_ROOM_DROP_ID, ctx(null))).toEqual({ kind: 'none' })
   })
 
-  it('member chip dropped outside the zone leaves; on the zone stays', () => {
-    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, null)).toEqual({ kind: 'leave', terminalId: 't9' })
-    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, 'leaf-2')).toEqual({ kind: 'leave', terminalId: 't9' })
-    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t9`, WAR_ROOM_DROP_ID)).toEqual({ kind: 'none' })
+  it('member chip on another room tab moves it', () => {
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, `${ROOM_DROP_PREFIX}room-2`, ctx('room-1', { t1: 'room-1' })))
+      .toEqual({ kind: 'move', terminalId: 't1', roomId: 'room-2' })
+  })
+
+  it('member chip on its own room tab or the body of its room keeps membership', () => {
+    const c = ctx('room-1', { t1: 'room-1' })
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, `${ROOM_DROP_PREFIX}room-1`, c)).toEqual({ kind: 'none' })
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, WAR_ROOM_DROP_ID, c)).toEqual({ kind: 'none' })
+  })
+
+  it('member chip on the body moves it into the ACTIVE room when that differs', () => {
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, WAR_ROOM_DROP_ID, ctx('room-2', { t1: 'room-1' })))
+      .toEqual({ kind: 'move', terminalId: 't1', roomId: 'room-2' })
+  })
+
+  it('member chip dropped anywhere else leaves', () => {
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, null, ctx('room-1', { t1: 'room-1' })))
+      .toEqual({ kind: 'leave', terminalId: 't1' })
+    expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, 'some-leaf', ctx('room-1', { t1: 'room-1' })))
+      .toEqual({ kind: 'leave', terminalId: 't1' })
+  })
+
+  it('pane over pane still reorders; self/nothing is none', () => {
+    expect(resolveDragEnd('a', 'b', ctx('room-1'))).toEqual({ kind: 'reorder', activeLeafId: 'a', overLeafId: 'b' })
+    expect(resolveDragEnd('a', 'a', ctx('room-1'))).toEqual({ kind: 'none' })
+    expect(resolveDragEnd('a', null, ctx('room-1'))).toEqual({ kind: 'none' })
   })
 })
 
