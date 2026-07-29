@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { flushQueue, type PendingDelivery } from '@/lib/war-room-nudge'
-import type { WarRoomDeliver, WarRoomEvent, WarRoomMemberInfo } from '@/tauri/warroom'
+import type {
+  WarRoomDeliver, WarRoomEvent, WarRoomMemberInfo, WarRoomRoomInfo, WarRoomRoomMeta
+} from '@/tauri/warroom'
 
 /** Bounded so a runaway agent debate can't grow renderer memory forever. */
 export const TRANSCRIPT_CAP = 500
@@ -15,9 +17,16 @@ export interface WarRoomMember {
   connected: boolean
 }
 
+const toMember = (m: WarRoomMemberInfo): WarRoomMember => ({
+  terminalId: m.terminalId, name: m.name, agentId: m.agentId, cwd: m.cwd, connected: m.connected
+})
+
 interface WarRoomStore {
-  members: WarRoomMember[]
-  transcript: WarRoomEvent[]
+  rooms: WarRoomRoomMeta[]
+  /** Null only before hydration (boot snapshot hasn't landed yet). */
+  activeRoomId: string | null
+  membersByRoom: Record<string, WarRoomMember[]>
+  transcriptByRoom: Record<string, WarRoomEvent[]>
   /** Pending deliveries per recipient terminalId, flushed on sustained idle. */
   queues: Record<string, PendingDelivery[]>
   /** Terminals whose queue the delivery scheduler is withholding because the
@@ -25,45 +34,61 @@ interface WarRoomStore {
    *  the scheduler owns writing it (see war-room-delivery.ts). */
   held: Record<string, boolean>
 
+  /** Routes a server event into its room's member list / transcript. */
   applyEvent: (e: WarRoomEvent) => void
-  /** Replace members from the Rust snapshot (boot / dev-reload hydration). */
-  hydrateMembers: (list: WarRoomMemberInfo[]) => void
-  clearTranscript: () => void
+  /** Reconcile the room list from a `warroom:rooms` push (create/rename/delete). */
+  applyRooms: (list: WarRoomRoomMeta[]) => void
+  /** Replace rooms + members from the Rust boot snapshot (boot / dev-reload). */
+  hydrateRooms: (list: WarRoomRoomInfo[]) => void
+  setActiveRoom: (roomId: string) => void
+  clearTranscript: (roomId: string) => void
   enqueue: (d: WarRoomDeliver) => void
   /** Queue the join intro as a verbatim paste (execute-shaped: full text + Enter). */
   enqueueIntro: (terminalId: string, text: string) => void
   setHeld: (terminalId: string, held: boolean) => void
   /** Drain a terminal's queue into ordered paste payloads. */
   takeFlush: (terminalId: string) => string[]
+  /** Member of ANY room. */
   isMember: (terminalId: string) => boolean
+  memberRoomId: (terminalId: string) => string | null
 }
 
 export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
-  members: [],
-  transcript: [],
+  rooms: [],
+  activeRoomId: null,
+  membersByRoom: {},
+  transcriptByRoom: {},
   queues: {},
   held: {},
 
   applyEvent: (e) =>
     set((s) => {
-      const transcript = [...s.transcript, e].slice(-TRANSCRIPT_CAP)
+      const roomTranscript = [...(s.transcriptByRoom[e.roomId] ?? []), e].slice(-TRANSCRIPT_CAP)
+      const transcriptByRoom = { ...s.transcriptByRoom, [e.roomId]: roomTranscript }
       if (e.kind === 'join') {
         const member: WarRoomMember = {
-          terminalId: e.terminalId,
-          name: e.name,
-          agentId: e.agentId,
-          cwd: e.cwd,
-          connected: e.connected
+          terminalId: e.terminalId, name: e.name, agentId: e.agentId, cwd: e.cwd, connected: e.connected
         }
-        const members = [...s.members.filter((m) => m.terminalId !== e.terminalId), member]
-        return { members, transcript }
+        // Belt-and-braces: the server emits the old room's Leave before this
+        // Join, but event reordering across threads must never leave one
+        // terminal visible in two room slices.
+        const membersByRoom = Object.fromEntries(
+          Object.entries(s.membersByRoom).map(([rid, ms]) => [
+            rid, ms.filter((m) => m.terminalId !== e.terminalId)
+          ])
+        )
+        membersByRoom[e.roomId] = [...(membersByRoom[e.roomId] ?? []), member]
+        return { membersByRoom, transcriptByRoom }
       }
       if (e.kind === 'connected') {
         return {
-          members: s.members.map((m) =>
-            m.terminalId === e.terminalId ? { ...m, connected: true } : m
-          ),
-          transcript
+          membersByRoom: {
+            ...s.membersByRoom,
+            [e.roomId]: (s.membersByRoom[e.roomId] ?? []).map((m) =>
+              m.terminalId === e.terminalId ? { ...m, connected: true } : m
+            )
+          },
+          transcriptByRoom
         }
       }
       if (e.kind === 'leave') {
@@ -72,27 +97,53 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
         delete queues[e.terminalId]
         delete held[e.terminalId]
         return {
-          members: s.members.filter((m) => m.terminalId !== e.terminalId),
-          transcript,
-          queues,
-          held
+          membersByRoom: {
+            ...s.membersByRoom,
+            [e.roomId]: (s.membersByRoom[e.roomId] ?? []).filter((m) => m.terminalId !== e.terminalId)
+          },
+          transcriptByRoom, queues, held
         }
       }
-      return { transcript }
+      return { transcriptByRoom }
     }),
 
-  hydrateMembers: (list) =>
-    set({
-      members: list.map((m) => ({
-        terminalId: m.terminalId,
-        name: m.name,
-        agentId: m.agentId,
-        cwd: m.cwd,
-        connected: m.connected
-      }))
+  applyRooms: (list) =>
+    set((s) => {
+      const keep = new Set(list.map((r) => r.roomId))
+      const membersByRoom: typeof s.membersByRoom = {}
+      const transcriptByRoom: typeof s.transcriptByRoom = {}
+      const queues = { ...s.queues }
+      const held = { ...s.held }
+      for (const [rid, ms] of Object.entries(s.membersByRoom)) {
+        if (keep.has(rid)) { membersByRoom[rid] = ms; continue }
+        // Room deleted: its members' Leaves were emitted first, but drop any
+        // queue that survived reordering — never deliver into a dead room.
+        for (const m of ms) { delete queues[m.terminalId]; delete held[m.terminalId] }
+      }
+      for (const [rid, t] of Object.entries(s.transcriptByRoom)) {
+        if (keep.has(rid)) transcriptByRoom[rid] = t
+      }
+      const activeRoomId =
+        s.activeRoomId !== null && keep.has(s.activeRoomId)
+          ? s.activeRoomId
+          : (list[0]?.roomId ?? null)
+      return { rooms: list, activeRoomId, membersByRoom, transcriptByRoom, queues, held }
     }),
 
-  clearTranscript: () => set({ transcript: [] }),
+  hydrateRooms: (list) =>
+    set((s) => ({
+      rooms: list.map(({ roomId, name }) => ({ roomId, name })),
+      membersByRoom: Object.fromEntries(list.map((r) => [r.roomId, r.members.map(toMember)])),
+      activeRoomId:
+        s.activeRoomId !== null && list.some((r) => r.roomId === s.activeRoomId)
+          ? s.activeRoomId
+          : (list[0]?.roomId ?? null)
+    })),
+
+  setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
+
+  clearTranscript: (roomId) =>
+    set((s) => ({ transcriptByRoom: { ...s.transcriptByRoom, [roomId]: [] } })),
 
   enqueue: (d) =>
     set((s) => ({
@@ -140,5 +191,10 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
     return flushQueue(queue)
   },
 
-  isMember: (terminalId) => get().members.some((m) => m.terminalId === terminalId)
+  isMember: (terminalId) =>
+    Object.values(get().membersByRoom).some((ms) => ms.some((m) => m.terminalId === terminalId)),
+
+  memberRoomId: (terminalId) =>
+    Object.entries(get().membersByRoom)
+      .find(([, ms]) => ms.some((m) => m.terminalId === terminalId))?.[0] ?? null
 }))
