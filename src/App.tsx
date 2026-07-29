@@ -54,9 +54,10 @@ import { useWarRoomStore } from '@/store/war-room-store'
 import {
   warRoomJoin,
   warRoomLeave,
-  warRoomMembers,
+  warRoomRooms,
   onWarRoomEvent,
-  onWarRoomDeliver
+  onWarRoomDeliver,
+  onWarRoomRooms
 } from '@/tauri/warroom'
 import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
@@ -122,7 +123,7 @@ export default function App(): ReactElement {
     git.setPanelOpen(prior.open)
   }, [])
 
-  const joinWarRoom = useCallback((leafId: string): void => {
+  const joinWarRoom = useCallback((leafId: string, roomId: string): void => {
     const st = useAppStore.getState()
     const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
     const leaf = ws ? findLeaf(ws.layout, leafId) : null
@@ -130,9 +131,13 @@ export default function App(): ReactElement {
       restorePanelIfNoDrop() // no target pane — don't leave the panel flipped
       return
     }
-    // Re-dropping a pane that's already a member must not re-enqueue the
-    // execute-shaped intro: that would burn another agent turn for nothing.
-    const alreadyMember = useWarRoomStore.getState().isMember(leaf.terminalId)
+    // Re-dropping a pane that's already a member of THIS room must not
+    // re-enqueue the execute-shaped intro: that would burn another agent turn
+    // for nothing. A pane dragged into a DIFFERENT room still arrives here
+    // (not through moveMember, which only handles member-chip drags), so the
+    // guard compares rooms rather than just membership.
+    const priorRoomId = useWarRoomStore.getState().memberRoomId(leaf.terminalId)
+    const alreadyMember = priorRoomId === roomId
     const resolvedAgent = leaf.agentId ?? DEFAULT_TEMPLATE_ID
     // 'terminal' is the plain shell template — a member, but never nudged and
     // never an execute target (the backend enforces the latter).
@@ -146,13 +151,15 @@ export default function App(): ReactElement {
       resolvePaneTitle(resolvedAgent, useTerminalTitleStore.getState().titles[leaf.terminalId]),
       cwd
     )
-    const peers = useWarRoomStore.getState().members
+    const st2 = useWarRoomStore.getState()
+    const peers = (st2.membersByRoom[roomId] ?? [])
       .filter((m) => m.terminalId !== leaf.terminalId)
       .map((m) => m.name)
-    void warRoomJoin({ terminalId: leaf.terminalId, agentId, cwd, displayName })
+    const roomName = st2.rooms.find((r) => r.roomId === roomId)?.name ?? 'War Room'
+    void warRoomJoin({ roomId, terminalId: leaf.terminalId, agentId, cwd, displayName })
       .then(() => {
         if (agentId && !alreadyMember) {
-          useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(peers))
+          useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(roomName, peers))
         }
         useGitStore.getState().setMode('warroom')
         panelBeforeDragRef.current = null // drop landed — keep the panel on War Room
@@ -162,6 +169,31 @@ export default function App(): ReactElement {
         restorePanelIfNoDrop() // join failed — don't leave the panel flipped to War Room
       })
   }, [restorePanelIfNoDrop])
+
+  const moveMember = useCallback((terminalId: string, roomId: string): void => {
+    const st = useWarRoomStore.getState()
+    const fromRoom = st.memberRoomId(terminalId)
+    const member =
+      fromRoom !== null ? st.membersByRoom[fromRoom]?.find((m) => m.terminalId === terminalId) : undefined
+    if (!member) return
+    const peers = (st.membersByRoom[roomId] ?? []).map((m) => m.name)
+    const roomName = st.rooms.find((r) => r.roomId === roomId)?.name ?? 'War Room'
+    void warRoomJoin({
+      roomId,
+      terminalId,
+      agentId: member.agentId ?? undefined,
+      cwd: member.cwd,
+      displayName: member.name
+    })
+      .then(() => {
+        // A move resets the handshake (new room, new pending state); the intro
+        // tells the agent to call list_peers, which reconnects it immediately.
+        if (member.agentId) {
+          useWarRoomStore.getState().enqueueIntro(terminalId, buildIntroText(roomName, peers))
+        }
+      })
+      .catch((e) => console.warn('war room move failed:', e))
+  }, [])
 
   function handleDragStart(id: string): void {
     setDraggingLeafId(id)
@@ -173,9 +205,17 @@ export default function App(): ReactElement {
 
   function handleDragEnd(activeId: string, overId: string | null): void {
     setDraggingLeafId(null)
-    const action = resolveDragEnd(activeId, overId)
+    const st = useWarRoomStore.getState()
+    const action = resolveDragEnd(activeId, overId, {
+      activeRoomId: st.activeRoomId,
+      memberRoomId: st.memberRoomId
+    })
     if (action.kind === 'join') {
-      joinWarRoom(action.leafId)
+      joinWarRoom(action.leafId, action.roomId)
+      return
+    }
+    if (action.kind === 'move') {
+      moveMember(action.terminalId, action.roomId)
       return
     }
     restorePanelIfNoDrop()
@@ -380,8 +420,12 @@ export default function App(): ReactElement {
         // auto-leave on pty death normally beats us here — this sweep is the
         // belt-and-braces for any path that drops a pane without killing it.
         // warRoomLeave is idempotent, so racing the backend is harmless.
-        for (const m of useWarRoomStore.getState().members) {
-          if (!live.has(m.terminalId)) void warRoomLeave(m.terminalId)
+        // Iterate every room's slice — the sweep doesn't just target whatever
+        // room is currently shown in the panel.
+        for (const ms of Object.values(useWarRoomStore.getState().membersByRoom)) {
+          for (const m of ms) {
+            if (!live.has(m.terminalId)) void warRoomLeave(m.terminalId)
+          }
         }
       }),
     []
@@ -440,16 +484,20 @@ export default function App(): ReactElement {
     const stopDelivery = startWarRoomDelivery()
     const unEvent = onWarRoomEvent((e) => useWarRoomStore.getState().applyEvent(e))
     const unDeliver = onWarRoomDeliver((d) => useWarRoomStore.getState().enqueue(d))
+    // Room list can change independent of membership (create/rename/delete);
+    // keep it live so a room disappearing mid-session tears down its slice.
+    const unRooms = onWarRoomRooms((rooms) => useWarRoomStore.getState().applyRooms(rooms))
     // Membership lives Rust-side and outlives renderer reloads (dev HMR,
     // crash-restore) — hydrate so the panel never shows an empty room while
     // the server still routes messages.
-    void warRoomMembers()
-      .then((list) => useWarRoomStore.getState().hydrateMembers(list))
-      .catch(() => {})
+    void warRoomRooms()
+      .then((list) => useWarRoomStore.getState().hydrateRooms(list))
+      .catch(() => {}) // matches the existing hydration's error posture
     return () => {
       stopDelivery()
       void unEvent.then((f) => f())
       void unDeliver.then((f) => f())
+      void unRooms.then((f) => f())
     }
   }, [])
 

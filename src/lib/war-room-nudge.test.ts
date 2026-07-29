@@ -21,7 +21,7 @@ describe('buildNudgeText', () => {
 
 describe('buildIntroText', () => {
   it('lists peers and all three tools', () => {
-    const t = buildIntroText(['Codex', 'Claude'])
+    const t = buildIntroText('War Room', ['Codex', 'Claude'])
     expect(t).toContain('Codex')
     expect(t).toContain('war_room.list_peers')
     expect(t).toContain('war_room.send')
@@ -29,13 +29,19 @@ describe('buildIntroText', () => {
   })
 
   it('still reads sensibly with no peers yet', () => {
-    expect(buildIntroText([])).toContain('war_room.list_peers')
+    expect(buildIntroText('War Room', [])).toContain('war_room.list_peers')
   })
 
   it('tells agents the Moderator is the human user and is reachable', () => {
-    const t = buildIntroText(['Codex'])
+    const t = buildIntroText('War Room', ['Codex'])
     expect(t).toContain('Moderator')
     expect(t).toContain('__moderator__')
+  })
+
+  it('intro names the room', () => {
+    const text = buildIntroText('Website A', ['Codex'])
+    expect(text).toContain('War Room "Website A"')
+    expect(text).toContain('with Codex')
   })
 })
 

@@ -28,10 +28,10 @@ export function buildNudgeText(fromNames: string[]): string {
   return `[War Room] ${fromNames.length} new messages (from ${who}). Call the war_room.read_inbox tool to read them, then reply with war_room.send.`
 }
 
-export function buildIntroText(peerNames: string[]): string {
+export function buildIntroText(roomName: string, peerNames: string[]): string {
   const with_ = peerNames.length > 0 ? ` with ${peerNames.join(', ')}` : ''
   return (
-    `[War Room] You joined Swarmterm's War Room${with_}. ` +
+    `[War Room] You joined Swarmterm's War Room "${roomName}"${with_}. ` +
     `First call war_room.list_peers now — that confirms your connection (until then ` +
     `peers see you as pending and cannot message you). ` +
     `Tools: war_room.list_peers (who is here), war_room.send (mode "probe" to message a peer, ` +
