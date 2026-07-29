@@ -37,6 +37,9 @@ beforeEach(() => {
   useWarRoomStore.setState({
     rooms: [], activeRoomId: null, membersByRoom: {}, transcriptByRoom: {}, queues: {}, held: {}
   })
+  // applyEvent now drops events for rooms not in `rooms` (deleted-room race
+  // guard, see war-room-store.ts) — seed the one room these tests join into.
+  useWarRoomStore.getState().hydrateRooms([{ roomId: 'room-1', name: 'War Room', members: [] }])
   useTerminalActivityStore.setState({ active: {} })
   useTerminalTypingStore.setState({ lastKeyAt: {}, dirty: {} })
   useAppStore.setState({ workspaces: [], activeWorkspaceId: '' })

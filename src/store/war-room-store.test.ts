@@ -53,6 +53,22 @@ describe('room routing', () => {
     expect(s.membersByRoom['room-2']).toHaveLength(1)
   })
 
+  it('ignores an event for a room that is not in the known rooms list (deleted-room race)', () => {
+    seedRooms()
+    const before = useWarRoomStore.getState()
+    useWarRoomStore.getState().applyEvent(join('room-ghost', 't1'))
+    const s = useWarRoomStore.getState()
+    expect(s.membersByRoom['room-ghost']).toBeUndefined()
+    expect(s.transcriptByRoom['room-ghost']).toBeUndefined()
+    expect(s.isMember('t1')).toBe(false)
+    // Untouched — the event was dropped whole, not partially applied.
+    expect(s.membersByRoom).toBe(before.membersByRoom)
+    expect(s.transcriptByRoom).toBe(before.transcriptByRoom)
+    // The guard only rejects the unknown room; a real room still works.
+    useWarRoomStore.getState().applyEvent(join('room-1', 't2'))
+    expect(useWarRoomStore.getState().membersByRoom['room-1']).toHaveLength(1)
+  })
+
   it('leave drops that terminal queue and held flag (unchanged behaviour, now per room)', () => {
     seedRooms()
     useWarRoomStore.getState().applyEvent(join('room-1', 't1'))

@@ -63,6 +63,18 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
 
   applyEvent: (e) =>
     set((s) => {
+      // Unknown room = the room was deleted (or hydration hasn't landed yet).
+      // Applying anyway would resurrect a phantom membersByRoom/transcriptByRoom
+      // slice that isMember — and therefore the delivery scheduler — trusts;
+      // revocation must hold even against event reordering (see
+      // war-room-delivery.ts's own membership re-check for the same reason).
+      // This is safe for delete: war_room_delete emits each member's Leave
+      // BEFORE the warroom:rooms snapshot that drops the room, so those
+      // Leaves still find the room present and clean up queues/held normally
+      // — only events arriving AFTER the snapshot removed the room are
+      // dropped here. The boot window is covered separately: hydrateRooms
+      // replaces membership wholesale, so nothing needs to survive it.
+      if (!s.rooms.some((r) => r.roomId === e.roomId)) return s
       const roomTranscript = [...(s.transcriptByRoom[e.roomId] ?? []), e].slice(-TRANSCRIPT_CAP)
       const transcriptByRoom = { ...s.transcriptByRoom, [e.roomId]: roomTranscript }
       if (e.kind === 'join') {
