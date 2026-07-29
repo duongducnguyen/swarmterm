@@ -95,7 +95,10 @@ function MessageGroup({ item }: { item: Extract<TranscriptItem, { kind: 'group' 
   // The sender may have left — colors derive from the id, so history keeps
   // its identity; the agent icon falls back via the (possibly gone) roster.
   const agentId = useWarRoomStore(
-    (s) => s.members.find((m) => m.terminalId === item.fromId)?.agentId ?? null
+    (s) =>
+      Object.values(s.membersByRoom)
+        .flat()
+        .find((m) => m.terminalId === item.fromId)?.agentId ?? null
   )
   return (
     <div className="rounded px-1 py-1 hover:bg-muted/30">
@@ -125,7 +128,7 @@ function MessageGroup({ item }: { item: Extract<TranscriptItem, { kind: 'group' 
   )
 }
 
-export function ClearButton(): ReactElement {
+export function ClearButton({ roomId }: { roomId: string }): ReactElement {
   const [arming, setArming] = useState(false)
   useEffect(() => {
     if (!arming) return
@@ -136,7 +139,7 @@ export function ClearButton(): ReactElement {
     return (
       <button
         onClick={() => {
-          useWarRoomStore.getState().clearTranscript()
+          useWarRoomStore.getState().clearTranscript(roomId)
           setArming(false)
         }}
         className="rounded bg-[#ed4245]/20 px-1.5 py-0.5 text-[10px] font-medium text-[#ed4245]"

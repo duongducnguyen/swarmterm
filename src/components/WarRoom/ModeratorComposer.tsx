@@ -39,7 +39,10 @@ const MODE_HINT: Record<WarRoomMode, string> = {
 }
 
 export function ModeratorComposer(): ReactElement {
-  const members = useWarRoomStore((s) => s.members)
+  const roomId = useWarRoomStore((s) => s.activeRoomId)
+  const members = useWarRoomStore((s) =>
+    s.activeRoomId !== null ? (s.membersByRoom[s.activeRoomId] ?? []) : []
+  )
   const [text, setText] = useState('')
   const [mode, setMode] = useState<WarRoomMode>('probe')
   const [targetId, setTargetId] = useState<string>(EVERYONE)
@@ -58,6 +61,14 @@ export function ModeratorComposer(): ReactElement {
   useEffect(() => {
     setTargetId((current) => reconcileTarget(current, members, mode))
   }, [members, mode])
+
+  // Selection is per-room: carrying a target across rooms would send into the
+  // wrong roster (reconcileTarget would catch most, but Everyone + stale text
+  // reads as aimed at the previous room).
+  useEffect(() => {
+    setTargetId(EVERYONE)
+    setError(null)
+  }, [roomId])
 
   const targets = composerTargets(members, mode)
   const validation = validateComposer({ text, targetId, mode, members })
@@ -83,6 +94,7 @@ export function ModeratorComposer(): ReactElement {
 
   async function send(): Promise<void> {
     if (inFlightRef.current) return
+    if (roomId === null) return
     if (!validation.ok) {
       setError(validation.reason)
       return
@@ -91,6 +103,7 @@ export function ModeratorComposer(): ReactElement {
     setSending(true)
     try {
       await warRoomModeratorSend({
+        roomId,
         to: targetId === EVERYONE ? null : targetId,
         content: text.trim(),
         mode
