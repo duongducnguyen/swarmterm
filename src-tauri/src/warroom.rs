@@ -351,6 +351,175 @@ impl WarRoom {
     }
 }
 
+/// Name of the room seeded at boot — drag-in works with zero setup.
+pub const DEFAULT_ROOM_NAME: &str = "War Room";
+
+pub struct RoomEntry {
+    pub id: String,
+    pub name: String,
+    pub room: WarRoom,
+}
+
+/// Registry of independent rooms. A Vec, not a HashMap: creation order IS the
+/// renderer's tab order, and with a handful of rooms every lookup is a linear
+/// scan anyway. Ids are a process-local counter — nothing persists, so they
+/// only need uniqueness within one launch.
+pub struct WarRooms {
+    rooms: Vec<RoomEntry>,
+    next_id: u64,
+}
+
+impl Default for WarRooms {
+    fn default() -> Self {
+        let mut s = Self { rooms: Vec::new(), next_id: 1 };
+        s.create(DEFAULT_ROOM_NAME).expect("default room name is non-blank");
+        s
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomMeta {
+    pub room_id: String,
+    pub name: String,
+}
+
+/// Boot-hydration snapshot: rooms in tab order, each with its roster.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomInfo {
+    pub room_id: String,
+    pub name: String,
+    pub members: Vec<MemberInfo>,
+}
+
+/// Wire envelope for `warroom:event`: the existing kind-tagged payload plus a
+/// flattened `roomId`, so the renderer routes without a nested object.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomScopedEvent {
+    pub room_id: String,
+    #[serde(flatten)]
+    pub event: WarRoomEvent,
+}
+
+pub fn scoped(room_id: &str, event: WarRoomEvent) -> RoomScopedEvent {
+    RoomScopedEvent { room_id: room_id.to_string(), event }
+}
+
+pub struct JoinOutcome {
+    /// `(old_room_id, Leave)` when the join was a move from another room.
+    pub left: Option<(String, WarRoomEvent)>,
+    pub joined: WarRoomEvent,
+}
+
+impl WarRooms {
+    pub fn create(&mut self, name: &str) -> Result<RoomMeta, String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("room name must not be empty".into());
+        }
+        let id = format!("room-{}", self.next_id);
+        self.next_id += 1;
+        self.rooms.push(RoomEntry { id: id.clone(), name: name.to_string(), room: WarRoom::default() });
+        Ok(RoomMeta { room_id: id, name: name.to_string() })
+    }
+
+    pub fn rename(&mut self, room_id: &str, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("room name must not be empty".into());
+        }
+        let entry = self
+            .rooms
+            .iter_mut()
+            .find(|r| r.id == room_id)
+            .ok_or_else(|| format!("no such room \"{room_id}\""))?;
+        entry.name = name.to_string();
+        Ok(())
+    }
+
+    /// Removes the room and returns one Leave per (non-Moderator) member so the
+    /// caller can emit them — the renderer's existing leave handling is what
+    /// drops that terminal's queued deliveries and held flag.
+    pub fn delete(&mut self, room_id: &str, ts: u64) -> Result<Vec<WarRoomEvent>, String> {
+        let idx = self
+            .rooms
+            .iter()
+            .position(|r| r.id == room_id)
+            .ok_or_else(|| format!("no such room \"{room_id}\""))?;
+        if self.rooms.len() == 1 {
+            // The drop zone must always have a target; the UI disables the
+            // button too, this is the authoritative guard.
+            return Err("cannot delete the last room".into());
+        }
+        let mut entry = self.rooms.remove(idx);
+        let ids: Vec<String> =
+            entry.room.members_info().iter().map(|m| m.terminal_id.clone()).collect();
+        Ok(ids.iter().filter_map(|id| entry.room.leave(id, ts)).collect())
+    }
+
+    /// The move semantics: joining room X while a member of room Y leaves Y
+    /// first (inbox and handshake die with the old membership). A same-room
+    /// re-join skips the leave so `WarRoom::join` keeps inbox + connected.
+    pub fn join(
+        &mut self,
+        room_id: &str,
+        terminal_id: String,
+        agent_id: Option<String>,
+        cwd: String,
+        display_name: String,
+        ts: u64,
+    ) -> Result<JoinOutcome, String> {
+        if !self.rooms.iter().any(|r| r.id == room_id) {
+            return Err(format!("no such room \"{room_id}\""));
+        }
+        let left = match self.find_room_of(&terminal_id) {
+            Some(entry) if entry.id == room_id => None,
+            Some(_) => self.leave_everywhere(&terminal_id, ts),
+            None => None,
+        };
+        let entry = self.rooms.iter_mut().find(|r| r.id == room_id).expect("checked above");
+        let joined = entry.room.join(terminal_id, agent_id, cwd, display_name, ts);
+        Ok(JoinOutcome { left, joined })
+    }
+
+    /// Backs `war_room_leave` and both PTY-death auto-leave paths — the caller
+    /// doesn't know (or care) which room the pane was in.
+    pub fn leave_everywhere(&mut self, terminal_id: &str, ts: u64) -> Option<(String, WarRoomEvent)> {
+        for entry in self.rooms.iter_mut() {
+            if let Some(ev) = entry.room.leave(terminal_id, ts) {
+                return Some((entry.id.clone(), ev));
+            }
+        }
+        None
+    }
+
+    /// The MCP gate: which room is this terminal in? The Moderator id would
+    /// match every room, but MCP callers are always real terminal ids.
+    pub fn find_room_of(&mut self, terminal_id: &str) -> Option<&mut RoomEntry> {
+        self.rooms.iter_mut().find(|r| r.room.is_member(terminal_id))
+    }
+
+    pub fn get(&mut self, room_id: &str) -> Option<&mut RoomEntry> {
+        self.rooms.iter_mut().find(|r| r.id == room_id)
+    }
+
+    pub fn rooms_meta(&self) -> Vec<RoomMeta> {
+        self.rooms
+            .iter()
+            .map(|r| RoomMeta { room_id: r.id.clone(), name: r.name.clone() })
+            .collect()
+    }
+
+    pub fn rooms_info(&self) -> Vec<RoomInfo> {
+        self.rooms
+            .iter()
+            .map(|r| RoomInfo { room_id: r.id.clone(), name: r.name.clone(), members: r.room.members_info() })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,5 +792,156 @@ mod tests {
         assert_eq!(out.deliveries.len(), 1);
         assert_eq!(out.deliveries[0].to_id, "t2");
         assert!(r.drain_inbox(MODERATOR_ID).unwrap().is_empty());
+    }
+
+    // ---- WarRooms registry ----
+
+    fn registry() -> WarRooms {
+        WarRooms::default()
+    }
+
+    #[test]
+    fn default_seeds_one_room_and_ids_increment() {
+        let mut r = registry();
+        let meta = r.rooms_meta();
+        assert_eq!(meta.len(), 1);
+        assert_eq!(meta[0].room_id, "room-1");
+        assert_eq!(meta[0].name, DEFAULT_ROOM_NAME);
+        let b = r.create("Website B").unwrap();
+        assert_eq!(b.room_id, "room-2");
+        r.delete("room-2", 1).unwrap();
+        // Ids never recycle, even after a delete.
+        assert_eq!(r.create("C").unwrap().room_id, "room-3");
+    }
+
+    #[test]
+    fn create_and_rename_reject_blank_names_and_unknown_ids() {
+        let mut r = registry();
+        assert!(r.create("   ").is_err());
+        assert!(r.rename("room-1", "").is_err());
+        assert!(r.rename("ghost", "X").is_err());
+        r.rename("room-1", "  Website A  ").unwrap();
+        assert_eq!(r.rooms_meta()[0].name, "Website A"); // trimmed
+    }
+
+    #[test]
+    fn delete_rejects_last_room_and_unknown_id() {
+        let mut r = registry();
+        assert!(r.delete("ghost", 1).is_err());
+        let err = r.delete("room-1", 1).unwrap_err();
+        assert!(err.contains("last room"));
+        r.create("B").unwrap();
+        r.delete("room-1", 1).unwrap(); // fine once another exists
+        assert_eq!(r.rooms_meta().len(), 1);
+    }
+
+    #[test]
+    fn delete_returns_a_leave_per_member_and_never_for_the_moderator() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        r.join("room-2", "t2".into(), None, "/b".into(), "B".into(), 2).unwrap();
+        let events = r.delete("room-2", 3).unwrap();
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().all(|e| matches!(e, WarRoomEvent::Leave { .. })));
+        assert!(r.find_room_of("t1").is_none());
+    }
+
+    #[test]
+    fn join_moves_between_rooms_and_rejects_unknown_room() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        assert!(r.join("ghost", "t1".into(), None, "/a".into(), "A".into(), 1).is_err());
+        let first = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        assert!(first.left.is_none());
+        assert_eq!(r.find_room_of("t1").unwrap().id, "room-1");
+        let moved = r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 2).unwrap();
+        let (old_room, ev) = moved.left.expect("move yields the old room's leave");
+        assert_eq!(old_room, "room-1");
+        assert!(matches!(ev, WarRoomEvent::Leave { .. }));
+        assert_eq!(r.find_room_of("t1").unwrap().id, "room-2");
+        // Never in two rooms at once.
+        assert!(!r.get("room-1").unwrap().room.is_member("t1"));
+    }
+
+    #[test]
+    fn same_room_rejoin_does_not_leave_and_keeps_connected() {
+        let mut r = registry();
+        r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        r.find_room_of("t1").unwrap().room.mark_connected("t1", 2);
+        let again = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 3).unwrap();
+        assert!(again.left.is_none());
+        assert!(matches!(again.joined, WarRoomEvent::Join { connected: true, .. }));
+    }
+
+    #[test]
+    fn cross_room_move_resets_connected_to_pending() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        r.find_room_of("t1").unwrap().room.mark_connected("t1", 2);
+        let moved = r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 3).unwrap();
+        // Old inbox and handshake die with the old membership; the intro tells
+        // the agent to call list_peers, which re-flips it immediately.
+        assert!(matches!(moved.joined, WarRoomEvent::Join { connected: false, .. }));
+    }
+
+    #[test]
+    fn leave_everywhere_finds_the_right_room_and_ignores_strangers_and_moderator() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        r.join("room-2", "t1".into(), None, "/a".into(), "A".into(), 1).unwrap();
+        assert!(r.leave_everywhere("ghost", 2).is_none());
+        assert!(r.leave_everywhere(MODERATOR_ID, 2).is_none()); // seat is per-room and unevictable
+        let (room_id, _) = r.leave_everywhere("t1", 3).unwrap();
+        assert_eq!(room_id, "room-2");
+        assert!(r.leave_everywhere("t1", 4).is_none()); // idempotent
+    }
+
+    #[test]
+    fn rooms_are_isolated_for_broadcast_and_each_has_its_own_moderator() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        r.join("room-1", "a1".into(), Some("codex".into()), "/a".into(), "A1".into(), 1).unwrap();
+        r.join("room-1", "a2".into(), Some("codex".into()), "/a".into(), "A2".into(), 2).unwrap();
+        r.join("room-2", "b1".into(), Some("codex".into()), "/b".into(), "B1".into(), 3).unwrap();
+        for id in ["a1", "a2"] { r.get("room-1").unwrap().room.mark_connected(id, 4); }
+        r.get("room-2").unwrap().room.mark_connected("b1", 4);
+        let out = r.get("room-1").unwrap().room.send("a1", None, "hi", MessageMode::Probe, 5).unwrap();
+        assert!(out.deliveries.iter().all(|d| d.to_id != "b1"));
+        assert!(r.get("room-2").unwrap().room.drain_inbox("b1").unwrap().is_empty());
+        // Each room's Moderator is addressable independently.
+        assert!(r.get("room-2").unwrap().room.is_member(MODERATOR_ID));
+        let out = r.get("room-2").unwrap().room
+            .send(MODERATOR_ID, Some("b1"), "only B", MessageMode::Probe, 6).unwrap();
+        assert_eq!(out.deliveries.len(), 1);
+        assert!(r.get("room-1").unwrap().room.drain_inbox("a1").unwrap().is_empty());
+    }
+
+    #[test]
+    fn rooms_info_reports_rooms_in_creation_order_with_members() {
+        let mut r = registry();
+        r.create("B").unwrap();
+        r.join("room-2", "t1".into(), None, "/x".into(), "X".into(), 1).unwrap();
+        let info = r.rooms_info();
+        assert_eq!(info.len(), 2);
+        assert_eq!(info[0].room_id, "room-1");
+        assert!(info[0].members.is_empty());
+        assert_eq!(info[1].members.len(), 1);
+        assert_eq!(info[1].members[0].terminal_id, "t1");
+    }
+
+    #[test]
+    fn room_scoped_event_serializes_flat_with_room_id() {
+        let mut r = registry();
+        let out = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        let j = serde_json::to_value(scoped("room-1", out.joined)).unwrap();
+        assert_eq!(j["roomId"], "room-1");
+        assert_eq!(j["kind"], "join"); // flattened, not nested under "event"
+        assert_eq!(j["terminalId"], "t1");
+        let meta = serde_json::to_value(&r.rooms_meta()[0]).unwrap();
+        assert_eq!(meta["roomId"], "room-1");
+        let info = serde_json::to_value(&r.rooms_info()[0]).unwrap();
+        assert_eq!(info["members"].as_array().unwrap().len(), 1);
     }
 }
