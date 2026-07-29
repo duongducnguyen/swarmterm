@@ -20,7 +20,13 @@ function NameInput(props: {
 }): ReactElement {
   const [value, setValue] = useState(props.initial)
   const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => ref.current?.select(), [])
+  useEffect(() => {
+    // select() implies focus in Chromium/WebKit, but that pairing is
+    // guaranteed nowhere — call focus() explicitly so the caret and
+    // keystrokes reliably land in the input regardless of engine quirks.
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
   return (
     <input
       ref={ref}
@@ -41,6 +47,7 @@ function RoomTab(props: {
   room: WarRoomRoomMeta
   active: boolean
   heldCount: number
+  memberCount: number
   deletable: boolean
   onSelect: () => void
 }): ReactElement {
@@ -90,7 +97,13 @@ function RoomTab(props: {
         <button
           tabIndex={-1}
           aria-label={confirmDelete ? 'Confirm delete room' : 'Delete room'}
-          title={confirmDelete ? 'Click again to delete — members will be disconnected' : 'Delete room'}
+          title={
+            confirmDelete
+              ? props.memberCount > 0
+                ? `Click again to delete — ${props.memberCount} member(s) will be disconnected`
+                : 'Click again to delete the empty room'
+              : 'Delete room'
+          }
           onClick={() => {
             if (!confirmDelete) { setConfirmDelete(true); return }
             void warRoomDelete(props.room.roomId).catch((e) => console.warn('delete failed:', e))
@@ -111,6 +124,7 @@ export function RoomTabs(props: {
   rooms: WarRoomRoomMeta[]
   activeRoomId: string | null
   heldByRoom: Record<string, number>
+  memberCountByRoom: Record<string, number>
   onSelect: (roomId: string) => void
 }): ReactElement {
   const [creating, setCreating] = useState(false)
@@ -122,6 +136,7 @@ export function RoomTabs(props: {
           room={r}
           active={r.roomId === props.activeRoomId}
           heldCount={props.heldByRoom[r.roomId] ?? 0}
+          memberCount={props.memberCountByRoom[r.roomId] ?? 0}
           deletable={props.rooms.length > 1}
           onSelect={() => props.onSelect(r.roomId)}
         />

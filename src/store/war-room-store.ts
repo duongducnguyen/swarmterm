@@ -72,8 +72,13 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
       // BEFORE the warroom:rooms snapshot that drops the room, so those
       // Leaves still find the room present and clean up queues/held normally
       // — only events arriving AFTER the snapshot removed the room are
-      // dropped here. The boot window is covered separately: hydrateRooms
-      // replaces membership wholesale, so nothing needs to survive it.
+      // dropped here. The boot window is covered only for MEMBERSHIP:
+      // hydrateRooms replaces membersByRoom wholesale from the boot snapshot,
+      // so a join/leave/connected dropped here before hydration lands is
+      // superseded, not lost. A message dropped in that same sub-second
+      // window is NOT backfilled — hydrateRooms carries no transcript — so
+      // it's a display-only loss for whoever was watching; the recipient's
+      // inbox and any warroom:deliver nudge are unaffected by this guard.
       if (!s.rooms.some((r) => r.roomId === e.roomId)) return s
       const roomTranscript = [...(s.transcriptByRoom[e.roomId] ?? []), e].slice(-TRANSCRIPT_CAP)
       const transcriptByRoom = { ...s.transcriptByRoom, [e.roomId]: roomTranscript }
@@ -127,13 +132,19 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
       const queues = { ...s.queues }
       const held = { ...s.held }
       for (const [rid, ms] of Object.entries(s.membersByRoom)) {
-        if (keep.has(rid)) { membersByRoom[rid] = ms; continue }
+        if (keep.has(rid)) continue
         // Room deleted: its members' Leaves were emitted first, but drop any
         // queue that survived reordering — never deliver into a dead room.
         for (const m of ms) { delete queues[m.terminalId]; delete held[m.terminalId] }
       }
-      for (const [rid, t] of Object.entries(s.transcriptByRoom)) {
-        if (keep.has(rid)) transcriptByRoom[rid] = t
+      for (const r of list) {
+        // Seed both slices for every surviving/new room (not just ones we
+        // already had an entry for) so a brand-new room gets a stable,
+        // store-owned `[]` instead of panel selectors falling back to a
+        // fresh array literal on every render (see WarRoomPanel/
+        // ModeratorComposer's `?? []`).
+        membersByRoom[r.roomId] = s.membersByRoom[r.roomId] ?? []
+        transcriptByRoom[r.roomId] = s.transcriptByRoom[r.roomId] ?? []
       }
       const activeRoomId =
         s.activeRoomId !== null && keep.has(s.activeRoomId)
@@ -146,6 +157,12 @@ export const useWarRoomStore = create<WarRoomStore>((set, get) => ({
     set((s) => ({
       rooms: list.map(({ roomId, name }) => ({ roomId, name })),
       membersByRoom: Object.fromEntries(list.map((r) => [r.roomId, r.members.map(toMember)])),
+      // Same stable-empty-slice reasoning as applyRooms; a room with no
+      // prior transcript (fresh boot, or a room the boot snapshot didn't
+      // have transcript history for) gets a store-owned `[]`.
+      transcriptByRoom: Object.fromEntries(
+        list.map((r) => [r.roomId, s.transcriptByRoom[r.roomId] ?? []])
+      ),
       activeRoomId:
         s.activeRoomId !== null && list.some((r) => r.roomId === s.activeRoomId)
           ? s.activeRoomId

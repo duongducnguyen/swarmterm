@@ -108,6 +108,18 @@ describe('room routing', () => {
     expect(s.membersByRoom['room-2']).toBeUndefined()
     expect(s.transcriptByRoom['room-2']).toBeUndefined()
     expect(s.queues['t1']).toBeUndefined() // belt-and-braces queue drop
+    // room-3 is brand new (no prior membersByRoom/transcriptByRoom entry) —
+    // it must still be seeded with `[]`, not left undefined, so panel
+    // selectors get a stable store-owned reference.
+    expect(s.membersByRoom['room-3']).toEqual([])
+    expect(s.transcriptByRoom['room-3']).toEqual([])
+    const firstMembersRead = useWarRoomStore.getState().membersByRoom['room-3']
+    const firstTranscriptRead = useWarRoomStore.getState().transcriptByRoom['room-3']
+    useWarRoomStore.getState().setActiveRoom('room-3') // unrelated update
+    const secondMembersRead = useWarRoomStore.getState().membersByRoom['room-3']
+    const secondTranscriptRead = useWarRoomStore.getState().transcriptByRoom['room-3']
+    expect(secondMembersRead).toBe(firstMembersRead)
+    expect(secondTranscriptRead).toBe(firstTranscriptRead)
   })
 
   it('clearTranscript clears only the named room', () => {

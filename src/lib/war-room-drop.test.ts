@@ -32,6 +32,13 @@ describe('resolveDragEnd', () => {
     expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, WAR_ROOM_DROP_ID, c)).toEqual({ kind: 'none' })
   })
 
+  // This arm is unreachable in today's UI: chips render from the active
+  // room's member list, so a chip's own room always equals the active room
+  // mid-drag. Divergence would only happen if the active room changed out
+  // from under an in-flight drag (e.g. the active room got deleted mid-drag),
+  // and moveMember no-ops in that case anyway (the member lookup fails once
+  // the room is gone). Kept as deliberate defense-in-depth, not a reachable
+  // feature path.
   it('member chip on the body moves it into the ACTIVE room when that differs', () => {
     expect(resolveDragEnd(`${MEMBER_DRAG_PREFIX}t1`, WAR_ROOM_DROP_ID, ctx('room-2', { t1: 'room-1' })))
       .toEqual({ kind: 'move', terminalId: 't1', roomId: 'room-2' })

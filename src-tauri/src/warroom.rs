@@ -71,7 +71,7 @@ pub struct RoomMember {
     pub inbox: VecDeque<RoomMessage>,
 }
 
-/// Snapshot for the renderer (war_room_members command / boot hydration).
+/// Snapshot for the renderer (war_room_rooms command / boot hydration).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemberInfo {

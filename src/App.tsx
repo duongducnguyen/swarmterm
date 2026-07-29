@@ -158,6 +158,10 @@ export default function App(): ReactElement {
     const roomName = st2.rooms.find((r) => r.roomId === roomId)?.name ?? 'War Room'
     void warRoomJoin({ roomId, terminalId: leaf.terminalId, agentId, cwd, displayName })
       .then(() => {
+        // Same event-vs-response ordering guarantee as moveMember's
+        // enqueueIntro below (see its comment): if this join was itself a
+        // move (priorRoomId !== roomId), the old room's Leave has already
+        // applied by the time we get here, so this enqueue lands clean.
         if (agentId && !alreadyMember) {
           useWarRoomStore.getState().enqueueIntro(leaf.terminalId, buildIntroText(roomName, peers))
         }
@@ -188,6 +192,14 @@ export default function App(): ReactElement {
       .then(() => {
         // A move resets the handshake (new room, new pending state); the intro
         // tells the agent to call list_peers, which reconnects it immediately.
+        //
+        // Ordering note — the first place in this file where event-vs-response
+        // ordering is load-bearing, hence written down: the backend emits this
+        // terminal's Leave(oldRoom) then Join(newRoom) BEFORE the `war_room_join`
+        // invoke resolves, and Tauri delivers both events through the same
+        // web-content queue ahead of the response. So by the time this .then
+        // runs, applyEvent's 'leave' branch has already cleared this terminal's
+        // queue — the enqueueIntro below can't be swallowed by its own move.
         if (member.agentId) {
           useWarRoomStore.getState().enqueueIntro(terminalId, buildIntroText(roomName, peers))
         }

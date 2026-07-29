@@ -41,6 +41,18 @@ export function WarRoomPanel(): ReactElement {
   )
   const heldTotal = heldByRoom[activeRoomId ?? ''] ?? 0
 
+  // Per-room member counts for the tab strip's armed-delete confirm copy.
+  // Same identity concern as heldByRoom above: a fresh Record needs
+  // useShallow or every store tick reallocates it and RoomTab re-renders for
+  // no reason.
+  const memberCountByRoom = useWarRoomStore(
+    useShallow((s) => {
+      const out: Record<string, number> = {}
+      for (const [roomId, ms] of Object.entries(s.membersByRoom)) out[roomId] = ms.length
+      return out
+    })
+  )
+
   const subTab = (key: 'members' | 'discussion', label: ReactNode): ReactElement => (
     <button
       onClick={() => setTab(key)}
@@ -65,6 +77,7 @@ export function WarRoomPanel(): ReactElement {
         rooms={rooms}
         activeRoomId={activeRoomId}
         heldByRoom={heldByRoom}
+        memberCountByRoom={memberCountByRoom}
         onSelect={(id) => useWarRoomStore.getState().setActiveRoom(id)}
       />
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
