@@ -171,9 +171,10 @@ pub struct AppState {
     /// server failed to bind the cell stays empty and `spawn_terminal` skips
     /// the env injection (browser preview via MCP just won't work).
     pub mcp_url: OnceLock<Arc<str>>,
-    /// War Room membership + inboxes. Its own lock (never nested with
-    /// `terminals`) so MCP tools keep the lock-read-drop-before-await rule.
-    pub war_room: Mutex<crate::warroom::WarRoom>,
+    /// War Room membership + inboxes, now multiple independent rooms. Its own
+    /// lock (never nested with `terminals`) so MCP tools keep the
+    /// lock-read-drop-before-await rule.
+    pub war_rooms: Mutex<crate::warroom::WarRooms>,
 }
 
 impl Default for AppState {
@@ -182,7 +183,7 @@ impl Default for AppState {
             terminals: Mutex::new(HashMap::new()),
             quitting: AtomicBool::new(false),
             mcp_url: OnceLock::new(),
-            war_room: Mutex::new(crate::warroom::WarRoom::default()),
+            war_rooms: Mutex::new(crate::warroom::WarRooms::default()),
         }
     }
 }
@@ -446,10 +447,10 @@ fn read_loop(
     // the exit event must find the id free, since create rejects a duplicate live id.
     if let Some(state) = app.try_state::<AppState>() {
         state.terminals.lock().unwrap().remove(&id);
-        let left = state.war_room.lock().unwrap().leave(&id, crate::warroom::now_ms());
-        if let Some(event) = left {
+        let left = state.war_rooms.lock().unwrap().leave_everywhere(&id, crate::warroom::now_ms());
+        if let Some((room_id, event)) = left {
             use tauri::Emitter;
-            let _ = app.emit("warroom:event", &event);
+            let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
         }
     }
     let _ = on_data.send(PtyOut::Exit { exit_code });

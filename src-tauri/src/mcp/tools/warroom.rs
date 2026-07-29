@@ -108,11 +108,16 @@ impl SwarmtermMcpServer {
         let terminal = self.caller(&parts)?;
         let state = self.app.state::<AppState>();
         // Lock scoped to a block so the handshake event is emitted lock-free.
-        let (connected_ev, peers) = {
-            let mut room = state.war_room.lock().unwrap();
-            if !room.is_member(&terminal.0) {
-                return Err(rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None));
-            }
+        // TODO(Task 3): find_room_of + scoped is a bridge to keep this file
+        // compiling against the multi-room registry; the full rewrite (with
+        // `room` on ListPeersResult) lands there.
+        let (room_id, connected_ev, peers) = {
+            let mut rooms = state.war_rooms.lock().unwrap();
+            let entry = rooms
+                .find_room_of(&terminal.0)
+                .ok_or_else(|| rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None))?;
+            let room_id = entry.id.clone();
+            let room = &mut entry.room;
             let connected_ev = room.mark_connected(&terminal.0, now_ms());
             let peers: Vec<PeerEntry> = room
                 .peers()
@@ -126,10 +131,10 @@ impl SwarmtermMcpServer {
                     connected: m.connected,
                 })
                 .collect();
-            (connected_ev, peers)
+            (room_id, connected_ev, peers)
         };
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &ev);
+            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
         Ok(Json(ListPeersResult {
             peers,
@@ -159,23 +164,25 @@ impl SwarmtermMcpServer {
         let state = self.app.state::<AppState>();
         // Lock, mutate, collect what to emit, drop the lock BEFORE emitting —
         // emit re-enters Tauri and must never run under our mutex.
-        let (connected_ev, event, deliveries) = {
-            let mut room = state.war_room.lock().unwrap();
-            if !room.is_member(&terminal.0) {
-                return Err(rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None));
-            }
+        let (room_id, connected_ev, event, deliveries) = {
+            let mut rooms = state.war_rooms.lock().unwrap();
+            let entry = rooms
+                .find_room_of(&terminal.0)
+                .ok_or_else(|| rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None))?;
+            let room_id = entry.id.clone();
+            let room = &mut entry.room;
             // The call itself IS the handshake — a sender is proven by definition.
             let connected_ev = room.mark_connected(&terminal.0, now_ms());
             let out = room
                 .send(&terminal.0, args.to.as_deref(), &args.content, mode, now_ms())
                 .map_err(|m| rmcp::ErrorData::invalid_params(m, None))?;
-            (connected_ev, out.event, out.deliveries)
+            (room_id, connected_ev, out.event, out.deliveries)
         };
         let delivered = deliveries.len();
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &ev);
+            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
-        let _ = self.app.emit("warroom:event", &event);
+        let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
         for d in deliveries {
             let _ = self.app.emit("warroom:deliver", &d);
         }
@@ -204,16 +211,21 @@ impl SwarmtermMcpServer {
     ) -> Result<Json<ReadInboxResult>, rmcp::ErrorData> {
         let terminal = self.caller(&parts)?;
         let state = self.app.state::<AppState>();
-        let (connected_ev, messages) = {
-            let mut room = state.war_room.lock().unwrap();
+        let (room_id, connected_ev, messages) = {
+            let mut rooms = state.war_rooms.lock().unwrap();
+            let entry = rooms
+                .find_room_of(&terminal.0)
+                .ok_or_else(|| rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None))?;
+            let room_id = entry.id.clone();
+            let room = &mut entry.room;
             let connected_ev = room.mark_connected(&terminal.0, now_ms());
             let messages = room
                 .drain_inbox(&terminal.0)
                 .ok_or_else(|| rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None))?;
-            (connected_ev, messages)
+            (room_id, connected_ev, messages)
         };
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &ev);
+            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
         let note = if messages.is_empty() {
             "No pending messages.".into()

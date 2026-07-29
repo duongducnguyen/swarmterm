@@ -54,10 +54,11 @@ pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     }
     // A dead pane must not linger as a War Room ghost: peers would still see
     // it in list_peers and queue messages for a terminal that can never read
-    // them. leave() is idempotent, so racing read_loop's cleanup is harmless.
-    let left = state.war_room.lock().unwrap().leave(&id, crate::warroom::now_ms());
-    if let Some(event) = left {
-        let _ = app.emit("warroom:event", &event);
+    // them. leave_everywhere() is idempotent, so racing read_loop's cleanup
+    // is harmless.
+    let left = state.war_rooms.lock().unwrap().leave_everywhere(&id, crate::warroom::now_ms());
+    if let Some((room_id, event)) = left {
+        let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
 }
 
@@ -237,19 +238,21 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
-/// Frontend drags a pane into the War Room. Metadata is a frontend snapshot:
-/// the leaf's explicit agentId and the registry's live cwd — the Rust terminal
-/// map deliberately stores neither.
+/// Frontend drags a pane into one room's drop zone. Metadata is a frontend
+/// snapshot: the leaf's explicit agentId and the registry's live cwd — the
+/// Rust terminal map deliberately stores neither. Joining room X while
+/// already a member of room Y moves it: `WarRooms::join` leaves Y first.
 #[tauri::command]
 pub fn war_room_join(
     app: AppHandle,
     state: State<'_, AppState>,
+    room_id: String,
     terminal_id: String,
     agent_id: Option<String>,
     cwd: String,
     display_name: String,
 ) -> Result<(), String> {
-    // TOCTOU: this liveness check and the `war_room.join` insert below take
+    // TOCTOU: this liveness check and the `war_rooms.join` insert below take
     // two separate mutexes with no lock held across both, so a pane that dies
     // in the gap between them still gets inserted as a member. Accepted: it's
     // recoverable via the chip's ✕ / leave, and the alternative (a single
@@ -264,49 +267,103 @@ pub fn war_room_join(
     if state.mcp_url.get().is_none() {
         return Err("MCP server failed to start this run — War Room is unavailable".into());
     }
-    let event = state.war_room.lock().unwrap().join(
+    let outcome = state.war_rooms.lock().unwrap().join(
+        &room_id,
         terminal_id,
         agent_id,
         cwd,
         display_name,
         crate::warroom::now_ms(),
-    );
-    let _ = app.emit("warroom:event", &event);
+    )?;
+    // Old room's Leave first, then the Join — the renderer's queue cleanup
+    // must run before the new membership appears.
+    if let Some((old_room, ev)) = outcome.left {
+        let _ = app.emit("warroom:event", &crate::warroom::scoped(&old_room, ev));
+    }
+    let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, outcome.joined));
     Ok(())
 }
 
-/// Current room snapshot for renderer hydration (app boot / dev reload) —
-/// membership lives Rust-side and outlives frontend reloads.
+/// Full rooms snapshot for renderer hydration (boot / dev reload).
 #[tauri::command]
-pub fn war_room_members(state: State<'_, AppState>) -> Vec<crate::warroom::MemberInfo> {
-    state.war_room.lock().unwrap().members_info()
+pub fn war_room_rooms(state: State<'_, AppState>) -> Vec<crate::warroom::RoomInfo> {
+    state.war_rooms.lock().unwrap().rooms_info()
 }
 
 #[tauri::command]
 pub fn war_room_leave(app: AppHandle, state: State<'_, AppState>, terminal_id: String) {
-    let left = state.war_room.lock().unwrap().leave(&terminal_id, crate::warroom::now_ms());
-    if let Some(event) = left {
-        let _ = app.emit("warroom:event", &event);
+    let left = state.war_rooms.lock().unwrap().leave_everywhere(&terminal_id, crate::warroom::now_ms());
+    if let Some((room_id, event)) = left {
+        let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
 }
 
-/// The user speaking as the Moderator, from the Discussion tab's composer.
-/// `to: None` broadcasts. Mirrors `mcp/tools/warroom.rs`'s lock-then-emit
-/// discipline: `emit` re-enters Tauri and must never run under the room mutex.
-/// Returns the delivery count so the composer can confirm reach; the error
-/// string is `WarRoom::send`'s own message, shown inline in the composer.
+#[tauri::command]
+pub fn war_room_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<crate::warroom::RoomMeta, String> {
+    let (meta, rooms) = {
+        let mut reg = state.war_rooms.lock().unwrap();
+        let meta = reg.create(&name)?;
+        (meta, reg.rooms_meta())
+    };
+    let _ = app.emit("warroom:rooms", &rooms);
+    Ok(meta)
+}
+
+#[tauri::command]
+pub fn war_room_rename(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    room_id: String,
+    name: String,
+) -> Result<(), String> {
+    let rooms = {
+        let mut reg = state.war_rooms.lock().unwrap();
+        reg.rename(&room_id, &name)?;
+        reg.rooms_meta()
+    };
+    let _ = app.emit("warroom:rooms", &rooms);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn war_room_delete(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    room_id: String,
+) -> Result<(), String> {
+    let (leaves, rooms) = {
+        let mut reg = state.war_rooms.lock().unwrap();
+        let leaves = reg.delete(&room_id, crate::warroom::now_ms())?;
+        (leaves, reg.rooms_meta())
+    };
+    // Leaves first (queue/held cleanup per member), snapshot last (tab strip).
+    for ev in leaves {
+        let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
+    }
+    let _ = app.emit("warroom:rooms", &rooms);
+    Ok(())
+}
+
+/// The user speaking as the Moderator of ONE room, from that room's composer.
+/// Same lock-then-emit discipline; error strings surface inline in the composer.
 #[tauri::command]
 pub fn war_room_moderator_send(
     app: AppHandle,
     state: State<'_, AppState>,
+    room_id: String,
     to: Option<String>,
     content: String,
     mode: Option<String>,
 ) -> Result<usize, String> {
     let mode = crate::warroom::MessageMode::parse(mode.as_deref())?;
     let (event, deliveries) = {
-        let mut room = state.war_room.lock().unwrap();
-        let out = room.send(
+        let mut reg = state.war_rooms.lock().unwrap();
+        let entry = reg.get(&room_id).ok_or_else(|| format!("no such room \"{room_id}\""))?;
+        let out = entry.room.send(
             crate::warroom::MODERATOR_ID,
             to.as_deref(),
             &content,
@@ -316,7 +373,7 @@ pub fn war_room_moderator_send(
         (out.event, out.deliveries)
     };
     let delivered = deliveries.len();
-    let _ = app.emit("warroom:event", &event);
+    let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     for d in deliveries {
         let _ = app.emit("warroom:deliver", &d);
     }
