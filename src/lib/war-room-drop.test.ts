@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MEMBER_DRAG_PREFIX, ROOM_DROP_PREFIX, WAR_ROOM_DROP_ID, DragEndContext, memberDisplayName, resolveDragEnd } from './war-room-drop'
 
-const ctx = (activeRoomId: string | null, roomOf: Record<string, string> = {}) => ({
+const ctx = (activeRoomId: string | null, roomOf: Record<string, string> = {}): DragEndContext => ({
   activeRoomId,
   memberRoomId: (id: string) => roomOf[id] ?? null
 })
