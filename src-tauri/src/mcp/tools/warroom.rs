@@ -5,11 +5,11 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Told to any caller outside the room. Written for the agent: it names the
+/// Told to any caller outside every room. Written for the agent: it names the
 /// user action that fixes it, mirroring worktree_ctx's error posture.
 pub const NOT_IN_ROOM: &str =
-    "this terminal is not in the War Room — ask the user to drag this pane into the \
-     War Room panel (right sidebar) to join";
+    "this terminal is not in a War Room — ask the user to drag this pane into a room \
+     in the War Room panel (right sidebar) to join";
 
 #[cfg(test)]
 mod tests {
@@ -36,6 +36,17 @@ mod tests {
     fn not_in_room_message_names_the_fix() {
         assert!(NOT_IN_ROOM.contains("drag"));
         assert!(NOT_IN_ROOM.contains("War Room"));
+    }
+
+    #[test]
+    fn list_peers_result_serializes_room() {
+        let result = ListPeersResult {
+            room: "Website A".into(),
+            peers: vec![],
+            note: String::new(),
+        };
+        let j = serde_json::to_value(&result).unwrap();
+        assert_eq!(j["room"], "Website A");
     }
 }
 
@@ -65,6 +76,8 @@ pub struct PeerEntry {
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ListPeersResult {
+    /// Display name of the room this terminal is in.
+    pub room: String,
     pub peers: Vec<PeerEntry>,
     pub note: String,
 }
@@ -108,10 +121,7 @@ impl SwarmtermMcpServer {
         let terminal = self.caller(&parts)?;
         let state = self.app.state::<AppState>();
         // Lock scoped to a block so the handshake event is emitted lock-free.
-        // TODO(Task 3): find_room_of + scoped is a bridge to keep this file
-        // compiling against the multi-room registry; the full rewrite (with
-        // `room` on ListPeersResult) lands there.
-        let (room_id, connected_ev, peers) = {
+        let (room_id, connected_ev, room_name, peers) = {
             let mut rooms = state.war_rooms.lock().unwrap();
             let entry = rooms
                 .find_room_of(&terminal.0)
@@ -131,12 +141,13 @@ impl SwarmtermMcpServer {
                     connected: m.connected,
                 })
                 .collect();
-            (room_id, connected_ev, peers)
+            (room_id, connected_ev, entry.name.clone(), peers)
         };
         if let Some(ev) = connected_ev {
             let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
         Ok(Json(ListPeersResult {
+            room: room_name,
             peers,
             note: "Message a peer with war_room.send (mode \"probe\"), or hand one a task \
                    with mode \"execute\". Peers inspect their own codebase — ask them \
@@ -219,9 +230,7 @@ impl SwarmtermMcpServer {
             let room_id = entry.id.clone();
             let room = &mut entry.room;
             let connected_ev = room.mark_connected(&terminal.0, now_ms());
-            let messages = room
-                .drain_inbox(&terminal.0)
-                .ok_or_else(|| rmcp::ErrorData::invalid_request(NOT_IN_ROOM, None))?;
+            let messages = room.drain_inbox(&terminal.0).unwrap_or_default();
             (room_id, connected_ev, messages)
         };
         if let Some(ev) = connected_ev {
