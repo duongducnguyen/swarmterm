@@ -12,7 +12,9 @@ shell back), plus an optional Chrome-style web-preview column. Built on
 **Tauri 2 + Rust** (frontend: **React 19 + TypeScript + Vite**). Ported from an
 earlier Electron app; no state is persisted between launches by design.
 
-Full feature list and manual smoke-test checklist live in `README.md` (Vietnamese).
+`README.md` is the end-user guide (English) — what the app does and how to use
+it, no code guidance. The manual smoke-test checklist is
+`docs/manual-smoke-tests.md`. Update both when you ship user-visible behaviour.
 
 **Cross-platform intent:** build for macOS and Linux as well as Windows, even
 though primary development happens on Windows. Don't hard-code Windows-only
@@ -194,10 +196,12 @@ This project uses the **design-docs** flow: brainstorm a design →
 same trail; the existing specs/plans are good templates and the best record of
 *why* features look the way they do.
 
-## Note on README drift
+## Docs map
 
-`README.md` is detailed but its folder tree has drifted from the current code
-(e.g. it lists `theme-store.ts`, a `hooks/` dir, `WorkspaceSetup/`, and
-`tauri/preview.ts` that no longer exist; theming now lives in
-`appearance-store.ts` and the preview bridge is `tauri/popout.ts`). Read it for
-intent and the feature/test checklist, but verify file paths against the tree.
+- `README.md` — user-facing guide (English): what problems the app solves,
+  feature walkthrough, install, shortcuts, troubleshooting, limits. No
+  architecture or folder tree — that lives here. Screenshots are placehold.co
+  placeholders until real ones land; `docs/images/README.md` has the shot list.
+- `docs/manual-smoke-tests.md` — release smoke checklist.
+- `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).
+- `docs/design-docs/specs/` — per-feature design docs; the best record of *why*.

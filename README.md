@@ -1,295 +1,357 @@
-# Swarmterm — Tauri 2 + Rust
+<div align="center">
 
-App desktop kiểu "swarmterm" — bộ khung điều hướng + multi-terminal.
-Port lại từ bản Electron gốc (`workspace/`) sang **Tauri 2 + Rust**, toàn bộ
-tính năng iteration 1 được giữ nguyên.
+<!-- IMAGE: replace with docs/images/logo.png (256×256) — see docs/images/README.md -->
+<img src="https://placehold.co/128x128/1e1e1e/6b7280/png?text=LOGO" alt="Swarmterm" width="96" height="96">
 
-## Tính năng
+# Swarmterm
 
-- **Navbar trái** — danh sách workspace: thêm / chuyển / đổi tên / đóng.
-- **Multi-terminal** — mỗi workspace là một cây split nhị phân; split ngang/dọc
-  bất kỳ pane, kéo chỉnh kích thước, đóng pane (cây tự gộp).
-- **Terminal thật** — shell qua `portable-pty` Rust (ConPTY truecolor trên
-  Windows; mặc định PowerShell). Truecolor 24-bit được truyền thẳng qua ConPTY
-  và xterm.js hiển thị không downscale.
-- **Setup wizard + folder picker** — tạo workspace với thư mục làm việc tuỳ
-  chọn và lệnh khởi động từ template (native dialog qua `tauri-plugin-dialog`).
-- **System tray** — đóng cửa sổ → ẩn xuống tray (app chạy ngầm, pty vẫn sống);
-  tray → Show mở lại; tray → Quit tắt hẳn và kill mọi pty.
-- **Single-instance** — mở app lần 2 chỉ focus cửa sổ cũ
-  (`tauri-plugin-single-instance`).
-- **Frameless window** — titlebar tự vẽ; kéo vùng titlebar di chuyển cửa sổ;
-  minimize / maximize-restore / close-to-tray hoạt động qua Tauri window API
-  (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
-- **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
-  theo.
-- **Web browser preview** — cột thứ 3 hiển thị web preview của terminal đang
-  được chọn: mỗi terminal có tối đa MỘT preview (kèm history back/forward
-  riêng), click pane nào thấy preview của pane đó. Trigger từ trong terminal
-  qua MCP: mỗi PTY có sẵn env `SWARMTERM_MCP_URL` + `SWARMTERM_SESSION`, và
-  Swarmterm tự viết `.mcp.json` vào workspace khi tạo, nên Claude Code (hoặc
-  bất kỳ MCP client nào) gọi tool `browser.open_preview(url)` là preview cập
-  nhật — gọi lần nữa là điều hướng. Agent ở terminal nền cập nhật âm thầm,
-  không cướp view. Iframe DOM docked + address bar, gõ URL tự do.
-- **Isolate features in git worktrees** — composer có toggle "Isolate features
-  in git worktrees"; bật thì mỗi pane agent được tạo sẵn trong worktree riêng
-  (`<repo>.worktrees/<slug>`) kèm badge 🌿 ngay lập tức. MCP tool `worktree.spawn`
-  vẫn dùng để quản đốc giao việc giữa phiên (delegate mid-session). MCP tool
-  `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
-  không xoá worktree.
+**One window for a whole swarm of AI coding agents.**
 
-- **War Room** — kéo pane vào tab War Room để các agent nhắn tin/tranh luận/giao
-  việc cho nhau qua MCP; kéo ra để thu hồi quyền.
-- **War Room — nhiều phòng** — panel War Room có dải tab phòng: `+` tạo phòng
-  mới, double-click đổi tên inline, ✕ xoá (xác nhận 2 bước, phòng cuối cùng
-  không xoá được). Một pane chỉ ở trong tối đa 1 phòng — kéo vào tab phòng
-  khác là chuyển phòng (rời phòng cũ, intro được gõ lại, tool call kế tiếp mới
-  kết nối lại). Mỗi phòng có transcript, danh sách thành viên và Moderator
-  riêng; badge ⏸N trên tab báo tin đang chờ gửi ở phòng đó dù đang xem phòng
-  khác.
+Real split terminals · one git worktree per agent · a live web preview beside each pane · and a War Room where your agents talk to each other.
 
-- **Link trong terminal** — URL bấm thẳng một cái là mở bằng trình duyệt mặc
-  định của hệ điều hành (cột web-preview trong app dành riêng cho MCP
-  `browser.open_preview`, tức trang do agent chủ động mở); đường dẫn file bấm
-  Cmd/Ctrl+click là mở trong editor đúng dòng (`src/foo.ts:42:9`, kể cả dạng
-  `src/foo.ts(42,9)` của tsc và `File "x.py", line 42` của Python). Hai gesture
-  khác nhau là cố ý: mở URL gần như miễn phí, còn mở editor thì cướp focus khỏi
-  app nên phải chủ đích. Đường dẫn không tồn tại thì không thành link (Rust
-  validate trên FS trước). Nhận cả OSC 8 hyperlink mà Claude Code phát ra.
-  **Không link nào mở bằng app mặc định của OS** — click nhầm file `.sh`/`.exe`
-  không bao giờ chạy nó.
+[![Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
+[![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#requirements)
+[![Status](https://img.shields.io/badge/status-pre--1.0-f97316)](#known-limits)
 
-Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
+<!-- IMAGE: replace with docs/images/hero.png (1600×900) -->
+<img src="https://placehold.co/1600x900/1e1e1e/6b7280/png?text=Hero+screenshot" alt="Swarmterm overview" width="100%">
 
-## Tech stack
+</div>
 
-Tauri 2 (tính năng `unstable` multiwebview) · Rust · `portable-pty` ·
-`tauri-plugin-single-instance` · `tauri-plugin-dialog` ·
-`tauri-plugin-deep-link` · `url` · React 19 + TypeScript · Vite ·
-Tailwind CSS · xterm.js · zustand · Vitest.
+---
 
-## Yêu cầu môi trường
+## Contents
 
-- **Rust toolchain** — `rustup` + `cargo` (stable, 1.75+). Cài từ
-  <https://rustup.rs>.
-- **Node.js 18+** (đã kiểm thử trên v23) + npm 10+.
-- **WebView2 Runtime** — trên Windows 10/11 thường đã có sẵn; nếu thiếu tải từ
-  <https://developer.microsoft.com/microsoft-edge/webview2/>.
-- **Tauri prerequisites** trên Windows: Microsoft C++ Build Tools (đi kèm
-  Visual Studio 2022 hoặc cài riêng qua VS Build Tools Installer).
+- [Why Swarmterm](#why-swarmterm)
+- [Screenshots](#screenshots)
+- [Requirements](#requirements)
+- [Install & run](#install--run)
+- [Your first workspace](#your-first-workspace)
+- [Using Swarmterm](#using-swarmterm)
+  - [Workspaces and panes](#workspaces-and-panes)
+  - [Running several agents at once](#running-several-agents-at-once)
+  - [Worktree isolation](#worktree-isolation)
+  - [The Git panel](#the-git-panel)
+  - [Web preview](#web-preview)
+  - [War Room](#war-room)
+  - [Terminal essentials](#terminal-essentials)
+  - [Settings](#settings)
+  - [Window, tray and quitting](#window-tray-and-quitting)
+- [What your agents can do](#what-your-agents-can-do)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Troubleshooting](#troubleshooting)
+- [Known limits](#known-limits)
 
-## Cài đặt & chạy
+---
 
-```bash
-npm install                  # cài JS dependencies
-npm run tauri dev            # chạy app ở chế độ dev (hot reload frontend + Rust)
-```
+## Why Swarmterm
 
-## Scripts
+Running **one** coding agent in a terminal works anywhere. Running **five** is where ordinary terminals fall apart:
 
-| Lệnh | Mô tả |
+| The problem | What Swarmterm does about it |
 |---|---|
-| `npm run tauri dev` | Chạy app dev (Vite + hot reload frontend, Rust rebuild tự động). |
-| `npm run tauri build` | Build production (bundle installer). |
-| `npm run tauri build -- --no-bundle` | Build release binary, bỏ qua tạo installer (WiX/NSIS). |
-| `npm run build` | Build frontend (Vite + tsc) vào `dist/` — không cần Rust. |
-| `npm test` | Chạy unit test JS/TS (Vitest). |
-| `npm run test:watch` | Unit test ở chế độ watch. |
-| `cargo test` _(từ `src-tauri/`)_ | Chạy unit test Rust (pty helpers). |
+| One window or tab per agent — you lose track of which pane is doing what. | Every workspace is a real **split tree of panes**, with a workspace navbar, a terminal list, agent icons and an **activity dot** that lights up while a pane is producing output. |
+| Several agents editing the same checkout — they collide, and the diff becomes one unreviewable mess. | Flip one switch when you create the workspace and **each agent pane is born inside its own git worktree**, on its own branch. Separate diffs from the very first edit. |
+| An agent prints `http://localhost:5173` and you have to copy it into a browser. | A **web preview column** sits right next to the panes. The agent opens the page itself; each terminal keeps its own preview, so clicking a pane shows that pane's page. |
+| Agents can't talk to each other, so you become the copy-paste relay between them. | The **War Room**: drag panes into the panel and they can message each other, argue about a design, and hand over finished work. You get a seat too. |
+| Sending the same prompt to five agents means pasting it five times. | **Broadcast input**: pick a group of panes with `Alt + Click`, type once, every pane in the group receives it. |
+| You can't tell which agent is stuck waiting for you. | Per-pane activity dots, live pane titles, and a badge counting messages queued for a pane that is busy. |
 
-## Cấu trúc thư mục
+Swarmterm is a native desktop app (Tauri 2 + Rust, not Electron) with real PTY terminals and a VS Code-flavoured interface.
 
-```
-src/                          # Frontend React/TS (renderer)
-  App.tsx                     # Bố cục gốc: TitleBar + Navbar + Workspace
-  main.tsx                    # React entry point
-  index.css                   # Tailwind + CSS variables (light/dark theme)
-  tauri/
-    terminal.ts               # Bridge: invoke create/write/resize/kill_terminal + Channel<PtyOut>
-    window.ts                 # Bridge: minimize, toggleMaximize, close, show, onMaximizedChanged
-    dialog.ts                 # Bridge: pickDirectory (native folder picker), getHomeDir
-    deeplink.ts               # Bridge nghe event preview:open từ backend deep link
-    preview.ts                # Bridge điều khiển webview preview docked
-  components/
-    TitleBar/                 # Frameless title bar; drag region, window controls
-    Navbar/                   # Danh sách workspace (thêm/chuyển/đổi tên/đóng)
-    WorkspaceTabs/            # Tabs chuyển workspace
-    WorkspaceSetup/           # Setup wizard + template picker
-    Workspace/                # Render cây layout (react-resizable-panels)
-    TerminalPane/             # Bọc xterm.js; gắn vào bridge qua useTerminalSession
-    Browser/                  # BrowserColumn, AddressBar (web preview)
-    ui/                       # Button, dropdown-menu (kiểu shadcn)
-  hooks/
-    useTerminalSession.ts     # Effect: spawn pty → stream PtyOut vào xterm, retry
-  store/
-    app-store.ts              # zustand store: workspaces + layout actions
-    theme-store.ts            # zustand store: theme (light/dark) + localStorage
-    browser-store.ts          # zustand store: preview theo terminal (web preview)
-  lib/
-    layout-tree.ts            # Hàm cây split thuần (TDD; 37 test)
-    theme.ts                  # Helpers theme (9 test)
-    templates.ts              # Template lệnh khởi động workspace
-    utils.ts                  # cn() helper (clsx + tailwind-merge)
-    web-url.ts                # Chuẩn hoá/validate URL address bar (6 test)
+---
 
-src-tauri/                    # Backend Rust
-  src/
-    lib.rs                    # Builder: plugins, AppState, setup hook, command handler
-    main.rs                   # Entry point (gọi lib::run)
-    pty.rs                    # PtyOut enum, AppState, spawn_terminal, read_loop, UTF-8 helpers
-    commands.rs               # #[tauri::command]: create/write/resize/kill_terminal
-    tray.rs                   # TrayIconBuilder, menu Show/Quit, runtime-generated icon
-    deeplink.rs               # Parse/validate deep link swarmterm://auth/callback (OAuth PKCE)
-    mcp/                      # Embedded MCP server (browser.open_preview tool + framework)
-    preview.rs                # #[tauri::command]: điều khiển webview preview docked
-  Cargo.toml                  # portable-pty, tauri-plugin-single-instance, tauri-plugin-dialog,
-                              #   tauri-plugin-deep-link, rmcp, axum, tokio, url, serde
-  tauri.conf.json             # App config: frameless window, productName, identifier
-  capabilities/default.json  # ACL: core:default + window/event/dialog permissions
-```
+## Screenshots
 
-## Kiến trúc
+> These are **placeholders**. See [`docs/images/README.md`](docs/images/README.md) for the file names and sizes to drop in; each `<img>` below has a comment naming the file that replaces it.
 
-### PTY trong Rust (`portable-pty` + ConPTY)
+<table>
+<tr>
+<td width="50%">
 
-- Mỗi terminal được spawn trong Rust bằng `portable_pty::native_pty_system()`
-  (ConPTY trên Windows → truecolor 24-bit passthrough).
-- `AppState` giữ `Mutex<HashMap<String, ManagedTerminal>>` — mỗi entry chứa
-  `writer`, `master` (để resize), và `killer` (để kill từ thread lệnh).
-- Đọc output chạy trong **thread riêng** (`read_loop`): buffer 64 KB, drain
-  UTF-8 prefix hợp lệ bằng `take_valid_utf8` (giữ lại byte cuối bị cắt đôi
-  để tránh mojibake với ký tự đa byte / box-drawing / emoji), sau đó gửi qua
-  `Channel<PtyOut>`.
+<!-- IMAGE: docs/images/composer.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Workspace+composer" alt="Workspace composer" width="100%">
 
-### Streaming qua `Channel<PtyOut>`
+**Composer** — pick a folder, choose how many panes, assign agents, preview the layout.
 
-Kiểu enum:
-```rust
-pub enum PtyOut {
-    Data(String),
-    Exit { exit_code: i32 },
-}
-```
-Mỗi terminal nhận một `Channel<PtyOut>` riêng được truyền qua `invoke` từ
-renderer. Output được gửi theo từng read (không coalesce chủ ý — YAGNI); bản
-`Exit` cuối dọn sạch entry trong `AppState`.
+</td>
+<td width="50%">
 
-### Tray + Single-instance + Close-to-tray (Rust)
+<!-- IMAGE: docs/images/split-panes.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Split+panes+%2B+broadcast" alt="Split panes and broadcast" width="100%">
 
-- **Single-instance:** `tauri-plugin-single-instance` — callback focus +
-  unminimize + show cửa sổ chính.
-- **Tray:** `TrayIconBuilder` với icon 16×16 RGBA dựng runtime (không cần file
-  asset). Menu "Show Swarmterm" / "Quit" + left-click shows window.
-- **Close-to-tray:** `on_window_event` chặn `CloseRequested`, gọi
-  `api.prevent_close()` + `window.hide()` — trừ khi `AppState.quitting` đã
-  được set (do tray → Quit).
+**Panes + broadcast** — split, resize, swap panes; type once for a whole group.
 
-### Bridge renderer ↔ backend
+</td>
+</tr>
+<tr>
+<td width="50%">
 
-Renderer **không** dùng `window.api` hay bất kỳ shim nào. Tất cả giao tiếp
-chạy qua ba module trong `src/tauri/`:
-- `terminal.ts` — `invoke` + `Channel` cho các lệnh PTY.
-- `window.ts` — `@tauri-apps/api/window` cho điều khiển cửa sổ.
-- `dialog.ts` — `@tauri-apps/plugin-dialog` cho folder picker.
+<!-- IMAGE: docs/images/war-room.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=War+Room" alt="War Room" width="100%">
 
-## Kiểm thử
+**War Room** — rooms, transcript, members, and your Moderator composer.
 
-### Unit test tự động
+</td>
+<td width="50%">
+
+<!-- IMAGE: docs/images/git-worktrees.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Git+%2B+worktrees" alt="Git panel" width="100%">
+
+**Git panel** — each agent's worktree, changed files, inline diff.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<!-- IMAGE: docs/images/web-preview.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Web+preview" alt="Web preview" width="100%">
+
+**Web preview** — the agent opens the page; it lands next to its own pane.
+
+</td>
+<td width="50%">
+
+<!-- IMAGE: docs/images/settings.png (1200×750) -->
+<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Settings" alt="Settings" width="100%">
+
+**Settings** — appearance, terminal font and shell, shortcuts, account.
+
+</td>
+</tr>
+</table>
+
+---
+
+## Requirements
+
+| | |
+|---|---|
+| **Node.js** | 18 or newer, with npm 10+ |
+| **Rust** | stable toolchain from [rustup.rs](https://rustup.rs) |
+| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually preinstalled on Win 10/11) and Microsoft C++ Build Tools |
+| **macOS** | Xcode Command Line Tools — `xcode-select --install` |
+| **Linux** | `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator3`, `build-essential` — see [Tauri prerequisites](https://tauri.app/start/prerequisites/) |
+| **Optional** | The agent CLIs you want to use: `claude`, `codex`, `opencode`. Anything that isn't installed simply appears disabled in the composer. |
+
+---
+
+## Install & run
+
+There are no prebuilt downloads yet, so you run it from source:
 
 ```bash
-npm test                     # 118 tests JS/TS (layout-tree × 37, theme × 9, app-store × 32,
-                             #   browser-store × 5, web-url × 6, + các test khác)
-cd src-tauri && cargo test   # 18 tests Rust (pty helpers, shell, deeplink)
-npx tsc --noEmit             # Kiểm tra kiểu toàn bộ frontend
+git clone https://github.com/duongducnguyen/swarmterm.git
+cd swarmterm
+npm install
+npm run tauri dev
 ```
 
-### Smoke test thủ công
+To produce an installer for your platform instead:
 
-Sau `npm run tauri dev`:
+```bash
+npm run tauri build                  # installer / app bundle
+npm run tauri build -- --no-bundle   # just the binary, no installer
+```
 
-- [ ] Mở app → 1 workspace + 1 terminal PowerShell; gõ lệnh có kết quả.
-- [ ] Split pane ngang/dọc; kéo separator chỉnh kích thước; đóng pane → cây gộp.
-- [ ] Thêm / chuyển / đổi tên / đóng workspace qua navbar trái.
-- [ ] Setup wizard mở → chọn thư mục (native folder picker trả về đường dẫn);
-      template tạo đúng lệnh khởi động; workspace tab hiện và chuyển được.
-- [ ] Đóng cửa sổ → ẩn xuống tray (pty vẫn sống); tray → Show mở lại;
-      tray → Quit tắt hẳn và kill mọi pty.
-- [ ] Mở app lần 2 → chỉ focus cửa sổ cũ (single-instance).
-- [ ] Link — URL: `echo https://example.com` → hover thấy gạch chân + con trỏ
-      pointer; **bấm thường** một cái → trang mở ở trình duyệt mặc định của OS,
-      cột web-preview trong app KHÔNG bật lên.
-- [ ] Link — bôi đen: kéo chuột qua URL đó → chọn được text, trình duyệt KHÔNG mở.
-- [ ] Link — path tuyệt đối: `ls $PWD/package.json` → bấm thường không có gì xảy
-      ra; Cmd/Ctrl+click → file mở trong editor.
-- [ ] Link — path tương đối + dòng: `echo "src/lib/terminal-links.ts:15:1"` →
-      Cmd/Ctrl+click mở editor đúng dòng 15. Rồi `cd src`, `echo
-      "lib/terminal-links.ts:15"` → vẫn resolve được (bash, hoặc zsh trên macOS;
-      PowerShell thì không — xem Giới hạn đã biết).
-- [ ] Link — path không tồn tại: `echo "src/lib/does-not-exist.ts:9"` → hover
-      KHÔNG gạch chân, click không làm gì.
-- [ ] Link — OSC 8 từ agent: chạy `claude` trong pane, bảo nó đọc một file để nó
-      in đường dẫn ra → Cmd/Ctrl+click mở đúng file đó.
-- [ ] Titlebar tự vẽ hiển thị; kéo vùng titlebar di chuyển cửa sổ; kéo viền resize được
-      (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
-- [ ] Nút minimize / maximize-restore hoạt động; icon nút maximize đổi đúng trạng thái
-      (Windows/Linux only).
-- [ ] Nút close ẩn cửa sổ xuống tray (app không tắt) (Windows/Linux only).
-- [ ] Toggle theme đổi cả giao diện lẫn màu nền terminal.
-- [ ] Khởi động lại app → theme giữ đúng lựa chọn lần trước.
-- [ ] **Truecolor:** chạy CLI 24-bit màu (ví dụ `claude` nếu đã cài) → màu
-      hiển thị đúng, không bị downscale về 256-color.
-- [ ] **Worktree isolation:** Composer toggle "Isolate features in git worktrees"
-      bị vô hiệu hoá trên folder không phải repo git; bật được trên repo thật.
-      Bật toggle + tạo workspace với 3 pane Claude → 3 thư mục worktree tồn tại
-      cạnh repo (badge 🌿 hiện ngay, không cần gõ prompt). Broadcast 1 prompt
-      sang 3 pane → 3 diff riêng biệt, sạch trên 3 nhánh trong Git tab.
-      `worktree.remove` từ chối nếu worktree chứa file chưa commit; commit rồi
-      thử lại → thư mục xoá. Tạo workspace với toggle OFF, gọi `worktree.spawn` →
-      lỗi "worktree isolation is not enabled".
-- [ ] **Preview theo terminal:** 2 pane, mỗi pane bảo agent mở một URL khác
-      nhau qua `browser.open_preview` → click qua lại giữa 2 pane thấy trang
-      đổi đúng theo pane. Agent ở pane KHÔNG focus gọi tool → view hiện tại
-      không bị cướp. Pane chưa có preview → empty state, gõ URL vào address
-      bar tạo preview cho đúng pane. Agent gọi tool lần 2 → điều hướng,
-      back/forward hoạt động, không sinh thêm gì.
-- [ ] **War Room:** Kéo 2 pane agent vào tab War Room → chip thành viên hiện, intro được gõ vào từng pane.
-- [ ] **War Room — probe:** Agent A gửi probe → transcript hiện tin, agent B (đang idle) nhận nudge và đọc inbox.
-- [ ] **War Room — execute:** Agent A gửi execute → prompt chạy trong pane B, transcript đánh dấu màu cam.
-- [ ] **War Room — revocation:** Kéo chip ra / bấm ✕ → tool call tiếp theo từ pane đó bị từ chối "not in the War Room".
-- [ ] **War Room — PTY death:** Đóng pane thành viên → transcript ghi rời phòng, list_peers không còn ghost.
-- [ ] **War Room — nhiều phòng, join:** Mở app → sẵn 1 tab "War Room"; kéo 1
-      pane vào thân panel → join phòng đó, intro gõ vào pane đúng tên phòng.
-- [ ] **War Room — nhiều phòng, tạo phòng:** Bấm `+` tạo phòng "Website B";
-      kéo pane thứ 2 thẳng vào tab B → join B, không đụng phòng đầu.
-- [ ] **War Room — nhiều phòng, list_peers:** Gọi `war_room.list_peers` từ mỗi
-      pane → chỉ thấy peer cùng phòng, field `room` đúng tên phòng đó.
-- [ ] **War Room — nhiều phòng, cách ly transcript:** Broadcast ở phòng A →
-      transcript phòng B không nhận gì.
-- [ ] **War Room — nhiều phòng, chuyển phòng:** Kéo chip thành viên từ A sang
-      tab B → A ghi log Leave, B ghi log Join (pending), intro được gõ lại
-      vào pane, tool call kế tiếp mới reconnect.
-- [ ] **War Room — nhiều phòng, đổi tên:** Double-click tab → sửa tên inline;
-      composer và transcript hiển thị đúng tên mới ngay.
-- [ ] **War Room — nhiều phòng, xoá phòng:** Bấm ✕ trên phòng có thành viên →
-      xác nhận 2 bước → thành viên bị disconnect, tab biến mất, phòng active
-      fallback sang phòng còn lại.
-- [ ] **War Room — nhiều phòng, phòng cuối:** Chỉ còn 1 phòng → tab không có
-      nút ✕.
-- [ ] **War Room — nhiều phòng, badge chờ gửi:** Đang xem phòng A, queue một
-      tin gửi vào pane đang gõ dở ở phòng B → tab B hiện `⏸N`.
+The first build compiles the Rust side and takes a few minutes; later runs are fast.
 
-## Giới hạn đã biết (iteration 1)
+---
 
-- Không lưu/khôi phục trạng thái giữa các lần mở app (đúng phạm vi).
-- **Link trong terminal**: PowerShell không có hook môi trường để inject OSC 7,
-  nên path *tương đối* hết resolve sau khi `cd` (path tuyệt đối — gồm mọi thứ
-  Claude Code in ra — vẫn chạy). Tên file trần không có dấu `/` (`foo.ts:42`)
-  không thành link; phải có separator (`src/foo.ts:42`) — đây là biện pháp
-  chính chống false positive. Ký tự rộng (CJK) cùng dòng với path có thể làm
-  lệch vị trí gạch chân vài ô. Commit hash / số issue chưa được linkify.
-- Khi reload renderer thủ công lúc dev, pty cũ vẫn chạy cho đến khi cửa sổ
-  đóng (xterm reconnect chưa được implement).
-- Code editor, file browser, kanban, AI agent, Settings là phạm vi của các
-  iteration sau.
-- Web browser preview đã có (một preview mỗi terminal, bám focus); lưu/khôi
-  phục preview giữa các lần mở app chưa được implement.
+## Your first workspace
+
+1. **Launch.** Swarmterm opens on the Welcome screen — the workspace composer.
+2. **Pick a folder.** Browse to your project, or click one of the recent folders. This becomes the working directory for every pane.
+3. **Choose how many terminals** you want (the tiles on the right), then use the steppers to say how many of them run **Claude Code**, **Codex** or **OpenCode**. Anything you don't assign stays a plain shell. The layout preview updates as you go.
+4. **Optional but recommended for parallel work:** turn on **Isolate features in git worktrees** so every agent gets its own branch and directory.
+5. **Create** — click the button or press `⌘/Ctrl + Enter`.
+
+Your panes open with the agents already starting up. From here, the right-hand panel gives you **Preview**, **Git** and **War Room**.
+
+> Swarmterm deliberately keeps **no state between launches** — every start is a clean slate.
+
+---
+
+## Using Swarmterm
+
+### Workspaces and panes
+
+- **Left navbar** — all your workspaces. Add, switch, rename, close, or drag to reorder. Below them is the list of terminals in the current workspace; click one to jump straight to that pane.
+- **Split a pane** — use the split buttons in the pane header to divide it horizontally or vertically. Drag the separator to resize.
+- **Rearrange** — drag a pane by its header and drop it on another pane to swap the two. The shells keep running.
+- **Close a pane** — the layout closes the gap automatically. Closing the last pane of a workspace closes the workspace.
+- **Hide the sidebar** with `⌘/Ctrl + B` when you want maximum terminal space.
+
+### Running several agents at once
+
+- **Agent detection.** Swarmterm looks for `claude`, `codex` and `opencode` on your machine. If you install one while the app is running, just reopen the composer — it re-checks, no restart needed.
+- **Activity dots.** A pane's dot lights up while its shell is producing output and goes quiet when it stops, so you can see at a glance who is working and who is waiting for you.
+- **Broadcast input.** Press `⌘/Ctrl + Shift + B` to enter broadcast mode, `Alt + Click` panes to add or remove them from the group, then type. Every pane in the group receives the same keystrokes — ideal for "now run the tests" across five agents. `Esc` leaves broadcast mode.
+- **Per-pane control.** Each pane can be switched to a different agent, a different shell, or a different working directory from its header menu.
+
+### Worktree isolation
+
+Turn on **Isolate features in git worktrees** in the composer and Swarmterm sets everything up before the workspace even opens:
+
+- every agent pane is created **inside its own worktree** at `<repo>.worktrees/<name>`, on a new `swarm/<agent>-<n>` branch;
+- plain Terminal panes stay in the repository root;
+- if the folder isn't a git repository yet, it is initialised with a first commit for you;
+- panes running in a worktree are marked with a 🌿 badge in their header.
+
+Two rules that protect your work:
+
+- **Closing a pane or workspace never deletes a worktree.** Your branches survive.
+- **A worktree with uncommitted changes cannot be removed** — not by you through the app, and not by an agent. Commit first, then clean up.
+
+To tidy up later, use **Clear worktree** from a pane's context menu, or let an agent remove merged branches itself.
+
+### The Git panel
+
+Open the **Git** tab in the right panel to see, for the currently focused pane:
+
+- which worktree and branch it is on, and which agent owns each branch;
+- the files that changed, with an inline diff and line numbers;
+- how many commits the branch is ahead of the main line.
+
+It follows your focus — click a different agent's pane and the panel switches to that agent's work.
+
+### Web preview
+
+The **Preview** tab is a browser column docked next to your terminals, with an address bar and back/forward.
+
+- **Each terminal keeps its own page.** Click between panes and the preview follows.
+- **Agents open pages themselves.** When an agent starts a dev server it can put the page on screen for you; calling again just navigates the existing preview.
+- An agent working in a **background pane updates its own preview silently** — it never steals the view you're looking at.
+- You can also type any URL into the address bar yourself.
+
+### War Room
+
+The War Room is where agents stop being isolated.
+
+**Getting agents in**
+
+Drag a pane by its header onto the right panel — the War Room tab reveals itself while you drag. Drop it, and that agent joins the room and receives a short introduction telling it who else is there.
+
+**Rooms**
+
+The panel has a tab strip of rooms:
+
+- `+` creates a new room, double-click a tab to rename it, `✕` deletes it (with a two-step confirm; the last room can't be deleted).
+- **A pane belongs to at most one room.** Dragging it onto another room's tab moves it there.
+- Each room has its own transcript, member list and moderator seat, so two unrelated efforts never hear each other.
+
+**How agents talk**
+
+- **Probe** — a message lands in the peer's inbox and the peer is nudged to read it. This is what agents use for questions, debate and coordination.
+- **Execute** — the message is pasted into the peer's terminal and run as their next prompt. This is a handover: "we agreed, now do it." Execute is refused if the target is a plain shell rather than an agent.
+
+**Your seat**
+
+You are a member too — the **Moderator**. Use the composer at the bottom of the Discussion tab to send a message to one agent or broadcast to the whole room, in either mode. Agents can reply to you, and their replies show up in the transcript instead of being typed into somebody's terminal.
+
+**It waits for you to finish typing**
+
+If a message is destined for a pane where you have a half-typed command, Swarmterm **holds it** rather than interrupting: a small pill appears in the pane and the room tab shows `⏸N`. It retries by itself once the pane is free, and either "Deliver now" affordance releases it immediately. Held messages are never dropped.
+
+**Leaving**
+
+Drag a member chip out of the panel, or press its `✕`, and that agent immediately loses access — its next attempt to message the room is refused. Closing a pane removes it from the room automatically.
+
+> **Note:** switching a pane's agent, shell or folder restarts it, which also removes it from the room. Drag it back in.
+
+A full walkthrough — Claude Code and Codex negotiating an API contract — is in [`docs/war-room-demo.md`](docs/war-room-demo.md).
+
+### Terminal essentials
+
+- **Real shells, full colour.** Terminals are real PTYs with 24-bit truecolor, so agent CLIs look exactly as they do in your normal terminal. Emoji and box drawing render correctly.
+- **Copy and paste like VS Code.** `Ctrl/⌘ + C` copies when text is selected and otherwise still sends the interrupt to the shell; `Ctrl/⌘ + V` pastes.
+- **Clicking links.**
+  - A **single click** on a URL opens it in your normal browser.
+  - `⌘/Ctrl + click` on a file path opens it in your editor, at the right line — `src/foo.ts:42:9`, TypeScript's `src/foo.ts(42,9)` and Python's `File "x.py", line 42` all work.
+  - Paths that don't exist aren't clickable, and **no link is ever opened with the operating system's default app** — a mis-click on a `.sh` or `.exe` can never run it.
+- **Drag files in.** Drop a file or folder onto a pane and its path is inserted at the prompt, quoted correctly for that pane's shell.
+- **Choose your shell.** PowerShell, cmd, PowerShell 7 and Git Bash on Windows; zsh, bash and fish on macOS and Linux — per pane, or as a default in Settings.
+- **International input.** Vietnamese Telex, CJK IMEs and other multi-character input work in the terminal without dropped or duplicated characters.
+
+### Settings
+
+Open Settings from the navbar. Four sections:
+
+- **Appearance** — the visual style (currently VS Code Dark Modern).
+- **Terminal** — font family, size, line height and ligatures, with a live preview, plus your default shell.
+- **Keyboard Shortcuts** — the full list for your platform.
+- **Account** — optional sign-in with Google or GitHub; the session is stored in your operating system's keychain.
+
+Your appearance and terminal preferences are remembered between launches.
+
+### Window, tray and quitting
+
+- **Closing the window hides Swarmterm to the tray** and everything keeps running. Click the tray icon or choose *Show Swarmterm* to bring it back.
+- **Tray → Quit** is what actually exits, shutting down every terminal.
+- Opening Swarmterm a second time just focuses the window you already have.
+- On Windows, closing a pane kills the whole process tree it started — no orphaned build servers.
+
+---
+
+## What your agents can do
+
+Every terminal Swarmterm opens is automatically connected to the app, so agents that speak MCP (Claude Code, Codex, and others) can drive these features themselves. Nothing to configure — the connection is set up on every launch, and it only lasts as long as that pane.
+
+| Ability | What it does for you |
+|---|---|
+| **Open a preview** | The agent puts a page — usually the dev server it just started — into the preview column beside its own pane. |
+| **Spawn an isolated worktree** | Mid-session, an agent can hand a task to a fresh agent in its own worktree and branch, so parallel work never collides. |
+| **List worktrees** | The agent can see which branches and directories exist. |
+| **Remove a worktree** | Cleanup after a branch is merged — refused if anything is uncommitted, or if the directory isn't one Swarmterm created. |
+| **See who's in the room** | The agent lists its War Room peers, what they are, and where they're working. |
+| **Message a peer** | Ask a question, argue a design (probe), or hand over an agreed task to run (execute). |
+| **Read its inbox** | Pick up messages after being nudged, and reply. |
+
+The War Room abilities only work for panes you have actually dragged into a room, and the worktree abilities only in workspaces where you enabled isolation. Removing a pane from a room revokes its access instantly.
+
+---
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `⌘/Ctrl + B` | Show or hide the sidebar |
+| `⌘/Ctrl + Shift + B` | Toggle broadcast input |
+| `Alt + Click` | Add or remove a pane from the broadcast group |
+| `Esc` | Leave broadcast mode · close Settings |
+| `⌘/Ctrl + Enter` | Create the workspace from the composer |
+| `⌘/Ctrl + C` · `⌘/Ctrl + V` | Copy (when text is selected) · paste |
+| `⌘/Ctrl + Click` | Open a file path in your editor, at that line |
+
+On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the terminal for tmux.
+
+---
+
+## Troubleshooting
+
+**An agent is greyed out in the composer.** Its CLI isn't on your `PATH`. Install it, then reopen the composer — Swarmterm re-checks each time.
+
+**The worktree toggle is disabled.** The folder isn't a git repository, or it's a fresh repository with no commits yet. Make one commit and it becomes available.
+
+**An agent says it isn't in the War Room.** It was removed, or its pane restarted — switching a pane's agent, shell or folder restarts it. Drag the pane back into the room.
+
+**A message never arrived in a pane.** Look for the pill in the pane's corner or a `⏸N` badge on the room tab: it's being held because there's an unsubmitted line at that prompt. Press Enter, or click "Deliver now".
+
+**A relative path isn't clickable after `cd`.** On PowerShell, relative paths stop resolving once you change directory — absolute paths (including everything agents print) still work. Bare file names without a `/` are never linked, to avoid false positives.
+
+**The app disappeared.** Closing the window hides it to the tray. Click the tray icon to bring it back; use tray → Quit to exit for real.
+
+---
+
+## Known limits
+
+- **Nothing is saved between launches** — workspaces, layouts and previews all start fresh. This is intentional for now.
+- **One visual style.** VS Code Dark Modern only; a light theme is on the list.
+- **War Room membership doesn't survive a pane restart.** Re-drag the pane.
+- **No terminal search yet.**
+- **Linux** paths are implemented but less thoroughly tested than Windows and macOS.
+
+---
+
+<sub>Working on Swarmterm itself? Start with [`CLAUDE.md`](CLAUDE.md), the design specs in [`docs/design-docs/specs/`](docs/design-docs/specs/), and the release checklist in [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).</sub>
