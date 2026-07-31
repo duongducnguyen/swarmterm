@@ -1,398 +1,295 @@
-<div align="center">
+# Swarmterm — Tauri 2 + Rust
 
-<!-- ẢNH: thay bằng docs/images/logo.png (256×256) — xem docs/images/README.md -->
-<img src="https://placehold.co/128x128/1e1e1e/6b7280/png?text=LOGO" alt="Swarmterm" width="96" height="96">
-
-# Swarmterm
-
-**Một cửa sổ terminal cho cả bầy AI coding agent.**
-Nhiều workspace · split pane thật · mỗi agent một git worktree · preview web ngay cạnh pane · và một War Room để các agent nói chuyện với nhau.
-
-[![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
-[![Rust](https://img.shields.io/badge/Rust-stable-CE422B?logo=rust&logoColor=white)](https://www.rust-lang.org)
-[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/tests-644%20JS%20%2B%20147%20Rust-4ec994)](#kiểm-thử)
-[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#yêu-cầu-môi-trường)
-[![Status](https://img.shields.io/badge/status-pre--1.0-f97316)](#giới-hạn-đã-biết--roadmap)
-
-<!-- ẢNH: thay bằng docs/images/hero.png (1600×900) -->
-<img src="https://placehold.co/1600x900/1e1e1e/6b7280/png?text=Hero+screenshot" alt="Toàn cảnh Swarmterm" width="100%">
-
-</div>
-
----
-
-## Mục lục
-
-- [Swarmterm giải quyết vấn đề gì](#swarmterm-giải-quyết-vấn-đề-gì)
-- [Ảnh màn hình](#ảnh-màn-hình)
-- [Tính năng](#tính-năng)
-- [Bắt đầu nhanh](#bắt-đầu-nhanh)
-- [Yêu cầu môi trường](#yêu-cầu-môi-trường)
-- [Cài đặt & chạy](#cài-đặt--chạy)
-- [MCP server & tool](#mcp-server--tool)
-- [Phím tắt](#phím-tắt)
-- [Kiến trúc](#kiến-trúc)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Kiểm thử](#kiểm-thử)
-- [Giới hạn đã biết & roadmap](#giới-hạn-đã-biết--roadmap)
-- [Đóng góp](#đóng-góp)
-
----
-
-## Swarmterm giải quyết vấn đề gì
-
-Chạy **một** AI coding agent trong terminal thì terminal nào cũng làm được. Chạy **năm** agent song song mới là chỗ mọi thứ vỡ:
-
-| Vấn đề khi chạy nhiều agent | Cách Swarmterm giải quyết |
-|---|---|
-| Mỗi agent một cửa sổ/tab terminal → lạc mất pane nào đang chạy gì, alt-tab liên tục. | **Workspace + cây split thật**: mỗi workspace là một cây split nhị phân của pane thật, có navbar trái, tab workspace, danh sách terminal và **chấm hoạt động** báo pane nào đang stream output. |
-| Nhiều agent cùng sửa một checkout → giẫm chân nhau, diff trộn lẫn, không rollback nổi. | **Worktree-per-agent**: bật một toggle lúc tạo workspace là mỗi pane agent được sinh sẵn trong git worktree riêng (`<repo>.worktrees/<slug>`, nhánh `swarm/<agent>-<n>`). Diff tách bạch từ giây đầu tiên. |
-| Agent in ra `http://localhost:5173` → phải copy sang browser, mất ngữ cảnh. | **Cột web preview** ngay cạnh pane. Agent gọi MCP tool `browser.open_preview(url)` là trang hiện lên đúng pane đó — mỗi terminal có preview riêng, click pane nào thấy trang của pane đó. |
-| Agent A và agent B không nói chuyện được — con người phải làm cầu nối copy-paste. | **War Room**: kéo pane vào panel là agent nối vào một phòng chung, nhắn tin / tranh luận / bàn giao task cho nhau qua MCP. Nhiều phòng độc lập, và bạn có một ghế **Moderator** để chen vào. |
-| Gửi cùng một prompt cho N agent = paste N lần. | **Broadcast input**: chọn nhóm pane bằng `Alt + Click`, gõ một lần, mọi pane trong nhóm cùng nhận. |
-| Không biết agent nào đang bận, nào đang chờ mình. | Chấm hoạt động theo pane, icon agent trên header, tiêu đề pane bám theo tiến trình đang chạy, và badge số tin đang chờ gửi của War Room. |
-| Agent lỡ tay xoá worktree / chạy nhầm file khi bấm link. | Rào chắn cứng: `worktree.remove` **từ chối** worktree còn thay đổi chưa commit hoặc nằm ngoài `<repo>.worktrees`; **không link nào trong terminal được mở bằng app mặc định của OS** — bấm nhầm `.sh`/`.exe` không bao giờ chạy nó. |
-
-Swarmterm là app desktop **Tauri 2 + Rust** (không phải Electron), terminal thật chạy qua `portable-pty`, giao diện bám sát VS Code.
-
----
-
-## Ảnh màn hình
-
-> Ảnh dưới đây đang là **placeholder**. Xem [`docs/images/README.md`](docs/images/README.md) để biết tên file + kích thước cần upload; thay `src` của từng thẻ `<img>` bằng đường dẫn tương ứng là xong.
-
-<table>
-<tr>
-<td width="50%">
-
-<!-- ẢNH: docs/images/composer.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Workspace+composer" alt="Workspace composer" width="100%">
-
-**Composer** — chọn thư mục, số pane, phân bổ agent, bật cách ly worktree, xem trước layout rồi `⌘/Ctrl + Enter`.
-
-</td>
-<td width="50%">
-
-<!-- ẢNH: docs/images/split-panes.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Split+panes+%2B+broadcast" alt="Split pane và broadcast" width="100%">
-
-**Split pane + broadcast** — cây split nhị phân, kéo đổi chỗ pane, gõ một lần cho cả nhóm.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-<!-- ẢNH: docs/images/war-room.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=War+Room" alt="War Room" width="100%">
-
-**War Room** — nhiều phòng, transcript, danh sách thành viên, composer của Moderator.
-
-</td>
-<td width="50%">
-
-<!-- ẢNH: docs/images/git-worktrees.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Git+%2B+worktrees" alt="Git panel và worktree" width="100%">
-
-**Git panel** — worktree của từng agent, file đã đổi, diff inline có số dòng.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-<!-- ẢNH: docs/images/web-preview.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Web+preview" alt="Web preview" width="100%">
-
-**Web preview** — agent tự mở trang qua MCP, mỗi pane một preview + history riêng.
-
-</td>
-<td width="50%">
-
-<!-- ẢNH: docs/images/settings.png (1200×750) -->
-<img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Settings" alt="Settings" width="100%">
-
-**Settings** — Appearance, Terminal (font/ligature/shell), Keyboard Shortcuts, Account.
-
-</td>
-</tr>
-</table>
-
----
+App desktop kiểu "swarmterm" — bộ khung điều hướng + multi-terminal.
+Port lại từ bản Electron gốc (`workspace/`) sang **Tauri 2 + Rust**, toàn bộ
+tính năng iteration 1 được giữ nguyên.
 
 ## Tính năng
 
-### Workspace & layout
+- **Navbar trái** — danh sách workspace: thêm / chuyển / đổi tên / đóng.
+- **Multi-terminal** — mỗi workspace là một cây split nhị phân; split ngang/dọc
+  bất kỳ pane, kéo chỉnh kích thước, đóng pane (cây tự gộp).
+- **Terminal thật** — shell qua `portable-pty` Rust (ConPTY truecolor trên
+  Windows; mặc định PowerShell). Truecolor 24-bit được truyền thẳng qua ConPTY
+  và xterm.js hiển thị không downscale.
+- **Setup wizard + folder picker** — tạo workspace với thư mục làm việc tuỳ
+  chọn và lệnh khởi động từ template (native dialog qua `tauri-plugin-dialog`).
+- **System tray** — đóng cửa sổ → ẩn xuống tray (app chạy ngầm, pty vẫn sống);
+  tray → Show mở lại; tray → Quit tắt hẳn và kill mọi pty.
+- **Single-instance** — mở app lần 2 chỉ focus cửa sổ cũ
+  (`tauri-plugin-single-instance`).
+- **Frameless window** — titlebar tự vẽ; kéo vùng titlebar di chuyển cửa sổ;
+  minimize / maximize-restore / close-to-tray hoạt động qua Tauri window API
+  (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
+- **Theme toggle** — chuyển sáng/tối, lưu vào `localStorage`, terminal đổi màu
+  theo.
+- **Web browser preview** — cột thứ 3 hiển thị web preview của terminal đang
+  được chọn: mỗi terminal có tối đa MỘT preview (kèm history back/forward
+  riêng), click pane nào thấy preview của pane đó. Trigger từ trong terminal
+  qua MCP: mỗi PTY có sẵn env `SWARMTERM_MCP_URL` + `SWARMTERM_SESSION`, và
+  Swarmterm tự viết `.mcp.json` vào workspace khi tạo, nên Claude Code (hoặc
+  bất kỳ MCP client nào) gọi tool `browser.open_preview(url)` là preview cập
+  nhật — gọi lần nữa là điều hướng. Agent ở terminal nền cập nhật âm thầm,
+  không cướp view. Iframe DOM docked + address bar, gõ URL tự do.
+- **Isolate features in git worktrees** — composer có toggle "Isolate features
+  in git worktrees"; bật thì mỗi pane agent được tạo sẵn trong worktree riêng
+  (`<repo>.worktrees/<slug>`) kèm badge 🌿 ngay lập tức. MCP tool `worktree.spawn`
+  vẫn dùng để quản đốc giao việc giữa phiên (delegate mid-session). MCP tool
+  `worktree.remove` từ chối nếu worktree chứa file chưa commit; đóng workspace
+  không xoá worktree.
 
-- **Navbar trái** — danh sách workspace: tạo / chuyển / đổi tên / đóng / kéo sắp xếp lại; kèm danh sách terminal của workspace đang mở (click là nhảy tới pane) và nhãn phiên bản app.
-- **Composer tạo workspace** — chọn thư mục làm việc (native folder picker) hoặc chọn lại từ **recent folders**, đặt số terminal, phân bổ số lượng cho từng agent bằng stepper, xem **live layout preview**, bật/tắt cách ly worktree, tạo bằng nút hoặc `⌘/Ctrl + Enter`.
-- **Cây split nhị phân** — split ngang/dọc bất kỳ pane, kéo separator chỉnh kích thước, đóng pane thì cây tự gộp; **kéo header pane để đổi chỗ hai pane**.
-- **Tab workspace** — chuyển nhanh, kéo sắp xếp, đóng.
-- **Ẩn/hiện sidebar** bằng `⌘/Ctrl + B`.
+- **War Room** — kéo pane vào tab War Room để các agent nhắn tin/tranh luận/giao
+  việc cho nhau qua MCP; kéo ra để thu hồi quyền.
+- **War Room — nhiều phòng** — panel War Room có dải tab phòng: `+` tạo phòng
+  mới, double-click đổi tên inline, ✕ xoá (xác nhận 2 bước, phòng cuối cùng
+  không xoá được). Một pane chỉ ở trong tối đa 1 phòng — kéo vào tab phòng
+  khác là chuyển phòng (rời phòng cũ, intro được gõ lại, tool call kế tiếp mới
+  kết nối lại). Mỗi phòng có transcript, danh sách thành viên và Moderator
+  riêng; badge ⏸N trên tab báo tin đang chờ gửi ở phòng đó dù đang xem phòng
+  khác.
 
-### Terminal engine
+- **Link trong terminal** — URL bấm thẳng một cái là mở bằng trình duyệt mặc
+  định của hệ điều hành (cột web-preview trong app dành riêng cho MCP
+  `browser.open_preview`, tức trang do agent chủ động mở); đường dẫn file bấm
+  Cmd/Ctrl+click là mở trong editor đúng dòng (`src/foo.ts:42:9`, kể cả dạng
+  `src/foo.ts(42,9)` của tsc và `File "x.py", line 42` của Python). Hai gesture
+  khác nhau là cố ý: mở URL gần như miễn phí, còn mở editor thì cướp focus khỏi
+  app nên phải chủ đích. Đường dẫn không tồn tại thì không thành link (Rust
+  validate trên FS trước). Nhận cả OSC 8 hyperlink mà Claude Code phát ra.
+  **Không link nào mở bằng app mặc định của OS** — click nhầm file `.sh`/`.exe`
+  không bao giờ chạy nó.
 
-- **PTY thật trong Rust** — `portable-pty` (ConPTY trên Windows), không phải shell giả lập.
-- **Truecolor 24-bit** đi thẳng từ shell tới xterm.js, không downscale; render bằng WebGL addon.
-- **UTF-8 an toàn theo chunk** — ký tự đa byte bị cắt đôi giữa hai lần đọc được đệm lại, không mojibake với emoji / box-drawing / tiếng Việt.
-- **Chọn shell theo pane** — backend dò shell có thật trên máy (PowerShell / cmd / pwsh / Git Bash trên Windows; zsh / bash / fish… trên macOS–Linux) và đổi được từng pane.
-- **Copy/paste kiểu VS Code** — `Ctrl+C` chỉ copy khi đang có vùng chọn, còn lại vẫn là SIGINT; `Ctrl/⌘+V` luôn paste (không double-paste).
-- **Nhập tiếng Việt / IME** — lớp `terminal-input-client` đối chiếu textarea ẩn với những gì đã ghi vào pty theo **grapheme**, nên Telex/Unikey và IME đa ký tự không mất hay nhân đôi chữ.
-- **Kéo file vào pane** — thả file/thư mục vào terminal là đường dẫn được chèn vào dòng lệnh, escape đúng theo shell của pane.
-- **Link trong terminal** — click **thường** vào URL → mở trình duyệt mặc định của OS; `⌘/Ctrl + click` vào đường dẫn file → mở đúng dòng trong editor (`src/foo.ts:42:9`, kể cả dạng `src/foo.ts(42,9)` của tsc và `File "x.py", line 42` của Python). Đường dẫn không tồn tại thì không thành link (Rust kiểm tra trên filesystem trước). Nhận cả OSC 8 hyperlink. **Không link nào chạy bằng app mặc định của OS.**
-- **Tiêu đề pane thông minh** — header hiện agent/lệnh đang chạy, tự rút gọn theo bề rộng pane.
-- **Chấm hoạt động** — pane sáng đèn khi pty đang stream output, tắt sau khi im lặng.
-- **Registry ngoài React** — instance xterm sống ngoài cây render, nên re-parent pane (gộp cây khi đóng split) **không giết shell**.
+Không lưu trạng thái — mỗi lần mở app là 1 workspace + 1 terminal mặc định.
 
-### Điều phối nhiều agent
+## Tech stack
 
-- **Nhận diện agent CLI** — backend probe `claude` / `codex` / `opencode` trong `$PATH` (và các thư mục bin phổ biến); CLI chưa cài thì bị disable trong composer, cài xong mở lại composer là thấy ngay, không cần restart app.
-- **Broadcast input** — `⌘/Ctrl + Shift + B` bật chế độ broadcast, `Alt + Click` thêm/bớt pane khỏi nhóm, `Esc` thoát; banner hiển thị nhóm đang nhận.
-- **Worktree-per-agent** — toggle *"Isolate features in git worktrees"* trong composer: mỗi pane agent sinh ra **bên trong** worktree riêng trên nhánh `swarm/<agent>-<n>` (pane Terminal thường vẫn ở gốc repo). Folder chưa phải repo git sẽ được `git init` + commit đầu tiên tự động. Tạo worktree thất bại thì pane rơi về gốc repo chứ không chặn việc tạo workspace.
-- **Git panel** — chọn worktree (kèm agent đang giữ nhánh nào), danh sách file thay đổi, diff inline có số dòng, số commit chưa merge; theo dõi thư mục làm việc của pane đang focus.
-- **Dọn worktree** — context menu *Clear worktree* với xác nhận; đóng pane/workspace **không bao giờ** xoá worktree.
-
-### War Room — các agent nói chuyện với nhau
-
-- **Kéo là vào phòng** — kéo header pane thả vào panel là pane đó gia nhập phòng; kéo chip thành viên ra (hoặc bấm ✕) là thu hồi quyền ngay lập tức.
-- **Nhiều phòng** — dải tab phòng: `+` tạo phòng, double-click đổi tên inline, ✕ xoá (xác nhận 2 bước, phòng cuối cùng không xoá được). Một pane chỉ ở trong tối đa **một** phòng; kéo sang tab phòng khác là chuyển phòng. Transcript, danh sách thành viên và Moderator tách riêng theo từng phòng.
-- **Hai chế độ gửi** — `probe` (vào inbox của peer, peer được nhắc đọc) và `execute` (paste + chạy hẳn prompt trong pane của peer). `execute` bị backend từ chối nếu đích là pane shell thường.
-- **Ghế Moderator** — bạn cũng là một thành viên: gõ thẳng vào transcript, gửi cho một agent hoặc broadcast cả phòng; agent trả lời về `__moderator__` thì tin hiện trong tab Discussion chứ không gõ vào pane nào.
-- **Không phá ngang người đang gõ** — tin nhắn chỉ được gõ vào pane khi pane đó thật sự rảnh: đang có dòng lệnh gõ dở hoặc vừa gõ xong thì hàng đợi được **giữ lại** (pill trong pane + badge `⏸N` trên tab phòng), tự thử lại, và có nút *Deliver now*. Không bao giờ vứt tin đi.
-- **Tự dọn** — pane chết là tự rời phòng, `list_peers` không còn thành viên ma.
-
-### Web preview
-
-- Cột preview docked kèm address bar, back/forward — **mỗi terminal một preview riêng**, click pane nào thấy trang của pane đó; agent ở pane không focus cập nhật ngầm, không cướp view.
-- Trigger từ trong terminal qua MCP tool `browser.open_preview(url)`; gọi lại lần nữa là điều hướng chứ không sinh thêm preview.
-
-### Vỏ app & tiện ích
-
-- **Cửa sổ frameless** kiểu VS Code — titlebar tự vẽ, kéo di chuyển, minimize/maximize/close (macOS dùng traffic lights native), theo dõi trạng thái fullscreen.
-- **System tray** — đóng cửa sổ là ẩn xuống tray, pty vẫn sống; tray → *Show* để mở lại, tray → *Quit* mới thật sự tắt và kill toàn bộ pty.
-- **Single instance** — mở app lần hai chỉ focus lại cửa sổ cũ.
-- **Teardown sạch trên Windows** — shell được nhốt trong **Job Object** kill-on-close, đóng pane là chết cả cây tiến trình con/cháu.
-- **Settings** — Appearance (style *VS Code Dark Modern*), Terminal (font, cỡ chữ, line-height, ligature, shell mặc định, có preview trực tiếp), Keyboard Shortcuts, Account.
-- **Account** — đăng nhập OAuth (Google/GitHub) qua Supabase với PKCE, callback về deeplink `swarmterm://auth/callback`, phiên lưu trong keychain của hệ điều hành.
-
-> **Không lưu trạng thái giữa các lần mở app** — đây là chủ ý: mỗi lần khởi động là một khởi đầu sạch (Welcome → workspace).
-
----
-
-## Bắt đầu nhanh
-
-1. `npm install && npm run tauri dev`.
-2. Ở màn hình Welcome: chọn thư mục dự án → đặt **4 terminal** → phân bổ **3 Claude Code** (pane còn lại là shell thường) → bật **Isolate features in git worktrees** → `⌘/Ctrl + Enter`.
-3. Ba pane agent khởi động sẵn trong ba worktree riêng (badge 🌿 trên header). Bật **Git** ở panel phải để thấy ba nhánh tách bạch.
-4. `⌘/Ctrl + Shift + B` → `Alt + Click` chọn ba pane agent → gõ một prompt chung cho cả ba.
-5. Kéo hai pane vào tab **War Room** → bảo một agent `war_room.send` cho peer để chúng tự chốt hợp đồng API với nhau, rồi bàn giao task bằng `mode: "execute"`.
-6. Bảo agent chạy dev server và gọi `browser.open_preview` → trang hiện ngay ở cột **Preview** cạnh pane đó.
-
-Kịch bản demo chi tiết (Claude Code × Codex tranh luận một API contract): [`docs/war-room-demo.md`](docs/war-room-demo.md).
-
----
+Tauri 2 (tính năng `unstable` multiwebview) · Rust · `portable-pty` ·
+`tauri-plugin-single-instance` · `tauri-plugin-dialog` ·
+`tauri-plugin-deep-link` · `url` · React 19 + TypeScript · Vite ·
+Tailwind CSS · xterm.js · zustand · Vitest.
 
 ## Yêu cầu môi trường
 
-| Thành phần | Yêu cầu |
-|---|---|
-| **Node.js** | 18+ (đã chạy trên v23) + npm 10+ |
-| **Rust** | toolchain stable qua [rustup](https://rustup.rs) (1.75+) |
-| **Windows** | [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (Win 10/11 thường có sẵn) + Microsoft C++ Build Tools (VS 2022 hoặc VS Build Tools) |
-| **macOS** | Xcode Command Line Tools (`xcode-select --install`) |
-| **Linux** | `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator3`, `build-essential` — xem [Tauri prerequisites](https://tauri.app/start/prerequisites/) |
-| **Tuỳ chọn** | CLI của agent: `claude`, `codex`, `opencode` (thiếu cái nào thì cái đó bị disable trong composer) |
-
----
+- **Rust toolchain** — `rustup` + `cargo` (stable, 1.75+). Cài từ
+  <https://rustup.rs>.
+- **Node.js 18+** (đã kiểm thử trên v23) + npm 10+.
+- **WebView2 Runtime** — trên Windows 10/11 thường đã có sẵn; nếu thiếu tải từ
+  <https://developer.microsoft.com/microsoft-edge/webview2/>.
+- **Tauri prerequisites** trên Windows: Microsoft C++ Build Tools (đi kèm
+  Visual Studio 2022 hoặc cài riêng qua VS Build Tools Installer).
 
 ## Cài đặt & chạy
 
 ```bash
-npm install                          # cài JS dependencies
-npm run tauri dev                    # chạy app (Vite HMR + Rust auto-rebuild)
-npm run tauri build                  # bundle production (installer)
-npm run tauri build -- --no-bundle   # chỉ binary release, bỏ qua installer
+npm install                  # cài JS dependencies
+npm run tauri dev            # chạy app ở chế độ dev (hot reload frontend + Rust)
 ```
 
-### Scripts
+## Scripts
 
 | Lệnh | Mô tả |
 |---|---|
-| `npm run tauri dev` | Chạy app ở chế độ dev. |
-| `npm run tauri build` | Build production + installer. |
-| `npm run build` | Build frontend (`tsc && vite build`) vào `dist/` — không cần Rust. |
-| `npm test` | Unit test JS/TS (Vitest, chạy một lần). |
-| `npm run test:watch` | Vitest ở chế độ watch. |
-| `npx tsc --noEmit` | Type-check toàn bộ frontend (strict). |
-| `cargo test` *(trong `src-tauri/`)* | Unit test Rust. |
+| `npm run tauri dev` | Chạy app dev (Vite + hot reload frontend, Rust rebuild tự động). |
+| `npm run tauri build` | Build production (bundle installer). |
+| `npm run tauri build -- --no-bundle` | Build release binary, bỏ qua tạo installer (WiX/NSIS). |
+| `npm run build` | Build frontend (Vite + tsc) vào `dist/` — không cần Rust. |
+| `npm test` | Chạy unit test JS/TS (Vitest). |
+| `npm run test:watch` | Unit test ở chế độ watch. |
+| `cargo test` _(từ `src-tauri/`)_ | Chạy unit test Rust (pty helpers). |
 
----
-
-## MCP server & tool
-
-Khi khởi động, tiến trình Rust bind một cổng loopback ngẫu nhiên và chạy một **MCP server (Streamable HTTP)**. Mỗi PTY được spawn kèm:
+## Cấu trúc thư mục
 
 ```
-SWARMTERM_MCP_URL=http://127.0.0.1:<port>/mcp
-SWARMTERM_SESSION=<terminalId>
+src/                          # Frontend React/TS (renderer)
+  App.tsx                     # Bố cục gốc: TitleBar + Navbar + Workspace
+  main.tsx                    # React entry point
+  index.css                   # Tailwind + CSS variables (light/dark theme)
+  tauri/
+    terminal.ts               # Bridge: invoke create/write/resize/kill_terminal + Channel<PtyOut>
+    window.ts                 # Bridge: minimize, toggleMaximize, close, show, onMaximizedChanged
+    dialog.ts                 # Bridge: pickDirectory (native folder picker), getHomeDir
+    deeplink.ts               # Bridge nghe event preview:open từ backend deep link
+    preview.ts                # Bridge điều khiển webview preview docked
+  components/
+    TitleBar/                 # Frameless title bar; drag region, window controls
+    Navbar/                   # Danh sách workspace (thêm/chuyển/đổi tên/đóng)
+    WorkspaceTabs/            # Tabs chuyển workspace
+    WorkspaceSetup/           # Setup wizard + template picker
+    Workspace/                # Render cây layout (react-resizable-panels)
+    TerminalPane/             # Bọc xterm.js; gắn vào bridge qua useTerminalSession
+    Browser/                  # BrowserColumn, AddressBar (web preview)
+    ui/                       # Button, dropdown-menu (kiểu shadcn)
+  hooks/
+    useTerminalSession.ts     # Effect: spawn pty → stream PtyOut vào xterm, retry
+  store/
+    app-store.ts              # zustand store: workspaces + layout actions
+    theme-store.ts            # zustand store: theme (light/dark) + localStorage
+    browser-store.ts          # zustand store: preview theo terminal (web preview)
+  lib/
+    layout-tree.ts            # Hàm cây split thuần (TDD; 37 test)
+    theme.ts                  # Helpers theme (9 test)
+    templates.ts              # Template lệnh khởi động workspace
+    utils.ts                  # cn() helper (clsx + tailwind-merge)
+    web-url.ts                # Chuẩn hoá/validate URL address bar (6 test)
+
+src-tauri/                    # Backend Rust
+  src/
+    lib.rs                    # Builder: plugins, AppState, setup hook, command handler
+    main.rs                   # Entry point (gọi lib::run)
+    pty.rs                    # PtyOut enum, AppState, spawn_terminal, read_loop, UTF-8 helpers
+    commands.rs               # #[tauri::command]: create/write/resize/kill_terminal
+    tray.rs                   # TrayIconBuilder, menu Show/Quit, runtime-generated icon
+    deeplink.rs               # Parse/validate deep link swarmterm://auth/callback (OAuth PKCE)
+    mcp/                      # Embedded MCP server (browser.open_preview tool + framework)
+    preview.rs                # #[tauri::command]: điều khiển webview preview docked
+  Cargo.toml                  # portable-pty, tauri-plugin-single-instance, tauri-plugin-dialog,
+                              #   tauri-plugin-deep-link, rmcp, axum, tokio, url, serde
+  tauri.conf.json             # App config: frameless window, productName, identifier
+  capabilities/default.json  # ACL: core:default + window/event/dialog permissions
 ```
-
-`SWARMTERM_SESSION` vừa là danh tính vừa là **bearer token** của pane: nó chỉ tồn tại trong env của terminal đó và hết hiệu lực ngay khi pty bị kill. Nhờ vậy mỗi tool call luôn biết **pane nào** gọi — đó là cách preview bám đúng pane và War Room biết ai đang nói. Cấu hình MCP được ghi cho agent **tự động mỗi lần boot**, ghi kiểu merge + rename nguyên tử nên không bao giờ làm hỏng file có sẵn: Claude Code ở user scope `~/.claude.json` (mọi thư mục và mọi worktree đều thấy server, không cần `.mcp.json` riêng cho từng project), Codex ở `~/.codex/config.toml`.
-
-| Tool | Dùng để | Ghi chú |
-|---|---|---|
-| `browser.open_preview` | Mở/điều hướng trang trong cột preview của chính pane gọi. | Gọi lại = điều hướng, không sinh thêm preview. |
-| `worktree.spawn` | Tạo worktree mới + mở pane agent chạy trong đó (giao việc giữa phiên). | Chỉ hoạt động khi workspace bật worktree mode. |
-| `worktree.list` | Liệt kê worktree của repo (path, branch, HEAD, main). | |
-| `worktree.remove` | Xoá worktree sau khi nhánh đã merge. | **Từ chối** nếu còn thay đổi chưa commit hoặc path nằm ngoài `<repo>.worktrees`. |
-| `war_room.list_peers` | Xem ai đang ở cùng phòng (tên, loại agent, thư mục). | Chỉ chạy khi pane đã được kéo vào phòng. |
-| `war_room.send` | Gửi cho peer: `probe` (vào inbox + nhắc đọc) hoặc `execute` (paste & chạy prompt). | Bỏ `to` = broadcast probe cả phòng. |
-| `war_room.read_inbox` | Đọc & xoá tin đang chờ của mình. | Gọi khi được nhắc. |
-
-Thêm tool mới: tạo file trong `src-tauri/src/mcp/tools/` + một dòng `mod`. Spec: [`docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`](docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md).
-
----
-
-## Phím tắt
-
-| Phím | Hành động |
-|---|---|
-| `⌘/Ctrl + B` | Ẩn/hiện sidebar |
-| `⌘/Ctrl + Shift + B` | Bật/tắt broadcast input |
-| `Alt + Click` | Thêm/bớt pane khỏi nhóm broadcast |
-| `Esc` | Thoát broadcast / đóng Settings |
-| `⌘/Ctrl + Enter` | Tạo workspace từ composer |
-| `⌘/Ctrl + C` · `⌘/Ctrl + V` | Copy (khi có vùng chọn) · Paste |
-| `⌘/Ctrl + Click` | Mở đường dẫn file trong editor, đúng dòng |
-
-> Trên macOS dùng `⌘` để `Ctrl + B` vẫn thuộc về terminal (prefix của tmux).
-
----
 
 ## Kiến trúc
 
-```
-┌─ Renderer (src/) ──────────────┐         ┌─ Backend (src-tauri/src/) ──┐
-│ components/  React UI           │         │ lib.rs      builder/plugins │
-│ store/       zustand state      │ invoke  │ commands.rs #[command] fns  │
-│ lib/         logic thuần (TDD)  │ ──────► │ pty.rs      spawn + reader  │
-│ tauri/       cầu IPC ───────────┼─────────┤ shell.rs    dò shell        │
-│                                 │ Channel │ warroom.rs  phòng + inbox   │
-│                                 │ ◄────── │ mcp/        MCP server+tool │
-└─────────────────────────────────┘  PtyOut └─────────────────────────────┘
-```
+### PTY trong Rust (`portable-pty` + ConPTY)
 
-**Nguyên tắc chia lớp**
+- Mỗi terminal được spawn trong Rust bằng `portable_pty::native_pty_system()`
+  (ConPTY trên Windows → truecolor 24-bit passthrough).
+- `AppState` giữ `Mutex<HashMap<String, ManagedTerminal>>` — mỗi entry chứa
+  `writer`, `master` (để resize), và `killer` (để kill từ thread lệnh).
+- Đọc output chạy trong **thread riêng** (`read_loop`): buffer 64 KB, drain
+  UTF-8 prefix hợp lệ bằng `take_valid_utf8` (giữ lại byte cuối bị cắt đôi
+  để tránh mojibake với ký tự đa byte / box-drawing / emoji), sau đó gửi qua
+  `Channel<PtyOut>`.
 
-- `src/tauri/*` là **bề mặt IPC duy nhất** — không có shim `window.api`, component không bao giờ gọi thẳng `invoke`.
-- `#[tauri::command]` nằm gọn trong `commands.rs`, uỷ quyền xuống module (`pty.rs`, `shell.rs`, `git.rs`, `warroom.rs`); đăng ký trong `invoke_handler!` ở `lib.rs`.
-- `src/lib/` là logic thuần, không DOM/framework, mỗi file có `*.test.ts` bên cạnh — đây là chỗ chứa quy tắc nghiệp vụ.
-- `src/store/` là zustand: state + action; biến đổi thuần thì gọi xuống `lib/`.
-- `src/lib/terminal-registry.ts` giữ instance xterm **ngoài** cây React, key theo `terminalId`.
+### Streaming qua `Channel<PtyOut>`
 
-**Streaming PTY** — mỗi terminal có một `Channel<PtyOut>` riêng; thread đọc trong Rust decode output rồi bắn `Data`, kết thúc bằng đúng một `Exit`:
-
+Kiểu enum:
 ```rust
 pub enum PtyOut {
     Data(String),
     Exit { exit_code: i32 },
 }
 ```
+Mỗi terminal nhận một `Channel<PtyOut>` riêng được truyền qua `invoke` từ
+renderer. Output được gửi theo từng read (không coalesce chủ ý — YAGNI); bản
+`Exit` cuối dọn sạch entry trong `AppState`.
 
-**Vài quyết định không hiển nhiên** (chi tiết trong [`CLAUDE.md`](CLAUDE.md)): thứ tự teardown khi respawn cùng `terminalId`; Job Object trên Windows; đệm UTF-8 qua ranh giới chunk; trả focus về terminal sau khi click vào chrome (dnd-kit gắn `tabIndex` lên node kéo-thả); `prevent_close()` cho close-to-tray.
+### Tray + Single-instance + Close-to-tray (Rust)
 
-Toàn bộ tính năng đều đi qua trình tự **spec → plan → TDD**; hồ sơ thiết kế nằm trong [`docs/design-docs/specs/`](docs/design-docs/specs/) và là nguồn giải thích *vì sao* tốt nhất.
+- **Single-instance:** `tauri-plugin-single-instance` — callback focus +
+  unminimize + show cửa sổ chính.
+- **Tray:** `TrayIconBuilder` với icon 16×16 RGBA dựng runtime (không cần file
+  asset). Menu "Show Swarmterm" / "Quit" + left-click shows window.
+- **Close-to-tray:** `on_window_event` chặn `CloseRequested`, gọi
+  `api.prevent_close()` + `window.hide()` — trừ khi `AppState.quitting` đã
+  được set (do tray → Quit).
 
----
+### Bridge renderer ↔ backend
 
-## Cấu trúc thư mục
-
-```
-src/                              # Frontend React 19 + TypeScript
-  App.tsx                         # Bố cục gốc: TitleBar + Navbar + Workspace + RightPanel
-  components/
-    TitleBar/  Navbar/  WorkspaceTabs/     # Vỏ app (frameless titlebar, sidebar, tab)
-    Welcome/                                # Composer tạo workspace + layout preview
-    Workspace/  TerminalPane/               # Cây split, pane, header, pill giữ tin
-    Browser/                                # Cột web preview + address bar
-    Git/                                    # Worktree selector, file thay đổi, diff inline
-    WarRoom/                                # Tab phòng, transcript, thành viên, composer
-    RightPanel/                             # Chuyển tab Preview / Git / War Room
-    Settings/                               # Appearance, Terminal, Shortcuts, Account
-    Account/  ui/                           # Login modal; primitive kiểu shadcn
-  lib/                            # Logic thuần + test (layout-tree, war-room-*, terminal-*, git-diff…)
-  store/                          # zustand: app, git, browser, war-room, appearance, activity…
-  tauri/                          # Cầu IPC: terminal, window, dialog, git, warroom, worktree…
-
-src-tauri/                        # Backend Rust
-  src/
-    lib.rs  main.rs               # Builder, plugin, AppState, đăng ký command
-    commands.rs                   # #[tauri::command]
-    pty.rs                        # Spawn pty, read loop, Job Object, helper UTF-8
-    shell.rs  agents.rs           # Dò shell & agent CLI có trên máy
-    git.rs                        # worktree, file thay đổi, diff
-    warroom.rs                    # Registry phòng, thành viên, inbox
-    mcp/                          # MCP server + tools/{browser,worktree,warroom}.rs
-    tray.rs  deeplink.rs  auth.rs # Tray, swarmterm://, phiên đăng nhập
-  tauri.conf.json                 # Cửa sổ frameless, bundle, deep-link scheme
-
-docs/
-  images/                         # Ảnh cho README (xem docs/images/README.md)
-  manual-smoke-tests.md           # Checklist smoke test thủ công
-  war-room-demo.md                # Kịch bản demo War Room
-  design-docs/specs/              # Hồ sơ thiết kế từng tính năng
-```
-
----
+Renderer **không** dùng `window.api` hay bất kỳ shim nào. Tất cả giao tiếp
+chạy qua ba module trong `src/tauri/`:
+- `terminal.ts` — `invoke` + `Channel` cho các lệnh PTY.
+- `window.ts` — `@tauri-apps/api/window` cho điều khiển cửa sổ.
+- `dialog.ts` — `@tauri-apps/plugin-dialog` cho folder picker.
 
 ## Kiểm thử
 
+### Unit test tự động
+
 ```bash
-npm test                     # 644 test JS/TS trong 53 file (Vitest)
-npx tsc --noEmit             # Type-check strict toàn frontend
-cd src-tauri && cargo test   # 147 test Rust
+npm test                     # 118 tests JS/TS (layout-tree × 37, theme × 9, app-store × 32,
+                             #   browser-store × 5, web-url × 6, + các test khác)
+cd src-tauri && cargo test   # 18 tests Rust (pty helpers, shell, deeplink)
+npx tsc --noEmit             # Kiểm tra kiểu toàn bộ frontend
 ```
 
-*(Số liệu chạy ngày 2026-07-31 trên nhánh `main`.)*
+### Smoke test thủ công
 
-Checklist smoke test thủ công — chạy trước mỗi lần release: [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).
+Sau `npm run tauri dev`:
 
----
+- [ ] Mở app → 1 workspace + 1 terminal PowerShell; gõ lệnh có kết quả.
+- [ ] Split pane ngang/dọc; kéo separator chỉnh kích thước; đóng pane → cây gộp.
+- [ ] Thêm / chuyển / đổi tên / đóng workspace qua navbar trái.
+- [ ] Setup wizard mở → chọn thư mục (native folder picker trả về đường dẫn);
+      template tạo đúng lệnh khởi động; workspace tab hiện và chuyển được.
+- [ ] Đóng cửa sổ → ẩn xuống tray (pty vẫn sống); tray → Show mở lại;
+      tray → Quit tắt hẳn và kill mọi pty.
+- [ ] Mở app lần 2 → chỉ focus cửa sổ cũ (single-instance).
+- [ ] Link — URL: `echo https://example.com` → hover thấy gạch chân + con trỏ
+      pointer; **bấm thường** một cái → trang mở ở trình duyệt mặc định của OS,
+      cột web-preview trong app KHÔNG bật lên.
+- [ ] Link — bôi đen: kéo chuột qua URL đó → chọn được text, trình duyệt KHÔNG mở.
+- [ ] Link — path tuyệt đối: `ls $PWD/package.json` → bấm thường không có gì xảy
+      ra; Cmd/Ctrl+click → file mở trong editor.
+- [ ] Link — path tương đối + dòng: `echo "src/lib/terminal-links.ts:15:1"` →
+      Cmd/Ctrl+click mở editor đúng dòng 15. Rồi `cd src`, `echo
+      "lib/terminal-links.ts:15"` → vẫn resolve được (bash, hoặc zsh trên macOS;
+      PowerShell thì không — xem Giới hạn đã biết).
+- [ ] Link — path không tồn tại: `echo "src/lib/does-not-exist.ts:9"` → hover
+      KHÔNG gạch chân, click không làm gì.
+- [ ] Link — OSC 8 từ agent: chạy `claude` trong pane, bảo nó đọc một file để nó
+      in đường dẫn ra → Cmd/Ctrl+click mở đúng file đó.
+- [ ] Titlebar tự vẽ hiển thị; kéo vùng titlebar di chuyển cửa sổ; kéo viền resize được
+      (Windows/Linux; trên macOS dùng traffic lights native — titleBarStyle Overlay).
+- [ ] Nút minimize / maximize-restore hoạt động; icon nút maximize đổi đúng trạng thái
+      (Windows/Linux only).
+- [ ] Nút close ẩn cửa sổ xuống tray (app không tắt) (Windows/Linux only).
+- [ ] Toggle theme đổi cả giao diện lẫn màu nền terminal.
+- [ ] Khởi động lại app → theme giữ đúng lựa chọn lần trước.
+- [ ] **Truecolor:** chạy CLI 24-bit màu (ví dụ `claude` nếu đã cài) → màu
+      hiển thị đúng, không bị downscale về 256-color.
+- [ ] **Worktree isolation:** Composer toggle "Isolate features in git worktrees"
+      bị vô hiệu hoá trên folder không phải repo git; bật được trên repo thật.
+      Bật toggle + tạo workspace với 3 pane Claude → 3 thư mục worktree tồn tại
+      cạnh repo (badge 🌿 hiện ngay, không cần gõ prompt). Broadcast 1 prompt
+      sang 3 pane → 3 diff riêng biệt, sạch trên 3 nhánh trong Git tab.
+      `worktree.remove` từ chối nếu worktree chứa file chưa commit; commit rồi
+      thử lại → thư mục xoá. Tạo workspace với toggle OFF, gọi `worktree.spawn` →
+      lỗi "worktree isolation is not enabled".
+- [ ] **Preview theo terminal:** 2 pane, mỗi pane bảo agent mở một URL khác
+      nhau qua `browser.open_preview` → click qua lại giữa 2 pane thấy trang
+      đổi đúng theo pane. Agent ở pane KHÔNG focus gọi tool → view hiện tại
+      không bị cướp. Pane chưa có preview → empty state, gõ URL vào address
+      bar tạo preview cho đúng pane. Agent gọi tool lần 2 → điều hướng,
+      back/forward hoạt động, không sinh thêm gì.
+- [ ] **War Room:** Kéo 2 pane agent vào tab War Room → chip thành viên hiện, intro được gõ vào từng pane.
+- [ ] **War Room — probe:** Agent A gửi probe → transcript hiện tin, agent B (đang idle) nhận nudge và đọc inbox.
+- [ ] **War Room — execute:** Agent A gửi execute → prompt chạy trong pane B, transcript đánh dấu màu cam.
+- [ ] **War Room — revocation:** Kéo chip ra / bấm ✕ → tool call tiếp theo từ pane đó bị từ chối "not in the War Room".
+- [ ] **War Room — PTY death:** Đóng pane thành viên → transcript ghi rời phòng, list_peers không còn ghost.
+- [ ] **War Room — nhiều phòng, join:** Mở app → sẵn 1 tab "War Room"; kéo 1
+      pane vào thân panel → join phòng đó, intro gõ vào pane đúng tên phòng.
+- [ ] **War Room — nhiều phòng, tạo phòng:** Bấm `+` tạo phòng "Website B";
+      kéo pane thứ 2 thẳng vào tab B → join B, không đụng phòng đầu.
+- [ ] **War Room — nhiều phòng, list_peers:** Gọi `war_room.list_peers` từ mỗi
+      pane → chỉ thấy peer cùng phòng, field `room` đúng tên phòng đó.
+- [ ] **War Room — nhiều phòng, cách ly transcript:** Broadcast ở phòng A →
+      transcript phòng B không nhận gì.
+- [ ] **War Room — nhiều phòng, chuyển phòng:** Kéo chip thành viên từ A sang
+      tab B → A ghi log Leave, B ghi log Join (pending), intro được gõ lại
+      vào pane, tool call kế tiếp mới reconnect.
+- [ ] **War Room — nhiều phòng, đổi tên:** Double-click tab → sửa tên inline;
+      composer và transcript hiển thị đúng tên mới ngay.
+- [ ] **War Room — nhiều phòng, xoá phòng:** Bấm ✕ trên phòng có thành viên →
+      xác nhận 2 bước → thành viên bị disconnect, tab biến mất, phòng active
+      fallback sang phòng còn lại.
+- [ ] **War Room — nhiều phòng, phòng cuối:** Chỉ còn 1 phòng → tab không có
+      nút ✕.
+- [ ] **War Room — nhiều phòng, badge chờ gửi:** Đang xem phòng A, queue một
+      tin gửi vào pane đang gõ dở ở phòng B → tab B hiện `⏸N`.
 
-## Giới hạn đã biết & roadmap
+## Giới hạn đã biết (iteration 1)
 
-**Giới hạn hiện tại**
-
-- **Không persistence.** Layout, workspace và preview không được lưu giữa các lần mở app (chủ ý ở giai đoạn này).
-- **Link tương đối trên PowerShell.** PowerShell không có hook để inject OSC 7 nên đường dẫn *tương đối* hết resolve sau khi `cd` (đường dẫn tuyệt đối — gồm mọi thứ Claude Code in ra — vẫn chạy). Tên file trần không có separator (`foo.ts:42`) cố tình không thành link để tránh false positive. Ký tự rộng (CJK) cùng dòng có thể làm lệch vị trí gạch chân vài ô; commit hash / số issue chưa được linkify.
-- **Membership War Room không sống qua respawn.** Đổi agent/shell/cwd của pane (respawn cùng id) là pane rời phòng — kéo lại vào.
-- **Reload renderer thủ công lúc dev** để lại pty cũ chạy tới khi đóng cửa sổ (chưa có reconnect xterm).
-- **Một style giao diện.** Hiện chỉ có *VS Code Dark Modern*; theme sáng và style khác nằm trong hàng đợi.
-- **Kiểm thử đa nền tảng.** Phát triển chính trên Windows và macOS; đường Linux đã được gate `#[cfg]`/runtime nhưng chưa được smoke-test rộng.
-
-**Đang cân nhắc**
-
-- Lưu/khôi phục workspace + preview giữa các phiên.
-- Theme sáng và bộ style bổ sung.
-- Tìm kiếm trong terminal (`@xterm/addon-search` đã có sẵn trong dependency).
-- Transcript War Room xuất ra file; lịch sử phòng lâu dài.
-
----
-
-## Đóng góp
-
-- Đọc [`CLAUDE.md`](CLAUDE.md) trước — nó ghi ranh giới module và các gotcha đã trả giá để biết.
-- Tính năng mới đi theo trình tự: spec trong `docs/design-docs/specs/` → plan trong `docs/design-docs/plans/` → TDD.
-- Logic thuần vào `src/lib/` kèm `*.test.ts`; component giữ mỏng.
-- **Trước khi báo xong:** chạy `npm test`, `npx tsc --noEmit`, và `cargo test` nếu có đụng `src-tauri/`.
-
----
-
-<details>
-<summary><b>English TL;DR</b></summary>
-
-**Swarmterm** is a desktop multi-terminal built for running a *swarm* of AI coding agents: a workspace navbar, real split panes backed by `portable-pty`, one git worktree per agent so parallel work never collides, a per-pane web preview column, and a **War Room** where agents talk to each other over an embedded MCP server (`browser.open_preview`, `worktree.*`, `war_room.*`). Built on Tauri 2 + Rust with a React 19 + TypeScript frontend. See the sections above (Vietnamese) for features, setup, MCP tools, and architecture.
-
-</details>
+- Không lưu/khôi phục trạng thái giữa các lần mở app (đúng phạm vi).
+- **Link trong terminal**: PowerShell không có hook môi trường để inject OSC 7,
+  nên path *tương đối* hết resolve sau khi `cd` (path tuyệt đối — gồm mọi thứ
+  Claude Code in ra — vẫn chạy). Tên file trần không có dấu `/` (`foo.ts:42`)
+  không thành link; phải có separator (`src/foo.ts:42`) — đây là biện pháp
+  chính chống false positive. Ký tự rộng (CJK) cùng dòng với path có thể làm
+  lệch vị trí gạch chân vài ô. Commit hash / số issue chưa được linkify.
+- Khi reload renderer thủ công lúc dev, pty cũ vẫn chạy cho đến khi cửa sổ
+  đóng (xterm reconnect chưa được implement).
+- Code editor, file browser, kanban, AI agent, Settings là phạm vi của các
+  iteration sau.
+- Web browser preview đã có (một preview mỗi terminal, bám focus); lưu/khôi
+  phục preview giữa các lần mở app chưa được implement.
