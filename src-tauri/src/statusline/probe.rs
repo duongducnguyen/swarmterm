@@ -178,6 +178,76 @@ mod tests {
         assert!(status_addr("").is_none());
     }
 
+    /// Serve one canned response on a loopback port and hand back its URL.
+    /// Exercises the read loop against a real socket — the part of `probe` that
+    /// the pure parser tests above cannot reach.
+    fn serve_once(response: &'static [u8]) -> (String, std::thread::JoinHandle<String>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            // Read just the request head so the assertion below can check the
+            // headers we send; the request has no body.
+            let mut req = Vec::new();
+            let mut chunk = [0u8; 256];
+            loop {
+                let n = sock.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                req.extend_from_slice(&chunk[..n]);
+                if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            sock.write_all(response).unwrap();
+            sock.flush().unwrap();
+            // Dropping the socket closes the connection, matching the
+            // `Connection: close` the server promises.
+            String::from_utf8_lossy(&req).into_owned()
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn probe_reads_a_real_200_off_the_wire() {
+        let (url, server) = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+              Content-Length: 26\r\nConnection: close\r\n\r\n{\"mcp\":{\"connected\":true}}",
+        );
+        assert_eq!(
+            probe(&url, "abc-123", Duration::from_millis(500)),
+            Some(true)
+        );
+        let req = server.join().unwrap();
+        assert!(req.starts_with("GET /status HTTP/1.1\r\n"), "req was {req:?}");
+        assert!(req.contains("Authorization: Bearer abc-123\r\n"));
+        assert!(req.contains("Connection: close\r\n"));
+    }
+
+    #[test]
+    fn probe_reads_connected_false() {
+        let (url, server) = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 27\r\nConnection: close\r\n\r\n\
+              {\"mcp\":{\"connected\":false}}",
+        );
+        assert_eq!(
+            probe(&url, "abc-123", Duration::from_millis(500)),
+            Some(false)
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn probe_treats_a_401_as_unreachable() {
+        // A dead pane's token: from the status line's point of view "refused"
+        // and "cannot vouch for this link" are the same fact.
+        let (url, server) =
+            serve_once(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        assert_eq!(probe(&url, "ghost", Duration::from_millis(500)), None);
+        server.join().unwrap();
+    }
+
     #[test]
     fn probe_reports_unreachable_when_nothing_is_listening() {
         // Port 1 on loopback is reserved and never bound by us; the connect is
