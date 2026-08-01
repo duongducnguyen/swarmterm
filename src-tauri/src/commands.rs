@@ -77,6 +77,16 @@ pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
     crate::agents::list_agents()
 }
 
+/// Install or remove Claude Code's `statusLine` entry. Driven from the renderer
+/// (on boot and on toggle) rather than from Rust's `setup`, because the
+/// preference lives in localStorage and only the renderer can read it. That
+/// ordering is fine: the status line only matters once a Claude pane exists,
+/// which is strictly after the renderer has mounted.
+#[tauri::command]
+pub fn set_claude_statusline(app: AppHandle, enabled: bool) -> Result<(), String> {
+    crate::statusline::install::apply(&app, enabled)
+}
+
 #[tauri::command]
 pub async fn git_list_worktrees(
     app: AppHandle,

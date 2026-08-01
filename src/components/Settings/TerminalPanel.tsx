@@ -13,6 +13,7 @@ import {
 } from '@/lib/terminal-text'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { useTerminalTextStore } from '@/store/terminal-text-store'
+import { useStatuslineStore } from '@/store/statusline-store'
 import { listAvailableShells, type AvailableShell } from '@/tauri/shell'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -101,7 +102,63 @@ export function TerminalPanel(): ReactElement {
           })}
         </div>
       </section>
+
+      <StatusLineSettings />
     </div>
+  )
+}
+
+/**
+ * The Claude Code status line toggle. Lives under Terminal rather than getting
+ * its own category: it is one switch about what agent panes show, not a surface
+ * of its own.
+ */
+function StatusLineSettings(): ReactElement {
+  const enabled = useStatuslineStore((s) => s.enabled)
+  const setEnabled = useStatuslineStore((s) => s.setEnabled)
+
+  return (
+    <section className="rounded-xl border border-border bg-card/40 p-5 sm:p-6">
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-foreground">Agent status line</h2>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Shows whether Claude Code reached Swarmterm&rsquo;s MCP server, plus the
+          session&rsquo;s context usage, under the prompt in every Claude pane.
+        </p>
+      </div>
+
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="block text-xs font-medium text-muted-foreground">
+            Manage Claude Code&rsquo;s status line
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/70">
+            Writes a <span className="font-mono">statusLine</span> entry to{' '}
+            <span className="font-mono">~/.claude/settings.json</span>. An existing
+            custom status line is left untouched.
+          </span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Toggle Claude Code status line"
+          onClick={() => void setEnabled(!enabled)}
+          className={cn(
+            'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+            enabled ? 'bg-primary' : 'bg-muted'
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-0.5 h-4 w-4 rounded-full bg-background transition-transform',
+              enabled ? 'left-0.5 translate-x-4' : 'left-0.5'
+            )}
+          />
+        </button>
+      </div>
+    </section>
   )
 }
 

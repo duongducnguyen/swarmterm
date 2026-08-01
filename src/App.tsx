@@ -13,6 +13,7 @@ import {
   type Workspace as WorkspaceModel
 } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
+import { useStatuslineStore } from '@/store/statusline-store'
 import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
@@ -246,6 +247,7 @@ export default function App(): ReactElement {
     void useAuthStore.getState().hydrate()
     void useAgentAvailabilityStore.getState().refresh()
     void useShellAvailabilityStore.getState().refresh()
+    void useStatuslineStore.getState().sync()
   }, [])
 
   // Esc closes the Welcome page when it's closeable and Settings isn't covering it.
