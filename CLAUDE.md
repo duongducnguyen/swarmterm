@@ -182,6 +182,23 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   `<repo>.worktrees`; closing panes/workspaces never deletes worktrees;
   worktree directories are never renamed (agent session state is keyed by
   absolute path).
+- **Claude Code status line.** `swarmterm --statusline` is a second entry point
+  into the same binary, short-circuited in `main.rs` *before* the Tauri builder
+  so no window/tray/single-instance/AppKit is touched. It prints one line: an
+  `mcp` segment and a `ctx` segment (`statusline/render.rs` is pure and holds
+  every state). "Connected" is proved by an axum middleware on `/mcp` that
+  records each inbound bearer token (`mcp/clients.rs`) — `initialize` never
+  reaches `SwarmtermMcpServer::caller`, so hooking the tool layer would miss the
+  one request that matters; `/status` is registered *after* `.layer(...)` so the
+  probe cannot stamp its own verdict. Membership is dropped in both
+  `kill_terminal` and `read_loop`, so a same-id respawn starts at `mcp …`. The
+  probe is hand-rolled HTTP/1.1 over `TcpStream` (300 ms) — no tokio runtime in
+  a command Claude re-runs every render. The entry is merge-written into
+  `~/.claude/settings.json` (NOT `~/.claude.json`) and a foreign `statusLine` is
+  never touched in either direction. On Windows the recorded path uses forward
+  slashes: Claude Code runs the command through Git Bash, which eats
+  backslashes. Spec:
+  `docs/design-docs/specs/2026-08-01-claude-statusline-design.md`.
 - **`swarmterm://auth/callback` deeplink stays** for OAuth PKCE only. Anything
   else that arrives on the scheme is now logged and dropped — the browser
   preview flow moved to MCP.

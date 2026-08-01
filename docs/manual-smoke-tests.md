@@ -145,3 +145,25 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 - [ ] With only one room left → its tab has no ✕.
 - [ ] While viewing room A, queue a message into a pane being typed in in room B
       → tab B shows `⏸N`.
+
+## Claude Code status line
+
+- [ ] Open a workspace with a Claude Code agent pane. Within a few seconds of
+      the first prompt the line under the input box reads
+      `mcp ✓  ·  ctx <n>k/<n>k <n>%`.
+- [ ] A fresh Claude session reads `ctx —` until its first reply.
+- [ ] In a plain Terminal pane run `claude --strict-mcp-config` → `mcp …`:
+      Claude is alive but never called our server.
+- [ ] With a Claude pane running, quit Swarmterm from the tray (Quit, not
+      close-to-tray) → the next render reads `mcp ✗`.
+- [ ] Run `claude` in a system terminal → the `mcp` segment is absent, only
+      `ctx …` renders.
+- [ ] Let a session pass 70% context → the `ctx` segment turns amber; past 90%
+      → red.
+- [ ] Settings → Terminal → Agent status line → off. `statusLine` is gone from
+      `~/.claude/settings.json` and every other key survived. Toggle back on →
+      it returns, pointing at the current binary.
+- [ ] Put your own `statusLine` in `~/.claude/settings.json`, relaunch
+      Swarmterm → it is untouched (a warning is logged to the devtools console).
+- [ ] Switch a pane's agent (respawns the pty under the same id) → the line
+      drops to `mcp …` until the new Claude connects.

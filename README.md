@@ -34,6 +34,7 @@ Real split terminals · one git worktree per agent · a live web preview beside 
   - [The Git panel](#the-git-panel)
   - [Web preview](#web-preview)
   - [War Room](#war-room)
+  - [Status line in Claude Code panes](#status-line-in-claude-code-panes)
   - [Terminal essentials](#terminal-essentials)
   - [Settings](#settings)
   - [Window, tray and quitting](#window-tray-and-quitting)
@@ -262,6 +263,26 @@ Drag a member chip out of the panel, or press its `✕`, and that agent immediat
 
 A full walkthrough — Claude Code and Codex negotiating an API contract — is in [`docs/war-room-demo.md`](docs/war-room-demo.md).
 
+### Status line in Claude Code panes
+
+Every Claude Code pane gets a one-line readout under its prompt:
+
+```
+mcp ✓  ·  ctx 84k/200k 42%
+```
+
+The left half answers a question that is otherwise invisible — whether Claude actually connected to Swarmterm, and therefore whether it really has the War Room and worktree tools:
+
+| | |
+|---|---|
+| `mcp ✓` | connected — Swarmterm's tools are available in this pane |
+| `mcp …` | Claude is running but never reached Swarmterm; its tools are missing |
+| `mcp ✗` | Swarmterm is no longer answering |
+
+The right half is the session's context window: tokens in use, the model's limit, and the percentage. It turns amber past 70% and red past 90%, and reads `ctx —` until Claude's first reply. In a terminal outside Swarmterm the `mcp` half is simply absent.
+
+Turn it off in **Settings → Terminal → Agent status line**. Swarmterm writes the entry into `~/.claude/settings.json`; if you already have your own status line there, yours is kept and Swarmterm's is skipped.
+
 ### Terminal essentials
 
 - **Real shells, full colour.** Terminals are real PTYs with 24-bit truecolor, so agent CLIs look exactly as they do in your normal terminal. Emoji and box drawing render correctly.
@@ -279,7 +300,7 @@ A full walkthrough — Claude Code and Codex negotiating an API contract — is 
 Open Settings from the navbar. Four sections:
 
 - **Appearance** — the visual style (currently VS Code Dark Modern).
-- **Terminal** — font family, size, line height and ligatures, with a live preview, plus your default shell.
+- **Terminal** — font family, size, line height and ligatures, with a live preview, your default shell, and the Claude Code status line toggle.
 - **Keyboard Shortcuts** — the full list for your platform.
 - **Account** — optional sign-in with Google or GitHub; the session is stored in your operating system's keychain.
 
