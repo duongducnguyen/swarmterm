@@ -175,6 +175,10 @@ pub struct AppState {
     /// lock (never nested with `terminals`) so MCP tools keep the
     /// lock-read-drop-before-await rule.
     pub war_rooms: Mutex<crate::warroom::WarRooms>,
+    /// Panes an MCP client has actually spoken to us from. Its own lock, never
+    /// nested with `terminals` or `war_rooms`, because the `/mcp` middleware
+    /// touches it on every inbound request and must not contend with pty I/O.
+    pub mcp_clients: Mutex<crate::mcp::clients::McpClients>,
 }
 
 impl Default for AppState {
@@ -184,6 +188,7 @@ impl Default for AppState {
             quitting: AtomicBool::new(false),
             mcp_url: OnceLock::new(),
             war_rooms: Mutex::new(crate::warroom::WarRooms::default()),
+            mcp_clients: Mutex::new(crate::mcp::clients::McpClients::default()),
         }
     }
 }
@@ -447,6 +452,7 @@ fn read_loop(
     // the exit event must find the id free, since create rejects a duplicate live id.
     if let Some(state) = app.try_state::<AppState>() {
         state.terminals.lock().unwrap().remove(&id);
+        state.mcp_clients.lock().unwrap().forget(&id);
         let left = state.war_rooms.lock().unwrap().leave_everywhere(&id, crate::warroom::now_ms());
         if let Some((room_id, event)) = left {
             use tauri::Emitter;

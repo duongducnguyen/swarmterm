@@ -55,6 +55,12 @@ use rmcp::transport::streamable_http_server::tower::{
 use rmcp::{tool_handler, ServerHandler};
 use tauri::{AppHandle, Manager};
 
+use axum::extract::State as AxumState;
+use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::routing::get;
+use axum::Json;
+
 use crate::mcp::auth::{self, AuthError, TerminalId};
 use crate::pty::AppState;
 
@@ -87,7 +93,7 @@ impl SwarmtermMcpServer {
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
             .unwrap_or("");
-        let token = header.strip_prefix("Bearer ").unwrap_or(header);
+        let token = auth::bearer(header);
         let state = self.app.state::<AppState>();
         let terminals = state.terminals.lock().unwrap();
         auth::resolve(token, |id| terminals.contains_key(id)).map_err(|e| match e {
@@ -179,9 +185,79 @@ impl ServerHandler for SwarmtermMcpServer {
 pub fn axum_router(app: AppHandle) -> axum::Router {
     let session_manager = Arc::new(LocalSessionManager::default());
     let service = StreamableHttpService::new(
-        move || Ok(SwarmtermMcpServer::new(app.clone())),
+        {
+            let app = app.clone();
+            move || Ok(SwarmtermMcpServer::new(app.clone()))
+        },
         session_manager,
         StreamableHttpServerConfig::default(),
     );
-    axum::Router::new().route_service("/mcp", service)
+    axum::Router::new()
+        .route_service("/mcp", service)
+        // Record every inbound MCP request's bearer BEFORE rmcp consumes the
+        // body. This layer — not `SwarmtermMcpServer::caller` — is what makes
+        // `initialize` count, and `initialize` is the request that proves the
+        // client actually loaded our config. Peeking the JSON-RPC body would
+        // mean buffering it; the header is enough.
+        //
+        // `layer` applies to routes registered ABOVE it only, which is why
+        // `/status` is added afterwards: the status probe is Swarmterm asking
+        // itself a question, and must never be able to manufacture the
+        // `connected` verdict it is about to read.
+        .layer(axum::middleware::from_fn_with_state(
+            app.clone(),
+            record_client,
+        ))
+        .route("/status", get(status_handler))
+        .with_state(app)
+}
+
+/// Middleware: stamp the caller's token into `AppState.mcp_clients`.
+async fn record_client(
+    AxumState(app): AxumState<AppHandle>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    if let Some(header) = req
+        .headers()
+        .get(AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+    {
+        let token = auth::bearer(header).to_owned();
+        app.state::<AppState>()
+            .mcp_clients
+            .lock()
+            .unwrap()
+            .touch(&token);
+    }
+    next.run(req).await
+}
+
+/// `GET /status` — the status line's only backend call. Loopback-only (the
+/// listener binds `127.0.0.1:0`) and reveals nothing beyond one boolean about
+/// the caller's own pane. Auth goes through `auth::resolve`, so a killed pane's
+/// token stops answering the instant its PTY dies — the same revocation rule
+/// the MCP tools use.
+async fn status_handler(AxumState(app): AxumState<AppHandle>, headers: HeaderMap) -> Response {
+    let header = headers
+        .get(AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    let token = auth::bearer(header);
+    let state = app.state::<AppState>();
+    let live = {
+        let terminals = state.terminals.lock().unwrap();
+        auth::resolve(token, |id| terminals.contains_key(id)).is_ok()
+    };
+    if !live {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let connected = state.mcp_clients.lock().unwrap().has_seen(token);
+    (
+        StatusCode::OK,
+        // The probe reads to EOF rather than implementing keep-alive framing.
+        [(axum::http::header::CONNECTION, "close")],
+        Json(serde_json::json!({ "mcp": { "connected": connected } })),
+    )
+        .into_response()
 }

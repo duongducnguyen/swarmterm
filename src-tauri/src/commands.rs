@@ -60,6 +60,11 @@ pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     if let Some((room_id, event)) = left {
         let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
+    // A respawned pane reuses its id, so a stale `connected` verdict would
+    // survive into the new shell and hide the very failure the status line
+    // exists to show. Drop it here and in `read_loop`, mirroring the two
+    // places the terminal leaves `AppState.terminals`.
+    state.mcp_clients.lock().unwrap().forget(&id);
 }
 
 #[tauri::command]
