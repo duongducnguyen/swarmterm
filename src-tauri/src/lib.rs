@@ -7,6 +7,8 @@ mod git;
 mod links;
 mod pty;
 mod shell;
+// Public so `main.rs` can reach `--statusline` without booting Tauri.
+pub mod statusline;
 mod tray;
 mod warroom;
 mod window_fit;
