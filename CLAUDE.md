@@ -220,5 +220,7 @@ same trail; the existing specs/plans are good templates and the best record of
   architecture or folder tree — that lives here. Screenshots are placehold.co
   placeholders until real ones land; `docs/images/README.md` has the shot list.
 - `docs/manual-smoke-tests.md` — release smoke checklist.
+- `docs/roadmap.md` — prioritized backlog (nodeterm research, 2026-08); ideas
+  only, BUSL — never port code.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).
 - `docs/design-docs/specs/` — per-feature design docs; the best record of *why*.
