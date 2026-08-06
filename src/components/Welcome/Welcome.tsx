@@ -384,17 +384,24 @@ export function Welcome(): ReactElement {
             <div className="flex flex-wrap gap-1.5">
               {TERMINAL_COUNTS.map((count) => {
                 const selected = count === terminalCount
+                // Both sides of the 12-pane cap are enforced at the control that
+                // would breach it (this tile picker, and the session checkboxes
+                // via canTickMore) — so totalPaneCount can never exceed maxTiles
+                // and createWorkspace never needs its own clamp.
+                const disabled = count + resumePanes.length > maxTiles
                 return (
                   <button
                     key={count}
                     type="button"
                     onClick={() => changeTerminalCount(count)}
                     aria-pressed={selected}
+                    disabled={disabled}
                     className={cn(
                       'flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors',
                       selected
                         ? 'border-ring bg-accent text-foreground ring-1 ring-ring'
-                        : 'border-border text-muted-foreground hover:border-ring/50 hover:bg-accent/40 hover:text-foreground'
+                        : 'border-border text-muted-foreground hover:border-ring/50 hover:bg-accent/40 hover:text-foreground',
+                      disabled && 'cursor-not-allowed opacity-40'
                     )}
                   >
                     {count}
