@@ -19,13 +19,20 @@ const entry = (over: Partial<AgentSessionEntry>): AgentSessionEntry => ({
 describe('mergeSessions', () => {
   it('sorts by updatedAtMs descending', () => {
     const out = mergeSessions(
-      [entry({ updatedAtMs: 1 }), entry({ updatedAtMs: 3 }), entry({ updatedAtMs: 2 })],
+      [
+        entry({ sessionId: '11111111-1111-1111-1111-111111111111', updatedAtMs: 1 }),
+        entry({ sessionId: '33333333-3333-3333-3333-333333333333', updatedAtMs: 3 }),
+        entry({ sessionId: '22222222-2222-2222-2222-222222222222', updatedAtMs: 2 })
+      ],
       {}
     )
     expect(out.map((e) => e.updatedAtMs)).toEqual([3, 2, 1])
   })
   it('caps at MAX_SESSION_ROWS by default', () => {
-    const many = Array.from({ length: 20 }, (_, i) => entry({ updatedAtMs: i }))
+    const many = Array.from({ length: 20 }, (_, i) => {
+      const hex = i.toString().padStart(8, '0')
+      return entry({ sessionId: `${hex}-0000-0000-0000-000000000000`, updatedAtMs: i })
+    })
     expect(mergeSessions(many, {})).toHaveLength(MAX_SESSION_ROWS)
   })
   it('drops agents whose CLI is unavailable', () => {
@@ -42,6 +49,17 @@ describe('mergeSessions', () => {
   it('drops entries whose agentId is not a known template', () => {
     const out = mergeSessions([entry({ agentId: 'mystery-agent' })], {})
     expect(out).toEqual([])
+  })
+  it('dedupes by sessionKey (newest wins)', () => {
+    const out = mergeSessions(
+      [
+        entry({ updatedAtMs: 1 }),
+        entry({ updatedAtMs: 5 })
+      ],
+      {}
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].updatedAtMs).toBe(5)
   })
 })
 

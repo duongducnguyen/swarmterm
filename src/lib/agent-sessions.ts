@@ -37,6 +37,7 @@ export function mergeSessions(
   availability: AgentAvailabilityMap,
   cap: number = MAX_SESSION_ROWS
 ): AgentSessionEntry[] {
+  const seen = new Set<string>()
   return entries
     .filter((e) => {
       const template = templateById(e.agentId)
@@ -45,6 +46,13 @@ export function mergeSessions(
       return isValidSessionId(e.agentId, e.sessionId)
     })
     .sort((a, b) => b.updatedAtMs - a.updatedAtMs)
+    .filter((e) => {
+      // Duplicate ids can arrive from a store that writes one file per resume of the same conversation; keys must be unique for React and for the tick set.
+      const key = sessionKey(e)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     .slice(0, cap)
 }
 
