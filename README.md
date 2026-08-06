@@ -30,6 +30,7 @@ Real split terminals · one git worktree per agent · a live web preview beside 
 - [Using Swarmterm](#using-swarmterm)
   - [Workspaces and panes](#workspaces-and-panes)
   - [Running several agents at once](#running-several-agents-at-once)
+  - [Resume past agent sessions](#resume-past-agent-sessions)
   - [Worktree isolation](#worktree-isolation)
   - [The Git panel](#the-git-panel)
   - [Web preview](#web-preview)
