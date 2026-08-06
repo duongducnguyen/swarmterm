@@ -117,7 +117,7 @@ Swarmterm is a native desktop app (Tauri 2 + Rust, not Electron) with real PTY t
 <!-- IMAGE: docs/images/settings.png (1200×750) -->
 <img src="https://placehold.co/1200x750/1e1e1e/6b7280/png?text=Settings" alt="Settings" width="100%">
 
-**Settings** — appearance, terminal font and shell, shortcuts, account.
+**Settings** — appearance, terminal font and shell, shortcuts.
 
 </td>
 </tr>
@@ -297,12 +297,11 @@ Turn it off in **Settings → Terminal → Agent status line**. Swarmterm writes
 
 ### Settings
 
-Open Settings from the navbar. Four sections:
+Open Settings from the navbar. Three sections:
 
 - **Appearance** — the visual style (currently VS Code Dark Modern).
 - **Terminal** — font family, size, line height and ligatures, with a live preview, your default shell, and the Claude Code status line toggle.
 - **Keyboard Shortcuts** — the full list for your platform.
-- **Account** — optional sign-in with Google or GitHub; the session is stored in your operating system's keychain.
 
 Your appearance and terminal preferences are remembered between launches.
 

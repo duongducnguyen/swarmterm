@@ -35,7 +35,7 @@ PowerShell syntax (`$env:VAR`, `$null`), not bash.
 | `npm run build` | Frontend-only build (`tsc && vite build`) — no Rust. |
 | `npm run tauri build` | Production bundle (installer). |
 | `npm run tauri build -- --no-bundle` | Release binary, skip installer. |
-| `cargo test` *(from `src-tauri/`)* | Rust unit tests (pty/shell/deeplink helpers). |
+| `cargo test` *(from `src-tauri/`)* | Rust unit tests (pty/shell helpers). |
 
 **Before claiming done:** run `npm test`, `npx tsc --noEmit`, and — if you
 touched `src-tauri/` — `cargo test`. Don't assert success without the output.
@@ -48,7 +48,7 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 │ store/       zustand state     │ invoke  │ commands.rs #[command] fns │
 │ lib/         pure logic (TDD)  │ ──────► │ pty.rs      spawn + reader │
 │ tauri/       IPC bridge ───────┼─────────┤ shell.rs    shell discovery│
-│                                │ Channel │ tray.rs / deeplink.rs      │
+│                                │ Channel │ tray.rs                    │
 └────────────────────────────────┘ ◄────── └────────────────────────────┘
                                     PtyOut
 ```
@@ -56,7 +56,7 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 - **`src/tauri/*` is the ONLY IPC surface.** There is no `window.api` shim. Every
   call into Rust goes through a thin typed module here: `terminal.ts` (pty
   create/write/resize/kill + the `Channel<PtyOut>` stream), `window.ts`,
-  `dialog.ts`, `clipboard.ts`, `shell.ts`, `deeplink.ts`, `popout.ts`. New
+  `dialog.ts`, `clipboard.ts`, `shell.ts`, `preview.ts`, `popout.ts`. New
   backend calls get a new function in one of these — components never call
   `invoke` directly.
 - **`#[tauri::command]` handlers live in `commands.rs`** and delegate to module
@@ -199,9 +199,6 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   slashes: Claude Code runs the command through Git Bash, which eats
   backslashes. Spec:
   `docs/design-docs/specs/2026-08-01-claude-statusline-design.md`.
-- **`swarmterm://auth/callback` deeplink stays** for OAuth PKCE only. Anything
-  else that arrives on the scheme is now logged and dropped — the browser
-  preview flow moved to MCP.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 
