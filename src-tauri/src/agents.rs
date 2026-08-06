@@ -45,6 +45,15 @@ pub fn list_agents() -> Vec<AgentEntry> {
         .collect()
 }
 
+/// Resolve one agent executable with the same probe `list_agents` uses —
+/// PATH plus the extra bin dirs a Finder/Explorer-launched app never
+/// inherits. Needed wherever swarmterm shells out to an agent CLI itself.
+pub fn find_agent_binary(exe: &str) -> Option<PathBuf> {
+    let pathext = std::env::var("PATHEXT").unwrap_or_default();
+    let cands = candidates(exe, &pathext, cfg!(windows));
+    find_in_dirs(&search_dirs(), &cands)
+}
+
 /// Directories to scan: every PATH segment, plus (on Unix) well-known bin dirs
 /// that a Finder-launched GUI app does not inherit from the login shell —
 /// that's where npm/homebrew put `claude`/`codex`.

@@ -6,6 +6,7 @@
 
 pub mod claude;
 pub mod codex;
+pub mod opencode;
 
 use serde::Serialize;
 use std::io::Read;
