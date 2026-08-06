@@ -20,6 +20,7 @@ import { getChangedFiles, branchUnmergedCount } from '@/tauri/git'
 import { classifyWorktree, clearWorktreeMenuLabel } from '@/lib/worktree-cleanup'
 import { agentCommand, DEFAULT_TEMPLATE_ID } from '@/lib/templates'
 import { buildAgentSpawnCommand, shellFlavor } from '@/lib/agent-spawn-command'
+import { buildResumeCommand } from '@/lib/resume-command'
 import { isWindowsPlatform } from '@/lib/platform'
 import { pickDirectory } from '@/tauri/dialog'
 import { cn } from '@/lib/utils'
@@ -105,16 +106,24 @@ export function TerminalPane({
   const resolvedShellId = leaf.shellId ?? globalShellId
   const resolvedAgentId = leaf.agentId ?? DEFAULT_TEMPLATE_ID
   const baseCommand = agentCommand(resolvedAgentId)
+  // A resume pane re-enters a session the CLI recorded on disk; the resume
+  // line wins over the worker-brief path (a resume leaf never carries
+  // initialPrompt — see createWorkspace).
+  const resumeCommand =
+    leaf.resumeSessionId !== undefined
+      ? buildResumeCommand(resolvedAgentId, leaf.resumeSessionId)
+      : undefined
   // Worker panes carry a one-shot task brief; quote it for the shell the pty
   // actually types into (initialCommand is a typed line, not an exec).
   const resolvedCommand =
-    baseCommand !== undefined && leaf.initialPrompt !== undefined
+    resumeCommand ??
+    (baseCommand !== undefined && leaf.initialPrompt !== undefined
       ? buildAgentSpawnCommand(
           baseCommand,
           leaf.initialPrompt,
           shellFlavor(resolvedShellId, isWindowsPlatform())
         )
-      : baseCommand
+      : baseCommand)
   // Published to the DOM so the app-level file-drop listener can quote paths
   // for this pane's shell without re-deriving the resolution chain.
   const paneShellFlavor = shellFlavor(resolvedShellId, isWindowsPlatform())
