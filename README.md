@@ -191,6 +191,13 @@ Your panes open with the agents already starting up. From here, the right-hand p
 - **Broadcast input.** Press `⌘/Ctrl + Shift + B` to enter broadcast mode, `Alt + Click` panes to add or remove them from the group, then type. Every pane in the group receives the same keystrokes — ideal for "now run the tests" across five agents. `Esc` leaves broadcast mode.
 - **Per-pane control.** Each pane can be switched to a different agent, a different shell, or a different working directory from its header menu.
 
+### Resume past agent sessions
+
+When you pick a working folder, the composer lists that folder's recent
+Claude Code, Codex, and OpenCode sessions (read from each CLI's own history).
+Tick any of them — each becomes an extra pane that reopens the conversation
+right where it left off. Swarmterm never modifies the CLIs' session files.
+
 ### Worktree isolation
 
 Turn on **Isolate features in git worktrees** in the composer and Swarmterm sets everything up before the workspace even opens:

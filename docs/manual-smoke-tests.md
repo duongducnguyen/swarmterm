@@ -167,3 +167,17 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
       Swarmterm → it is untouched (a warning is logged to the devtools console).
 - [ ] Switch a pane's agent (respawns the pty under the same id) → the line
       drops to `mcp …` until the new Claude connects.
+
+## Session resume (composer)
+
+- [ ] Pick a folder with prior Claude Code activity → "Resume sessions" lists
+      them, newest first, with agent icon and relative time.
+- [ ] Tick one + Create → the new pane runs `claude … --resume <id>` and the
+      old conversation is visible.
+- [ ] Folder with no sessions → no "Resume sessions" section, composer
+      otherwise unchanged.
+- [ ] Uninstall/rename an agent CLI → its sessions disappear from the list.
+- [ ] Worktree toggle ON + a ticked session → stepper panes get worktrees,
+      the resume pane spawns at the session's original folder.
+- [ ] Switch agent on a resume pane via the header dropdown → pane respawns
+      fresh (no --resume in the typed command).

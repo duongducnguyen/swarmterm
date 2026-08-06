@@ -201,6 +201,12 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   `docs/design-docs/specs/2026-08-01-claude-statusline-design.md`.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
+- **Session resume.** The composer's "Resume sessions" list is read live from
+  the CLIs' own stores (`sessions/` module scans Claude/Codex JSONL; OpenCode
+  goes through `opencode session list --format json`). Discovery is fail-open
+  (error ⇒ empty, never blocks Create); session ids are regex-validated in
+  `lib/resume-command.ts` before they reach a shell line; resume panes spawn
+  at the session's recorded cwd and are exempt from worktree provisioning.
 
 ## Dev workflow
 
