@@ -323,6 +323,14 @@ describe('updateLeaf', () => {
     const cleared = updateLeaf(bound, 'a', { worktreeBranch: undefined, initialPrompt: undefined })
     expect((cleared as LeafNode).worktreeBranch).toBeUndefined()
   })
+
+  it('updateLeaf can set and clear resumeSessionId', () => {
+    const leaf: LeafNode = { type: 'leaf', id: 'l1', terminalId: 't1' }
+    const set = updateLeaf(leaf, 'l1', { resumeSessionId: 'fe845bc6-6932-4459-8fb6-cdd0e7c6cc84' })
+    expect((set as LeafNode).resumeSessionId).toBe('fe845bc6-6932-4459-8fb6-cdd0e7c6cc84')
+    const cleared = updateLeaf(set, 'l1', { resumeSessionId: undefined })
+    expect((cleared as LeafNode).resumeSessionId).toBeUndefined()
+  })
 })
 
 // --- reorderLeaves ---------------------------------------------------------

@@ -29,6 +29,9 @@ export interface LeafNode {
   worktreeBranch?: string
   /** One-shot task brief appended (shell-quoted) to the agent command at spawn. */
   initialPrompt?: string
+  /** Session id this pane resumes at spawn (claude/codex/opencode session
+   *  recorded on disk by the CLI itself). Cleared on agent switch. */
+  resumeSessionId?: string
 }
 
 export interface SplitNode {
@@ -57,7 +60,12 @@ export function findLeaf(tree: LayoutNode, leafId: string): LeafNode | null {
 export function updateLeaf(
   tree: LayoutNode,
   leafId: string,
-  patch: Partial<Pick<LeafNode, 'agentId' | 'cwd' | 'shellId' | 'worktreeBranch' | 'initialPrompt'>>
+  patch: Partial<
+    Pick<
+      LeafNode,
+      'agentId' | 'cwd' | 'shellId' | 'worktreeBranch' | 'initialPrompt' | 'resumeSessionId'
+    >
+  >
 ): LayoutNode {
   if (tree.type === 'leaf') {
     return tree.id === leafId ? { ...tree, ...patch } : tree

@@ -50,6 +50,11 @@ export interface CreateWorkspaceConfig {
    *  stays at the workspace cwd. Created by the composer BEFORE the store is
    *  touched, so leaves are born with their isolation — no post-hoc rebinding. */
   paneWorktrees?: ({ path: string; branch: string } | null)[]
+  /** Sessions to resume, one extra pane each, appended after the stepper
+   *  panes. `cwd` is the session's recorded directory — resume commands only
+   *  find their session when run from where it was recorded, so these panes
+   *  are exempt from worktree provisioning. */
+  resumePanes?: Array<{ agentId: string; sessionId: string; cwd: string }>
 }
 
 /** One worktree to clear: the bound leaf, its worktree path + branch, and the repo root. */
@@ -192,8 +197,23 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
       // agentIds order. The ?? fallback is defensive — agentIds.length panes
       // always have a matching id.
       let paneIndex = 0
+      const resumePanes = config.resumePanes ?? []
       const makeWizardLeaf = (): LeafNode => {
         const i = paneIndex++
+        // Leaves past the stepper count are resume panes: they spawn at the
+        // session's recorded cwd and never get a worktree (the resume lookup
+        // is cwd-scoped in every CLI).
+        const resume = i >= config.terminalCount ? resumePanes[i - config.terminalCount] : undefined
+        if (resume) {
+          return {
+            type: 'leaf',
+            id: uid(),
+            terminalId: uid(),
+            agentId: resume.agentId,
+            resumeSessionId: resume.sessionId,
+            cwd: resume.cwd
+          }
+        }
         const wt = config.paneWorktrees?.[i] ?? null
         return {
           type: 'leaf',
@@ -203,7 +223,7 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
           ...(wt ? { cwd: wt.path, worktreeBranch: wt.branch } : {})
         }
       }
-      const layout = paneLayoutFor(config.terminalCount, makeWizardLeaf, uid)
+      const layout = paneLayoutFor(config.terminalCount + resumePanes.length, makeWizardLeaf, uid)
       const ws: Workspace = {
         id: uid(),
         name: workspaceNameFor(
@@ -350,24 +370,35 @@ export const appStoreCreator: StateCreator<AppStore> = (set, get) => ({
     set((s) => mapActive(s, (w) => ({ ...w, layout: resizeSplit(w.layout, splitId, sizes) }))),
 
   // An agent switch respawns the pty; replaying a brief written for another
-  // agent would be wrong, so a pending prompt is dropped along with it.
+  // agent would be wrong, so a pending prompt is dropped along with it. A
+  // resume session id is meaningless under another agent too — clear it.
   setPaneAgent: (leafId, agentId) =>
     set((s) =>
       mapActive(s, (w) => ({
         ...w,
-        layout: updateLeaf(w.layout, leafId, { agentId, initialPrompt: undefined })
+        layout: updateLeaf(w.layout, leafId, {
+          agentId,
+          initialPrompt: undefined,
+          resumeSessionId: undefined
+        })
       }))
     ),
 
   // Re-pointing a pane's folder must drop any stale worktree binding — otherwise
   // the header keeps showing the old branch chip and a later "Clear worktree"
   // would target a path the pane no longer runs in. Matches clearWorktreeBinding's
-  // patch shape (also drops a stale initialPrompt written for the old folder).
+  // patch shape (also drops a stale initialPrompt written for the old folder, and
+  // resumeSessionId — a session can't be found from a different cwd).
   setPaneCwd: (leafId, cwd) =>
     set((s) =>
       mapActive(s, (w) => ({
         ...w,
-        layout: updateLeaf(w.layout, leafId, { cwd, worktreeBranch: undefined, initialPrompt: undefined })
+        layout: updateLeaf(w.layout, leafId, {
+          cwd,
+          worktreeBranch: undefined,
+          initialPrompt: undefined,
+          resumeSessionId: undefined
+        })
       }))
     ),
 
