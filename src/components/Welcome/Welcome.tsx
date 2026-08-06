@@ -15,9 +15,16 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { listWorktrees, createWorktree, ensureRepoWithCommit } from '@/tauri/git'
+import { listAgentSessions } from '@/tauri/sessions'
 import { planWorktreeBranches, provisionWorktrees } from '@/lib/worktree-naming'
 import { folderName } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
+import {
+  mergeSessions,
+  sessionKey,
+  sessionTimeLabel,
+  type AgentSessionEntry
+} from '@/lib/agent-sessions'
 import { LayoutPreview } from './LayoutPreview'
 
 const DEFAULT_TERMINAL_COUNT = 2
@@ -53,6 +60,9 @@ export function Welcome(): ReactElement {
   const [isolateWorktrees, setIsolateWorktrees] = useState(false)
   const [isGitRepo, setIsGitRepo] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [sessions, setSessions] = useState<AgentSessionEntry[]>([])
+  const [tickedSessions, setTickedSessions] = useState<ReadonlySet<string>>(new Set())
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -123,10 +133,36 @@ export function Welcome(): ReactElement {
     }
   }, [trimmedFolder])
 
+  // Resume suggestions for the chosen folder. Fail-open: any error or a
+  // slow scan just means the section doesn't render — Create is never gated.
+  useEffect(() => {
+    setSessions([])
+    setTickedSessions(new Set())
+    if (trimmedFolder === '') return
+    let cancelled = false
+    void listAgentSessions(trimmedFolder)
+      .then((entries) => {
+        if (!cancelled) setSessions(mergeSessions(entries, availability))
+      })
+      .catch(() => {
+        if (!cancelled) setSessions([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [trimmedFolder, availability])
+
   const browse = async (): Promise<void> => {
     const picked = await pickDirectory()
     if (picked) setFolder(picked)
   }
+
+  const resumePanes = sessions
+    .filter((e) => tickedSessions.has(sessionKey(e)))
+    .map((e) => ({ agentId: e.agentId, sessionId: e.sessionId, cwd: e.cwd }))
+  const totalPaneCount = terminalCount + resumePanes.length
+  const maxTiles = TERMINAL_COUNTS[TERMINAL_COUNTS.length - 1] // 12
+  const canTickMore = totalPaneCount < maxTiles
 
   const submit = async (): Promise<void> => {
     // isSubmitting guards against a second Create click (or a duplicate
@@ -165,7 +201,8 @@ export function Welcome(): ReactElement {
         terminalCount,
         agentIds,
         worktreeMode: isolate,
-        paneWorktrees
+        paneWorktrees,
+        resumePanes: resumePanes.length > 0 ? resumePanes : undefined
       })
     } finally {
       setIsSubmitting(false)
@@ -184,7 +221,7 @@ export function Welcome(): ReactElement {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [trimmedFolder, terminalCount, counts, isolateWorktrees, isGitRepo, isSubmitting]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trimmedFolder, terminalCount, counts, isolateWorktrees, isGitRepo, isSubmitting, tickedSessions, sessions]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build caption: "4 panes · 2×2 · 2 AI agents · 2 Terminals"
   const aiCount = agentIds.filter((id) => id !== DEFAULT_TEMPLATE_ID).length
@@ -192,11 +229,12 @@ export function Welcome(): ReactElement {
   const aiClause =
     aiCount > 0 ? ` · ${aiCount} ${aiCount === 1 ? 'AI agent' : 'AI agents'}` : ''
   const termClause = ` · ${termCount} ${termCount === 1 ? 'Terminal' : 'Terminals'}`
-  const caption = `${layoutSummary(terminalCount)}${aiClause}${termClause}`
+  const resumedClause = resumePanes.length > 0 ? ` · ${resumePanes.length} resumed` : ''
+  const caption = `${layoutSummary(totalPaneCount)}${aiClause}${termClause}${resumedClause}`
 
   // Unique agent types present in the layout, in first-appearance order —
   // so the legend exactly matches what the preview shows.
-  const legendIds = [...new Set(agentIds)]
+  const legendIds = [...new Set([...agentIds, ...resumePanes.map((p) => p.agentId)])]
 
   const visibleRecents = recents.slice(0, MAX_RECENTS)
 
@@ -234,6 +272,54 @@ export function Welcome(): ReactElement {
               </Button>
             </div>
           </div>
+
+          {/* Resume sessions — recorded by the agent CLIs themselves for this
+              folder; ticking one appends a pane that re-enters that session. */}
+          {sessions.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Resume sessions
+              </p>
+              <div className="max-h-48 space-y-0.5 overflow-y-auto">
+                {sessions.map((s) => {
+                  const key = sessionKey(s)
+                  const ticked = tickedSessions.has(key)
+                  const disabled = !ticked && !canTickMore
+                  return (
+                    <label
+                      key={key}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent',
+                        disabled && 'cursor-not-allowed opacity-50'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={ticked}
+                        disabled={disabled}
+                        onChange={() =>
+                          setTickedSessions((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(key)) next.delete(key)
+                            else next.add(key)
+                            return next
+                          })
+                        }
+                        className="h-3.5 w-3.5 shrink-0 accent-primary"
+                      />
+                      <AgentIcon template={templateById(s.agentId)} className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={s.title}>
+                        {s.title}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {sessionTimeLabel(s.updatedAtMs, Date.now())}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Recent folders — inline list, capped at MAX_RECENTS rows */}
           {visibleRecents.length > 0 && (
@@ -415,7 +501,10 @@ export function Welcome(): ReactElement {
           <div className="mb-3">
             <p className="mb-1.5 text-xs text-muted-foreground">Preview</p>
             <div className="h-[175px]">
-              <LayoutPreview terminalCount={terminalCount} agents={agentIds} />
+              <LayoutPreview
+                terminalCount={totalPaneCount}
+                agents={[...agentIds, ...resumePanes.map((p) => p.agentId)]}
+              />
             </div>
           </div>
 
