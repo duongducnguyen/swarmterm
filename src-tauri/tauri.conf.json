@@ -28,13 +28,7 @@
       "csp": null
     }
   },
-  "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": ["swarmterm"]
-      }
-    }
-  },
+  "plugins": {},
   "bundle": {
     "active": true,
     "targets": "all",
