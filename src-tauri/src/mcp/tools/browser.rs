@@ -15,8 +15,7 @@ pub enum ToolError {
     InvalidArgs(String),
 }
 
-/// Accept only http:// and https:// URLs. Mirrors the old deeplink
-/// `Reject::BadUrl` rule — same allow-list, same shape of failure.
+/// Accept only http:// and https:// URLs.
 pub fn validate_preview_url(raw: &str) -> Result<String, ToolError> {
     let parsed = url::Url::parse(raw)
         .map_err(|e| ToolError::InvalidArgs(format!("url parse failed: {e}")))?;
