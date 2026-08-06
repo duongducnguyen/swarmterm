@@ -47,7 +47,6 @@ import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
 import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
-import { useAuthStore } from '@/store/auth-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
@@ -60,7 +59,7 @@ import {
   onWarRoomDeliver,
   onWarRoomRooms
 } from '@/tauri/warroom'
-import { onPreviewOpen, onAuthCallback } from '@/tauri/deeplink'
+import { onPreviewOpen } from '@/tauri/preview'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
 import type { CategoryId } from '@/components/Settings/SettingsView'
@@ -88,11 +87,6 @@ export default function App(): ReactElement {
   // Native full-screen state, owned here because both the header's traffic-light
   // inset and the system-chrome dodge below are driven by it.
   const [isFullscreen, setIsFullscreen] = useState(false)
-
-  const openAccountSettings = useCallback(() => {
-    setSettingsTab('account')
-    setSettingsOpen(true)
-  }, [])
 
   const gitPanelOpen = useGitStore((s) => s.panelOpen)
 
@@ -244,7 +238,6 @@ export default function App(): ReactElement {
   useEffect(() => {
     void showWindow()
     useRecentsStore.getState().hydrate()
-    void useAuthStore.getState().hydrate()
     void useAgentAvailabilityStore.getState().refresh()
     void useShellAvailabilityStore.getState().refresh()
     void useStatuslineStore.getState().sync()
@@ -461,16 +454,6 @@ export default function App(): ReactElement {
     }
   }, [])
 
-  // Wire deep-link OAuth callback to auth store handler.
-  useEffect(() => {
-    const unlisten = onAuthCallback((code) => {
-      void useAuthStore.getState().handleCallback(code)
-    })
-    return () => {
-      void unlisten.then((fn) => fn())
-    }
-  }, [])
-
   // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
   // removed clears the binding and relocates the pane back to the workspace folder.
   useEffect(() => {
@@ -539,7 +522,6 @@ export default function App(): ReactElement {
             setSettingsTab('appearance')
             setSettingsOpen((open) => !open)
           }}
-          onOpenAccountSettings={openAccountSettings}
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">

@@ -1,13 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { Keyboard, Palette, Terminal, User, X } from 'lucide-react'
+import { Keyboard, Palette, Terminal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AppearancePanel } from './AppearancePanel'
 import { TerminalPanel } from './TerminalPanel'
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel'
-import { AccountPanel } from './AccountPanel'
 
-export type CategoryId = 'appearance' | 'terminal' | 'shortcuts' | 'account'
+export type CategoryId = 'appearance' | 'terminal' | 'shortcuts'
 
 interface Category {
   id: CategoryId
@@ -19,7 +18,6 @@ const CATEGORIES: Category[] = [
   { id: 'appearance', label: 'Appearance', Icon: Palette },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'shortcuts', label: 'Keyboard Shortcuts', Icon: Keyboard },
-  { id: 'account', label: 'Account', Icon: User },
 ]
 
 interface SettingsViewProps {
@@ -102,7 +100,6 @@ export function SettingsView({ onClose, initialCategory }: SettingsViewProps): R
               {activeCategory === 'appearance' && <AppearancePanel />}
               {activeCategory === 'terminal' && <TerminalPanel />}
               {activeCategory === 'shortcuts' && <KeyboardShortcutsPanel />}
-              {activeCategory === 'account' && <AccountPanel />}
             </div>
           </div>
         </div>

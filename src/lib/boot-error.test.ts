@@ -27,7 +27,7 @@ describe('formatBootError', () => {
   })
 
   it('calls out a missing build-time env var, the most likely cause', () => {
-    const err = new Error('Missing required env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY')
+    const err = new Error('Missing required env var: VITE_EXAMPLE_FLAG')
     expect(formatBootError(err).hint).toMatch(/\.env/)
   })
 
