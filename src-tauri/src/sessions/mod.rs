@@ -5,6 +5,7 @@
 //! only surface may collapse `error` into `absent`).
 
 pub mod claude;
+pub mod codex;
 
 use serde::Serialize;
 use std::io::Read;
