@@ -69,3 +69,50 @@ pub(crate) fn clean_title(raw: &str) -> Option<String> {
     let collapsed: String = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
     Some(collapsed.chars().take(80).collect())
 }
+
+/// `$CLAUDE_CONFIG_DIR` else `<home>/.claude`, then `projects/`.
+fn claude_projects_root() -> Option<std::path::PathBuf> {
+    let base = std::env::var("CLAUDE_CONFIG_DIR")
+        .ok()
+        .map(std::path::PathBuf::from)
+        .or_else(|| home_dir().map(|h| h.join(".claude")))?;
+    Some(base.join("projects"))
+}
+
+/// `$CODEX_HOME` else `<home>/.codex`, then `sessions/`.
+fn codex_sessions_root() -> Option<std::path::PathBuf> {
+    let base = std::env::var("CODEX_HOME")
+        .ok()
+        .map(std::path::PathBuf::from)
+        .or_else(|| home_dir().map(|h| h.join(".codex")))?;
+    Some(base.join("sessions"))
+}
+
+/// HOME on unix, USERPROFILE on Windows — same convention as `agents.rs`.
+fn home_dir() -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    let var = "USERPROFILE";
+    #[cfg(not(windows))]
+    let var = "HOME";
+    std::env::var(var).ok().map(std::path::PathBuf::from)
+}
+
+/// Everything resumable for `folder`, all three stores, fail-open each.
+/// File scans run on a blocking thread (they touch possibly-cold disk);
+/// the OpenCode subprocess is already async.
+pub async fn list_all(folder: String) -> Vec<SessionEntry> {
+    let scan_folder = folder.clone();
+    let files = tauri::async_runtime::spawn_blocking(move || {
+        let mut out = Vec::new();
+        if let Some(root) = claude_projects_root() {
+            out.extend(claude::scan(&root, &scan_folder));
+        }
+        if let Some(root) = codex_sessions_root() {
+            out.extend(codex::scan(&root, &scan_folder));
+        }
+        out
+    });
+    let mut entries = files.await.unwrap_or_default();
+    entries.extend(opencode::scan(&folder).await);
+    entries
+}

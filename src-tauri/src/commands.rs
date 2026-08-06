@@ -77,6 +77,11 @@ pub fn list_available_agents() -> Vec<crate::agents::AgentEntry> {
     crate::agents::list_agents()
 }
 
+#[tauri::command]
+pub async fn list_agent_sessions(folder: String) -> Vec<crate::sessions::SessionEntry> {
+    crate::sessions::list_all(folder).await
+}
+
 /// Install or remove Claude Code's `statusLine` entry. Driven from the renderer
 /// (on boot and on toggle) rather than from Rust's `setup`, because the
 /// preference lives in localStorage and only the renderer can read it. That

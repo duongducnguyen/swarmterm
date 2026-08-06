@@ -96,6 +96,7 @@ pub fn run() {
             commands::war_room_moderator_send,
             commands::list_available_shells,
             commands::list_available_agents,
+            commands::list_agent_sessions,
             commands::set_claude_statusline,
             commands::resolve_path_link,
             commands::find_available_editor,
