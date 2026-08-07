@@ -170,8 +170,15 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 
 ## Session resume (composer)
 
-- [ ] Pick a folder with prior Claude Code activity → "Resume sessions" lists
-      them, newest first, with agent icon and relative time.
+- [ ] Pick a folder with prior Claude Code activity → "Resume sessions"
+      (below Recent) lists them newest first, with agent icon, relative
+      time, and All/Claude Code/Codex/OpenCode tabs (0-count tabs disabled).
+- [ ] More than 6 sessions → "Show all (N) ▾" expands into a scrollable
+      list; switching tabs collapses it; ticks survive tab switches and the
+      "k selected" badge stays visible while a filter hides them.
+- [ ] More than 5 recent folders → Recent shows 5 + "Show all (N) ▾";
+      expanding and collapsing works and never pushes Create off-screen.
+- [ ] Narrow window → session tabs wrap to a second line; rows truncate.
 - [ ] Tick one + Create → the new pane runs `claude … --resume <id>` and the
       old conversation is visible.
 - [ ] Folder with no sessions → no "Resume sessions" section, composer

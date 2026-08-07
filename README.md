@@ -199,6 +199,10 @@ Claude Code, Codex, and OpenCode sessions (read from each CLI's own history).
 Tick any of them — each becomes an extra pane that reopens the conversation
 right where it left off. Swarmterm never modifies the CLIs' session files.
 
+Tabs above the list filter it to one agent (All · Claude Code · Codex ·
+OpenCode), and both this list and Recent show a short head you can expand
+with "Show all".
+
 ### Worktree isolation
 
 Turn on **Isolate features in git worktrees** in the composer and Swarmterm sets everything up before the workspace even opens:
