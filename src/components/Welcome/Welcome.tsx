@@ -17,20 +17,23 @@ import { pickDirectory, getHomeDir } from '@/tauri/dialog'
 import { listWorktrees, createWorktree, ensureRepoWithCommit } from '@/tauri/git'
 import { listAgentSessions } from '@/tauri/sessions'
 import { planWorktreeBranches, provisionWorktrees } from '@/lib/worktree-naming'
-import { folderName } from '@/lib/recent-folders'
+import { folderName, VISIBLE_RECENT_ROWS } from '@/lib/recent-folders'
 import { useRecentsStore } from '@/store/recents-store'
+import { visibleSlice, hiddenCount } from '@/lib/list-paging'
 import {
   mergeSessions,
   sessionKey,
   sessionTimeLabel,
-  type AgentSessionEntry
+  filterSessions,
+  sessionTabCounts,
+  SESSION_FILTER_TABS,
+  VISIBLE_SESSION_ROWS,
+  type AgentSessionEntry,
+  type SessionFilter
 } from '@/lib/agent-sessions'
 import { LayoutPreview } from './LayoutPreview'
 
 const DEFAULT_TERMINAL_COUNT = 2
-/** Cap for recent folder rows kept in the list; the list area scrolls if they
- *  exceed the column height, so this is generous (fills the left column). */
-const MAX_RECENTS = 50
 
 /** Templates that run an AI agent CLI. Plain Terminal (command: null) is
  *  excluded here because it fills the remainder automatically via allocateAgents. */
@@ -63,6 +66,9 @@ export function Welcome(): ReactElement {
 
   const [sessions, setSessions] = useState<AgentSessionEntry[]>([])
   const [tickedSessions, setTickedSessions] = useState<ReadonlySet<string>>(new Set())
+  const [recentsExpanded, setRecentsExpanded] = useState(false)
+  const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all')
+  const [sessionsExpanded, setSessionsExpanded] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -138,6 +144,9 @@ export function Welcome(): ReactElement {
   useEffect(() => {
     setSessions([])
     setTickedSessions(new Set())
+    // A filter chosen for one project is meaningless for the next.
+    setSessionFilter('all')
+    setSessionsExpanded(false)
     if (trimmedFolder === '') return
     let cancelled = false
     void listAgentSessions(trimmedFolder)
@@ -160,6 +169,11 @@ export function Welcome(): ReactElement {
   const resumePanes = sessions
     .filter((e) => tickedSessions.has(sessionKey(e)))
     .map((e) => ({ agentId: e.agentId, sessionId: e.sessionId, cwd: e.cwd }))
+  // Ticks are kept against the FULL sessions list (above) so a selection made
+  // under one filter still counts once the user switches tabs.
+  const tabCounts = sessionTabCounts(sessions)
+  const filteredSessions = filterSessions(sessions, sessionFilter)
+  const visibleSessions = visibleSlice(filteredSessions, sessionsExpanded, VISIBLE_SESSION_ROWS)
   const totalPaneCount = terminalCount + resumePanes.length
   const maxTiles = TERMINAL_COUNTS[TERMINAL_COUNTS.length - 1] // 12
   const canTickMore = totalPaneCount < maxTiles
@@ -236,7 +250,7 @@ export function Welcome(): ReactElement {
   // so the legend exactly matches what the preview shows.
   const legendIds = [...new Set([...agentIds, ...resumePanes.map((p) => p.agentId)])]
 
-  const visibleRecents = recents.slice(0, MAX_RECENTS)
+  const visibleRecents = visibleSlice(recents, recentsExpanded, VISIBLE_RECENT_ROWS)
 
   return (
     <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center px-10 py-6">
@@ -273,61 +287,13 @@ export function Welcome(): ReactElement {
             </div>
           </div>
 
-          {/* Resume sessions — recorded by the agent CLIs themselves for this
-              folder; ticking one appends a pane that re-enters that session. */}
-          {sessions.length > 0 && (
-            <div className="mt-5">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Resume sessions
-              </p>
-              <div className="max-h-48 space-y-0.5 overflow-y-auto">
-                {sessions.map((s) => {
-                  const key = sessionKey(s)
-                  const ticked = tickedSessions.has(key)
-                  const disabled = !ticked && !canTickMore
-                  return (
-                    <label
-                      key={key}
-                      className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent',
-                        disabled && 'cursor-not-allowed opacity-50'
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={ticked}
-                        disabled={disabled}
-                        onChange={() =>
-                          setTickedSessions((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(key)) next.delete(key)
-                            else next.add(key)
-                            return next
-                          })
-                        }
-                        className="h-3.5 w-3.5 shrink-0 accent-primary"
-                      />
-                      <AgentIcon template={templateById(s.agentId)} className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={s.title}>
-                        {s.title}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {sessionTimeLabel(s.updatedAtMs, Date.now())}
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Recent folders — inline list, capped at MAX_RECENTS rows */}
+          {/* Recent folders — inline list, expandable past VISIBLE_RECENT_ROWS */}
           {visibleRecents.length > 0 && (
-            <div className="mt-5 flex min-h-0 flex-1 flex-col">
+            <div className="mt-5">
               <p className="mb-2 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Recent
               </p>
-              <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+              <div className={cn('space-y-0.5 overflow-y-auto', recentsExpanded && 'max-h-56')}>
                 {visibleRecents.map((path) => (
                   <div
                     key={path}
@@ -368,6 +334,117 @@ export function Welcome(): ReactElement {
                   </div>
                 ))}
               </div>
+              {hiddenCount(recents.length, false, VISIBLE_RECENT_ROWS) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRecentsExpanded((v) => !v)}
+                  className="mx-auto mt-1 block text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {recentsExpanded ? 'Show less ▴' : `Show all (${recents.length}) ▾`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Resume sessions — recorded by the agent CLIs themselves for this
+              folder; ticking one appends a pane that re-enters that session.
+              Sits last (after Recent) since it's per-folder and often empty;
+              tabs filter the list by agent, ticks always count against the
+              full unfiltered list. */}
+          {sessions.length > 0 && (
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Resume sessions
+                </p>
+                {tickedSessions.size > 0 && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {tickedSessions.size} selected
+                  </span>
+                )}
+              </div>
+              <div className="mb-2 flex flex-wrap gap-1">
+                {SESSION_FILTER_TABS.map((tab) => {
+                  const count = tabCounts[tab] ?? 0
+                  const active = sessionFilter === tab
+                  const empty = tab !== 'all' && count === 0
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      aria-pressed={active}
+                      disabled={empty}
+                      onClick={() => {
+                        setSessionFilter(tab)
+                        // A new filter is a new list — restart from the head.
+                        setSessionsExpanded(false)
+                      }}
+                      className={cn(
+                        'flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs',
+                        // Matches the terminal-count tile buttons' selected/idle
+                        // treatment (ring+accent, not the brief's default primary)
+                        // so the two pill families read as one control language.
+                        active
+                          ? 'border-ring bg-accent text-foreground ring-1 ring-ring'
+                          : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+                        empty && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground'
+                      )}
+                    >
+                      {tab !== 'all' && (
+                        <AgentIcon template={templateById(tab)} className="h-3 w-3 shrink-0" />
+                      )}
+                      {tab === 'all' ? 'All' : templateById(tab).name} ({count})
+                    </button>
+                  )
+                })}
+              </div>
+              <div className={cn('space-y-0.5 overflow-y-auto', sessionsExpanded && 'max-h-56')}>
+                {visibleSessions.map((s) => {
+                  const key = sessionKey(s)
+                  const ticked = tickedSessions.has(key)
+                  const disabled = !ticked && !canTickMore
+                  return (
+                    <label
+                      key={key}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent',
+                        disabled && 'cursor-not-allowed opacity-50'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={ticked}
+                        disabled={disabled}
+                        onChange={() =>
+                          setTickedSessions((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(key)) next.delete(key)
+                            else next.add(key)
+                            return next
+                          })
+                        }
+                        className="h-3.5 w-3.5 shrink-0 accent-primary"
+                      />
+                      <AgentIcon template={templateById(s.agentId)} className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={s.title}>
+                        {s.title}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {sessionTimeLabel(s.updatedAtMs, Date.now())}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              {hiddenCount(filteredSessions.length, false, VISIBLE_SESSION_ROWS) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSessionsExpanded((v) => !v)}
+                  className="mx-auto mt-1 block text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {sessionsExpanded ? 'Show less ▴' : `Show all (${filteredSessions.length}) ▾`}
+                </button>
+              )}
             </div>
           )}
         </section>
