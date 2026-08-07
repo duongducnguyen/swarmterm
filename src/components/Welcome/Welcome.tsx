@@ -375,6 +375,7 @@ export function Welcome(): ReactElement {
                       aria-pressed={active}
                       disabled={empty}
                       onClick={() => {
+                        if (tab === sessionFilter) return
                         setSessionFilter(tab)
                         // A new filter is a new list — restart from the head.
                         setSessionsExpanded(false)

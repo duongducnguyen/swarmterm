@@ -1,6 +1,6 @@
 /**
  * Pure logic for the composer's "Resume sessions" list. The backend returns
- * raw per-store rows; everything user-facing (ordering, caps, distrust of
+ * raw per-store rows; everything user-facing (ordering, filtering, distrust of
  * ids from foreign stores) is decided here so it can be unit-tested.
  */
 import { isValidSessionId } from '@/lib/resume-command'
