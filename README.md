@@ -386,4 +386,4 @@ On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the term
 
 ---
 
-<sub>Working on Swarmterm itself? Start with [`CLAUDE.md`](CLAUDE.md), the design specs in [`docs/design-docs/specs/`](docs/design-docs/specs/), and the release checklist in [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).</sub>
+<sub>Working on Swarmterm itself? Start with [`CLAUDE.md`](CLAUDE.md) and the release checklist in [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).</sub>

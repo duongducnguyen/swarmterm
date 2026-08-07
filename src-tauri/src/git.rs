@@ -324,7 +324,7 @@ pub fn is_inside_worktrees_dir(path: &Path, main_root: &Path) -> bool {
 
 /// Main repo root, resolved via --git-common-dir so a call made from inside a
 /// linked worktree still lands on the main root — worktrees stay siblings,
-/// never nest (guard borrowed from the design-docs using-git-worktrees skill).
+/// never nest.
 pub fn resolve_main_root(cwd: &Path) -> Result<PathBuf, String> {
     let p = cwd
         .to_str()

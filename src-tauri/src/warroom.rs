@@ -1,7 +1,6 @@
 //! War Room state: the single app-wide membership map + per-member inboxes.
 //! Pure data + rules so it unit-tests without Tauri; commands.rs and
 //! mcp/tools/warroom.rs own the locking, event emission, and timestamps.
-//! Spec: docs/design-docs/specs/2026-07-27-war-room-design.md.
 
 use std::collections::{HashMap, VecDeque};
 

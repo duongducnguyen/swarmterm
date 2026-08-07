@@ -32,7 +32,7 @@
     --activity: 48 96% 53%;     /* yellow: a terminal is actively producing output */
     --radius: 0.5rem;
 
-    /* Scrollbar (see docs/design-docs/specs/2026-05-31-scrollbar-redesign-design.md) */
+    /* Scrollbar */
     --sb-size: 10px;          /* channel width — slim but easy to grab */
     --sb-radius: 8px;
     --sb-thumb: 0 0% 100%;    /* thumb color (HSL triplet, used with alpha) */

@@ -1,6 +1,5 @@
 //! The `swarmterm --statusline` command: Claude Code runs it and renders the
-//! single line it prints below the input box. See
-//! docs/design-docs/specs/2026-08-01-claude-statusline-design.md.
+//! single line it prints below the input box.
 
 pub mod install;
 pub mod probe;

@@ -138,8 +138,7 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   token — the terminal's env is the only place it appears, and it stops
   authorising the moment the PTY is killed (auth resolver checks the live
   terminal map). To add a tool: drop it into `src-tauri/src/mcp/tools/` and
-  add one `mod` line — see the spec at
-  `docs/design-docs/specs/2026-07-04-swarmterm-mcp-server-design.md`.
+  add one `mod` line.
 - **War Room.** Multiple named rooms on `AppState.war_rooms` (`warroom.rs`:
   `WarRooms` registry over per-room `WarRoom` instances; default room seeded
   at boot, last room undeletable). A pane is in at most one room — drag onto
@@ -197,8 +196,7 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   `~/.claude/settings.json` (NOT `~/.claude.json`) and a foreign `statusLine` is
   never touched in either direction. On Windows the recorded path uses forward
   slashes: Claude Code runs the command through Git Bash, which eats
-  backslashes. Spec:
-  `docs/design-docs/specs/2026-08-01-claude-statusline-design.md`.
+  backslashes.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 - **Session resume.** The composer's "Resume sessions" list is read live from
@@ -210,11 +208,8 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 
 ## Dev workflow
 
-This project uses the **design-docs** flow: brainstorm a design →
-`docs/design-docs/specs/YYYY-MM-DD-<topic>-design.md` → implementation plan in
-`docs/design-docs/plans/` → TDD implementation. New features should follow the
-same trail; the existing specs/plans are good templates and the best record of
-*why* features look the way they do.
+New features follow a spec-first flow: brainstorm a short design doc, turn it
+into an implementation plan, then build it with TDD (`lib/` tests first).
 
 ## Docs map
 
@@ -226,4 +221,3 @@ same trail; the existing specs/plans are good templates and the best record of
 - `docs/roadmap.md` — prioritized backlog (nodeterm research, 2026-08); ideas
   only, BUSL — never port code.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).
-- `docs/design-docs/specs/` — per-feature design docs; the best record of *why*.
