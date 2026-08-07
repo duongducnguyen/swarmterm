@@ -2,6 +2,12 @@
   "name": "swarmterm",
   "private": true,
   "version": "0.1.0",
+  "description": "One window for a whole swarm of AI coding agents — split terminals, per-agent git worktrees, live web previews, and a War Room where agents collaborate",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/duongducnguyen/swarmterm.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

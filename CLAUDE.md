@@ -22,8 +22,7 @@ assumptions; gate platform code behind `#[cfg(...)]` (Rust) or runtime checks (T
 
 ## Commands
 
-Run from the repo root unless noted. The shell here is **PowerShell** — use
-PowerShell syntax (`$env:VAR`, `$null`), not bash.
+Run from the repo root unless noted.
 
 | Command | What it does |
 |---|---|
@@ -210,6 +209,8 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
 
 New features follow a spec-first flow: brainstorm a short design doc, turn it
 into an implementation plan, then build it with TDD (`lib/` tests first).
+Outside contributions follow `CONTRIBUTING.md` — design discussion in an issue
+first for anything non-trivial.
 
 ## Docs map
 
@@ -217,7 +218,6 @@ into an implementation plan, then build it with TDD (`lib/` tests first).
   feature walkthrough, install, shortcuts, troubleshooting, limits. No
   architecture or folder tree — that lives here. Screenshots are placehold.co
   placeholders until real ones land; `docs/images/README.md` has the shot list.
+- `CONTRIBUTING.md` — how to build, test, and submit changes; the CI contract.
 - `docs/manual-smoke-tests.md` — release smoke checklist.
-- `docs/roadmap.md` — prioritized backlog (nodeterm research, 2026-08); ideas
-  only, BUSL — never port code.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).

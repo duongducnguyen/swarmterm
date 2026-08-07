@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Rough is fine — features here start as a short design discussion.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

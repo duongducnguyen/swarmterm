@@ -12,6 +12,7 @@ Real split terminals · one git worktree per agent · a live web preview beside 
 [![Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#requirements)
 [![Status](https://img.shields.io/badge/status-pre--1.0-f97316)](#known-limits)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 <!-- IMAGE: replace with docs/images/hero.png (1600×900) -->
 <img src="https://placehold.co/1600x900/1e1e1e/6b7280/png?text=Hero+screenshot" alt="Swarmterm overview" width="100%">
@@ -43,6 +44,7 @@ Real split terminals · one git worktree per agent · a live web preview beside 
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 - [Known limits](#known-limits)
+- [Contributing & license](#contributing--license)
 
 ---
 
@@ -386,4 +388,12 @@ On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the term
 
 ---
 
-<sub>Working on Swarmterm itself? Start with [`CLAUDE.md`](CLAUDE.md) and the release checklist in [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).</sub>
+## Contributing & license
+
+Swarmterm is free software under [GPL-3.0](LICENSE). Contributions are very
+welcome — [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the test/CI
+checklist, and how to propose features.
+
+---
+
+<sub>Working on Swarmterm itself? Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CLAUDE.md`](CLAUDE.md), and the release checklist in [`docs/manual-smoke-tests.md`](docs/manual-smoke-tests.md).</sub>
