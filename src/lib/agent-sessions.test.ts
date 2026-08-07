@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_SESSION_ROWS,
+  filterSessions,
   mergeSessions,
   sessionKey,
+  sessionTabCounts,
   sessionTimeLabel,
   type AgentSessionEntry
 } from '@/lib/agent-sessions'
@@ -28,12 +29,14 @@ describe('mergeSessions', () => {
     )
     expect(out.map((e) => e.updatedAtMs)).toEqual([3, 2, 1])
   })
-  it('caps at MAX_SESSION_ROWS by default', () => {
-    const many = Array.from({ length: 20 }, (_, i) => {
-      const hex = i.toString().padStart(8, '0')
-      return entry({ sessionId: `${hex}-0000-0000-0000-000000000000`, updatedAtMs: i })
-    })
-    expect(mergeSessions(many, {})).toHaveLength(MAX_SESSION_ROWS)
+  it('does not cap — view layer decides visibility', () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      entry({
+        sessionId: `fe845bc6-6932-4459-8fb6-cdd0e7c6c${String(i).padStart(3, '0')}`,
+        updatedAtMs: i
+      })
+    )
+    expect(mergeSessions(many, {})).toHaveLength(20)
   })
   it('drops agents whose CLI is unavailable', () => {
     const out = mergeSessions(
@@ -82,5 +85,34 @@ describe('sessionKey', () => {
     expect(sessionKey(entry({}))).toBe(
       'claude-code:fe845bc6-6932-4459-8fb6-cdd0e7c6cc84'
     )
+  })
+})
+
+describe('filterSessions', () => {
+  const list = [
+    entry({}),
+    entry({ agentId: 'codex', sessionId: '018f3b2a-7c1d-4e0a-9b2f-1a2b3c4d5e6f' }),
+    entry({ agentId: 'codex', sessionId: '11111111-2222-4333-8444-555555555555' })
+  ]
+  it("'all' returns the input unchanged", () => {
+    expect(filterSessions(list, 'all')).toEqual(list)
+  })
+  it('an agent id keeps only that agent', () => {
+    expect(filterSessions(list, 'codex')).toHaveLength(2)
+    expect(filterSessions(list, 'claude-code')).toHaveLength(1)
+    expect(filterSessions(list, 'opencode')).toEqual([])
+  })
+})
+
+describe('sessionTabCounts', () => {
+  it('counts every tab, zero included, all = total', () => {
+    const counts = sessionTabCounts([
+      entry({}),
+      entry({ agentId: 'codex', sessionId: '018f3b2a-7c1d-4e0a-9b2f-1a2b3c4d5e6f' })
+    ])
+    expect(counts).toEqual({ all: 2, 'claude-code': 1, codex: 1, opencode: 0 })
+  })
+  it('empty input yields all zeros', () => {
+    expect(sessionTabCounts([])).toEqual({ all: 0, 'claude-code': 0, codex: 0, opencode: 0 })
   })
 })

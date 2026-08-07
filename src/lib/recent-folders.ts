@@ -6,6 +6,9 @@ export const RECENTS_STORAGE_KEY = 'cc-recent-folders'
 /** Most entries kept; older ones drop off beyond this. */
 export const MAX_RECENTS = 12
 
+/** Rows shown before the Recent expander opens (storage cap stays MAX_RECENTS). */
+export const VISIBLE_RECENT_ROWS = 5
+
 /** Minimal storage surface — lets tests pass a fake in place of localStorage. */
 export interface RecentsStorage {
   getItem: (key: string) => string | null
