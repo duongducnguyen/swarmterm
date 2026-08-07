@@ -1,8 +1,8 @@
 mod agents;
 mod commands;
-mod mcp;
 mod git;
 mod links;
+mod mcp;
 mod pty;
 mod sessions;
 mod shell;

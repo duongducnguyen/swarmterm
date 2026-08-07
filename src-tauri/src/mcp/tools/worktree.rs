@@ -128,7 +128,10 @@ impl SwarmtermMcpServer {
         let terminal = self.caller(&parts)?;
         let repo_root = self.worktree_ctx(&terminal)?;
         if args.prompt.trim().is_empty() {
-            return Err(rmcp::ErrorData::invalid_params("prompt must not be empty", None));
+            return Err(rmcp::ErrorData::invalid_params(
+                "prompt must not be empty",
+                None,
+            ));
         }
         validate_agent_id(args.agent.as_deref())
             .map_err(|m| rmcp::ErrorData::invalid_params(m, None))?;

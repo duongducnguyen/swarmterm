@@ -24,7 +24,9 @@ mod job {
         SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+    };
 
     /// Owns a kill-on-close job handle. On drop the last handle closes, which
     /// terminates any process still in the job — a safety net against orphans.
@@ -129,7 +131,12 @@ pub struct CreateTerminalResult {
 
 impl CreateTerminalResult {
     pub fn err(msg: impl Into<String>) -> Self {
-        Self { ok: false, pid: None, shell: None, error: Some(msg.into()) }
+        Self {
+            ok: false,
+            pid: None,
+            shell: None,
+            error: Some(msg.into()),
+        }
     }
 }
 
@@ -259,6 +266,10 @@ pub fn take_valid_utf8(buf: &mut Vec<u8>) -> Option<String> {
         // plausibly start a multibyte sequence and we haven't already buffered a
         // full char's worth (max 4 bytes). Otherwise the bytes are invalid —
         // flush lossily so the stream never stalls.
+        // The three ranges are the 2-, 3- and 4-byte UTF-8 lead classes. They
+        // happen to be contiguous, but they are kept split so the classes stay
+        // legible next to the UTF-8 spec.
+        #[allow(clippy::manual_range_patterns)]
         let leads_multibyte = matches!(buf[0], 0xC2..=0xDF | 0xE0..=0xEF | 0xF0..=0xF4);
         if leads_multibyte && buf.len() < 4 {
             return None;
@@ -416,7 +427,12 @@ pub fn spawn_terminal(
         read_loop(app, id, reader, child, on_data);
     });
 
-    CreateTerminalResult { ok: true, pid, shell: Some(shell), error: None }
+    CreateTerminalResult {
+        ok: true,
+        pid,
+        shell: Some(shell),
+        error: None,
+    }
 }
 
 /// Blocking read loop: stream decoded output, then wait for exit and clean up.
@@ -453,7 +469,11 @@ fn read_loop(
     if let Some(state) = app.try_state::<AppState>() {
         state.terminals.lock().unwrap().remove(&id);
         state.mcp_clients.lock().unwrap().forget(&id);
-        let left = state.war_rooms.lock().unwrap().leave_everywhere(&id, crate::warroom::now_ms());
+        let left = state
+            .war_rooms
+            .lock()
+            .unwrap()
+            .leave_everywhere(&id, crate::warroom::now_ms());
         if let Some((room_id, event)) = left {
             use tauri::Emitter;
             let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
@@ -485,7 +505,13 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn login_args_cover_the_common_posix_shells() {
-        for shell in ["/bin/zsh", "/bin/bash", "/bin/sh", "/opt/homebrew/bin/fish", "/bin/ksh"] {
+        for shell in [
+            "/bin/zsh",
+            "/bin/bash",
+            "/bin/sh",
+            "/opt/homebrew/bin/fish",
+            "/bin/ksh",
+        ] {
             assert_eq!(login_args(shell), vec!["-l".to_string()], "{shell}");
         }
     }
@@ -503,7 +529,10 @@ mod tests {
     #[test]
     fn login_args_ignore_the_directory_and_version_suffix() {
         assert_eq!(login_args("zsh"), vec!["-l".to_string()]);
-        assert_eq!(login_args("/usr/local/bin/bash-5.2"), vec!["-l".to_string()]);
+        assert_eq!(
+            login_args("/usr/local/bin/bash-5.2"),
+            vec!["-l".to_string()]
+        );
     }
 
     #[test]

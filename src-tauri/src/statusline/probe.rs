@@ -148,7 +148,10 @@ mod tests {
 
     #[test]
     fn extracts_the_connected_flag() {
-        assert_eq!(parse_connected(br#"{"mcp":{"connected":true}}"#), Some(true));
+        assert_eq!(
+            parse_connected(br#"{"mcp":{"connected":true}}"#),
+            Some(true)
+        );
         assert_eq!(
             parse_connected(br#"{"mcp":{"connected":false}}"#),
             Some(false)
@@ -220,7 +223,10 @@ mod tests {
             Some(true)
         );
         let req = server.join().unwrap();
-        assert!(req.starts_with("GET /status HTTP/1.1\r\n"), "req was {req:?}");
+        assert!(
+            req.starts_with("GET /status HTTP/1.1\r\n"),
+            "req was {req:?}"
+        );
         assert!(req.contains("Authorization: Bearer abc-123\r\n"));
         assert!(req.contains("Connection: close\r\n"));
     }
@@ -242,8 +248,9 @@ mod tests {
     fn probe_treats_a_401_as_unreachable() {
         // A dead pane's token: from the status line's point of view "refused"
         // and "cannot vouch for this link" are the same fact.
-        let (url, server) =
-            serve_once(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        let (url, server) = serve_once(
+            b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
         assert_eq!(probe(&url, "ghost", Duration::from_millis(500)), None);
         server.join().unwrap();
     }

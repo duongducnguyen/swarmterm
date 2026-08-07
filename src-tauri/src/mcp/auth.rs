@@ -11,10 +11,7 @@ pub enum AuthError {
 
 /// Resolve a bearer token to a live TerminalId, or explain why not.
 /// `is_live(id)` reports whether the token identifies a currently-running PTY.
-pub fn resolve(
-    token: &str,
-    is_live: impl Fn(&str) -> bool,
-) -> Result<TerminalId, AuthError> {
+pub fn resolve(token: &str, is_live: impl Fn(&str) -> bool) -> Result<TerminalId, AuthError> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
         return Err(AuthError::Missing);
@@ -43,7 +40,10 @@ mod tests {
 
     #[test]
     fn resolves_live_token() {
-        assert_eq!(resolve("abc-123", is_live), Ok(TerminalId("abc-123".into())));
+        assert_eq!(
+            resolve("abc-123", is_live),
+            Ok(TerminalId("abc-123".into()))
+        );
     }
 
     #[test]
@@ -59,7 +59,10 @@ mod tests {
 
     #[test]
     fn trims_whitespace() {
-        assert_eq!(resolve("  abc-123  ", is_live), Ok(TerminalId("abc-123".into())));
+        assert_eq!(
+            resolve("  abc-123  ", is_live),
+            Ok(TerminalId("abc-123".into()))
+        );
     }
 
     #[test]

@@ -88,7 +88,7 @@ pub fn scan(projects_root: &Path, folder: &str) -> Vec<SessionEntry> {
             updated_at_ms: mtime_ms(&path),
         });
     }
-    out.sort_by(|a, b| b.updated_at_ms.cmp(&a.updated_at_ms));
+    out.sort_by_key(|s| std::cmp::Reverse(s.updated_at_ms));
     out.truncate(PER_AGENT_CAP);
     out
 }
@@ -104,7 +104,10 @@ mod tests {
             encode_project_dir("/Users/me/Projects/swarmterm"),
             "-Users-me-Projects-swarmterm"
         );
-        assert_eq!(encode_project_dir("C:\\Users\\me\\proj"), "C--Users-me-proj");
+        assert_eq!(
+            encode_project_dir("C:\\Users\\me\\proj"),
+            "C--Users-me-proj"
+        );
         assert_eq!(encode_project_dir("/a b/c.d_e"), "-a-b-c-d-e");
     }
 

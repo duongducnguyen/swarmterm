@@ -27,7 +27,12 @@ pub fn write_terminal(state: State<'_, AppState>, id: String, data: String) {
 #[tauri::command]
 pub fn resize_terminal(state: State<'_, AppState>, id: String, cols: u16, rows: u16) {
     if let Some(t) = state.terminals.lock().unwrap().get(&id) {
-        let _ = t.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
+        let _ = t.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
     }
 }
 
@@ -56,7 +61,11 @@ pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     // it in list_peers and queue messages for a terminal that can never read
     // them. leave_everywhere() is idempotent, so racing read_loop's cleanup
     // is harmless.
-    let left = state.war_rooms.lock().unwrap().leave_everywhere(&id, crate::warroom::now_ms());
+    let left = state
+        .war_rooms
+        .lock()
+        .unwrap()
+        .leave_everywhere(&id, crate::warroom::now_ms());
     if let Some((room_id, event)) = left {
         let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
@@ -97,7 +106,10 @@ pub async fn git_list_worktrees(
     app: AppHandle,
     cwd: String,
 ) -> Result<Vec<crate::git::WorktreeInfo>, String> {
-    let home = app.path().home_dir().map_err(|e| format!("no home dir: {e}"))?;
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| format!("no home dir: {e}"))?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::git::list_worktrees(std::path::Path::new(&cwd), &home)
     })
@@ -117,10 +129,7 @@ pub async fn git_get_changed_files(
 }
 
 #[tauri::command]
-pub async fn git_get_file_diff(
-    worktree_path: String,
-    file: String,
-) -> Result<String, String> {
+pub async fn git_get_file_diff(worktree_path: String, file: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         crate::git::get_file_diff(std::path::Path::new(&worktree_path), &file)
     })
@@ -129,9 +138,7 @@ pub async fn git_get_file_diff(
 }
 
 #[tauri::command]
-pub async fn git_get_commit_info(
-    worktree_path: String,
-) -> Result<crate::git::CommitInfo, String> {
+pub async fn git_get_commit_info(worktree_path: String) -> Result<crate::git::CommitInfo, String> {
     tauri::async_runtime::spawn_blocking(move || {
         crate::git::get_commit_info(std::path::Path::new(&worktree_path))
     })
@@ -183,7 +190,10 @@ pub async fn git_clear_worktree(
 /// so the backend can ignore a repo that merely contains the folder.
 #[tauri::command]
 pub async fn ensure_repo_with_commit(app: AppHandle, path: String) -> Result<(), String> {
-    let home = app.path().home_dir().map_err(|e| format!("no home dir: {e}"))?;
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| format!("no home dir: {e}"))?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::git::ensure_repo_with_commit(std::path::Path::new(&path), &home)
     })
@@ -300,7 +310,10 @@ pub fn war_room_join(
     if let Some((old_room, ev)) = outcome.left {
         let _ = app.emit("warroom:event", &crate::warroom::scoped(&old_room, ev));
     }
-    let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, outcome.joined));
+    let _ = app.emit(
+        "warroom:event",
+        &crate::warroom::scoped(&room_id, outcome.joined),
+    );
     Ok(())
 }
 
@@ -312,7 +325,11 @@ pub fn war_room_rooms(state: State<'_, AppState>) -> Vec<crate::warroom::RoomInf
 
 #[tauri::command]
 pub fn war_room_leave(app: AppHandle, state: State<'_, AppState>, terminal_id: String) {
-    let left = state.war_rooms.lock().unwrap().leave_everywhere(&terminal_id, crate::warroom::now_ms());
+    let left = state
+        .war_rooms
+        .lock()
+        .unwrap()
+        .leave_everywhere(&terminal_id, crate::warroom::now_ms());
     if let Some((room_id, event)) = left {
         let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
@@ -382,7 +399,9 @@ pub fn war_room_moderator_send(
     let mode = crate::warroom::MessageMode::parse(mode.as_deref())?;
     let (event, deliveries) = {
         let mut reg = state.war_rooms.lock().unwrap();
-        let entry = reg.get(&room_id).ok_or_else(|| format!("no such room \"{room_id}\""))?;
+        let entry = reg
+            .get(&room_id)
+            .ok_or_else(|| format!("no such room \"{room_id}\""))?;
         let out = entry.room.send(
             crate::warroom::MODERATOR_ID,
             to.as_deref(),

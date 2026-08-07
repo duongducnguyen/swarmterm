@@ -144,7 +144,10 @@ pub fn merge_codex_config(existing: Option<&str>, url: &str) -> Result<String, S
         .ok_or("mcp_servers is not a table")?;
     let mut entry = toml_edit::Table::new();
     entry.insert("url", toml_edit::value(url));
-    entry.insert("bearer_token_env_var", toml_edit::value("SWARMTERM_SESSION"));
+    entry.insert(
+        "bearer_token_env_var",
+        toml_edit::value("SWARMTERM_SESSION"),
+    );
     servers.insert("swarmterm", toml_edit::Item::Table(entry));
     Ok(doc.to_string())
 }
@@ -158,13 +161,8 @@ pub fn write_codex_config_to_file(path: &Path, url: &str) -> Result<(), String> 
     };
     if let Some(s) = existing.as_deref() {
         if let Ok(doc) = s.parse::<toml_edit::DocumentMut>() {
-            let current = doc
-                .get("mcp_servers")
-                .and_then(|m| m.get("swarmterm"));
-            let url_ok = current
-                .and_then(|c| c.get("url"))
-                .and_then(|v| v.as_str())
-                == Some(url);
+            let current = doc.get("mcp_servers").and_then(|m| m.get("swarmterm"));
+            let url_ok = current.and_then(|c| c.get("url")).and_then(|v| v.as_str()) == Some(url);
             let bearer_ok = current
                 .and_then(|c| c.get("bearer_token_env_var"))
                 .and_then(|v| v.as_str())
@@ -207,7 +205,10 @@ pub fn register_codex(app: &AppHandle, url: &str) {
     let codex_home = std::env::var("CODEX_HOME").ok();
     let path = resolve_codex_config_path(&home, codex_home.as_deref());
     if let Err(e) = write_codex_config_to_file(&path, url) {
-        eprintln!("mcp: failed to register codex MCP config at {}: {e}", path.display());
+        eprintln!(
+            "mcp: failed to register codex MCP config at {}: {e}",
+            path.display()
+        );
     }
 }
 
@@ -372,7 +373,8 @@ mod tests {
 
     #[test]
     fn codex_preserves_other_tables_and_comments() {
-        let existing = "# my codex settings\nmodel = \"o4\"\n\n[mcp_servers.other]\ncommand = \"x\"\n";
+        let existing =
+            "# my codex settings\nmodel = \"o4\"\n\n[mcp_servers.other]\ncommand = \"x\"\n";
         let out = merge_codex_config(Some(existing), URL).unwrap();
         assert!(out.contains("# my codex settings"));
         assert!(out.contains("model = \"o4\""));

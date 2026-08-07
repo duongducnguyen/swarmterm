@@ -46,6 +46,9 @@ pub fn find_in_path_with(
 /// Given the path to `git.exe`, derive the sibling `bin\bash.exe` (used by the
 /// "Git Bash" detection fallback when the GitForWindows registry key is absent).
 /// Returns `None` if `git_exe` has no parent directory.
+// Only called from the Windows discovery path, but kept unconditional so the
+// unit tests cover it on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn git_bash_from_git_exe(git_exe: &std::path::Path) -> Option<PathBuf> {
     // git.exe usually lives at <install>\cmd\git.exe, so the bash is two levels
     // up + \bin\bash.exe. We resolve relative to <install>.
@@ -57,6 +60,9 @@ pub fn git_bash_from_git_exe(git_exe: &std::path::Path) -> Option<PathBuf> {
 /// Parse the output of `wsl.exe -l -q`. The command emits UTF-16 LE with a BOM
 /// and CR-LF line endings; the caller is expected to decode to a Rust `String`
 /// first. Returns the list of distro names (non-empty, BOM-stripped).
+// Only called from the Windows discovery path, but kept unconditional so the
+// unit tests cover it on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn parse_wsl_distros(decoded: &str) -> Vec<String> {
     decoded
         .lines()
@@ -122,14 +128,26 @@ fn probe() -> Vec<ShellEntry> {
 /// that the user's Terminal.app finds fine — hence the explicit fallbacks.
 #[cfg(not(windows))]
 const UNIX_SHELLS: &[(&str, &[&str])] = &[
-    ("zsh", &["/bin/zsh", "/usr/bin/zsh", "/opt/homebrew/bin/zsh"]),
+    (
+        "zsh",
+        &["/bin/zsh", "/usr/bin/zsh", "/opt/homebrew/bin/zsh"],
+    ),
     (
         "bash",
-        &["/bin/bash", "/usr/bin/bash", "/opt/homebrew/bin/bash", "/usr/local/bin/bash"],
+        &[
+            "/bin/bash",
+            "/usr/bin/bash",
+            "/opt/homebrew/bin/bash",
+            "/usr/local/bin/bash",
+        ],
     ),
     (
         "fish",
-        &["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"],
+        &[
+            "/opt/homebrew/bin/fish",
+            "/usr/local/bin/fish",
+            "/usr/bin/fish",
+        ],
     ),
 ];
 
@@ -156,13 +174,12 @@ pub fn unix_catalog(
     for (id, fallbacks) in UNIX_SHELLS {
         // `$PATH` first so a user's preferred build (Homebrew bash 5 over the
         // ancient /bin/bash 3.2) wins over the system copy.
-        let found = find_in_path_with(path_var, id, exists)
-            .or_else(|| {
-                fallbacks
-                    .iter()
-                    .map(std::path::PathBuf::from)
-                    .find(|p| exists(p))
-            });
+        let found = find_in_path_with(path_var, id, exists).or_else(|| {
+            fallbacks
+                .iter()
+                .map(std::path::PathBuf::from)
+                .find(|p| exists(p))
+        });
         entries.push(ShellEntry {
             id: (*id).to_string(),
             available: found.is_some(),
@@ -198,13 +215,11 @@ fn probe_pwsh(path_var: &str) -> ShellEntry {
 fn probe_git_bash(path_var: &str) -> ShellEntry {
     // Preferred: GitForWindows registry InstallPath. Fallback: sibling of git.exe.
     let from_reg = git_install_from_registry().map(|p| p.join("bin").join("bash.exe"));
-    let path = from_reg
-        .filter(|p| p.is_file())
-        .or_else(|| {
-            find_in_path(path_var, "git.exe")
-                .and_then(|git| git_bash_from_git_exe(&git))
-                .filter(|p| p.is_file())
-        });
+    let path = from_reg.filter(|p| p.is_file()).or_else(|| {
+        find_in_path(path_var, "git.exe")
+            .and_then(|git| git_bash_from_git_exe(&git))
+            .filter(|p| p.is_file())
+    });
 
     ShellEntry {
         id: "git-bash".into(),
@@ -236,7 +251,11 @@ fn probe_wsl() -> ShellEntry {
     ShellEntry {
         id: "wsl".into(),
         available,
-        detected_path: if available { Some("wsl.exe".into()) } else { None },
+        detected_path: if available {
+            Some("wsl.exe".into())
+        } else {
+            None
+        },
         args: vec![],
     }
 }
@@ -271,8 +290,7 @@ fn git_install_from_registry() -> Option<PathBuf> {
                 .encode_utf16()
                 .collect();
             let mut hkey: HKEY = std::ptr::null_mut();
-            if RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != ERROR_SUCCESS
-            {
+            if RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != ERROR_SUCCESS {
                 return None;
             }
             // Two-step query: ask for the byte length, then read into a buffer.
@@ -423,10 +441,17 @@ mod tests {
         fn finds_homebrew_shells_absent_from_a_gui_stub_path() {
             // A Tauri app launched from Finder gets PATH=/usr/bin:/bin:… — no
             // Homebrew. The absolute fallbacks are what keep fish discoverable.
-            let entries = unix_catalog("/bin/zsh", "/usr/bin:/bin", &fake_fs(&["/opt/homebrew/bin/fish"]));
+            let entries = unix_catalog(
+                "/bin/zsh",
+                "/usr/bin:/bin",
+                &fake_fs(&["/opt/homebrew/bin/fish"]),
+            );
             let fish = get(&entries, "fish");
             assert!(fish.available);
-            assert_eq!(fish.detected_path.as_deref(), Some("/opt/homebrew/bin/fish"));
+            assert_eq!(
+                fish.detected_path.as_deref(),
+                Some("/opt/homebrew/bin/fish")
+            );
         }
 
         #[test]

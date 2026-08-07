@@ -144,7 +144,9 @@ impl SwarmtermMcpServer {
             (room_id, connected_ev, entry.name.clone(), peers)
         };
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
+            let _ = self
+                .app
+                .emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
         Ok(Json(ListPeersResult {
             room: room_name,
@@ -185,15 +187,25 @@ impl SwarmtermMcpServer {
             // The call itself IS the handshake — a sender is proven by definition.
             let connected_ev = room.mark_connected(&terminal.0, now_ms());
             let out = room
-                .send(&terminal.0, args.to.as_deref(), &args.content, mode, now_ms())
+                .send(
+                    &terminal.0,
+                    args.to.as_deref(),
+                    &args.content,
+                    mode,
+                    now_ms(),
+                )
                 .map_err(|m| rmcp::ErrorData::invalid_params(m, None))?;
             (room_id, connected_ev, out.event, out.deliveries)
         };
         let delivered = deliveries.len();
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
+            let _ = self
+                .app
+                .emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
-        let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
+        let _ = self
+            .app
+            .emit("warroom:event", &crate::warroom::scoped(&room_id, event));
         for d in deliveries {
             let _ = self.app.emit("warroom:deliver", &d);
         }
@@ -234,12 +246,15 @@ impl SwarmtermMcpServer {
             (room_id, connected_ev, messages)
         };
         if let Some(ev) = connected_ev {
-            let _ = self.app.emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
+            let _ = self
+                .app
+                .emit("warroom:event", &crate::warroom::scoped(&room_id, ev));
         }
         let note = if messages.is_empty() {
             "No pending messages.".into()
         } else {
-            "Reply with war_room.send — keep the conversation in the tools, not the terminal.".to_string()
+            "Reply with war_room.send — keep the conversation in the tools, not the terminal."
+                .to_string()
         };
         Ok(Json(ReadInboxResult { messages, note }))
     }

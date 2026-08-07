@@ -61,7 +61,7 @@ fn quit(app: &tauri::AppHandle) {
     // Use `if let Ok` rather than `unwrap` so the process still exits even if the
     // terminals lock was somehow poisoned.
     if let Ok(mut map) = state.terminals.lock() {
-        for (_id, t) in map.iter_mut() {
+        for t in map.values_mut() {
             let _ = t.killer.kill();
         }
     }

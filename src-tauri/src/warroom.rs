@@ -83,13 +83,35 @@ pub struct MemberInfo {
 
 /// Transcript event pushed to the renderer over `warroom:event`.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "lowercase",
+    rename_all_fields = "camelCase"
+)]
 pub enum WarRoomEvent {
-    Join { seq: u64, terminal_id: String, name: String, agent_id: Option<String>, cwd: String, connected: bool, ts: u64 },
-    Leave { seq: u64, terminal_id: String, name: String, ts: u64 },
+    Join {
+        seq: u64,
+        terminal_id: String,
+        name: String,
+        agent_id: Option<String>,
+        cwd: String,
+        connected: bool,
+        ts: u64,
+    },
+    Leave {
+        seq: u64,
+        terminal_id: String,
+        name: String,
+        ts: u64,
+    },
     /// First successful war_room.* call from a pending member — the agent
     /// inside the pane has proven itself (a dragged-in bare shell never will).
-    Connected { seq: u64, terminal_id: String, name: String, ts: u64 },
+    Connected {
+        seq: u64,
+        terminal_id: String,
+        name: String,
+        ts: u64,
+    },
     Message {
         seq: u64,
         from_id: String,
@@ -192,7 +214,15 @@ impl WarRoom {
             },
         );
         let seq = self.next_seq();
-        WarRoomEvent::Join { seq, terminal_id, name: display_name, agent_id, cwd, connected, ts }
+        WarRoomEvent::Join {
+            seq,
+            terminal_id,
+            name: display_name,
+            agent_id,
+            cwd,
+            connected,
+            ts,
+        }
     }
 
     /// The MCP handshake: flips a pending member to connected on its first
@@ -206,7 +236,12 @@ impl WarRoom {
         member.connected = true;
         let name = member.display_name.clone();
         let seq = self.next_seq();
-        Some(WarRoomEvent::Connected { seq, terminal_id: terminal_id.into(), name, ts })
+        Some(WarRoomEvent::Connected {
+            seq,
+            terminal_id: terminal_id.into(),
+            name,
+            ts,
+        })
     }
 
     /// Renderer snapshot, sorted like `peers()`. The Moderator is excluded:
@@ -234,7 +269,12 @@ impl WarRoom {
         }
         let member = self.members.remove(terminal_id)?;
         let seq = self.next_seq();
-        Some(WarRoomEvent::Leave { seq, terminal_id: terminal_id.into(), name: member.display_name, ts })
+        Some(WarRoomEvent::Leave {
+            seq,
+            terminal_id: terminal_id.into(),
+            name: member.display_name,
+            ts,
+        })
     }
 
     pub fn send(
@@ -302,7 +342,9 @@ impl WarRoom {
         };
 
         let seq = self.next_seq();
-        let to_name = to.and_then(|t| self.members.get(t)).map(|m| m.display_name.clone());
+        let to_name = to
+            .and_then(|t| self.members.get(t))
+            .map(|m| m.display_name.clone());
         let event = WarRoomEvent::Message {
             seq,
             from_id: from_id.into(),
@@ -370,8 +412,12 @@ pub struct WarRooms {
 
 impl Default for WarRooms {
     fn default() -> Self {
-        let mut s = Self { rooms: Vec::new(), next_id: 1 };
-        s.create(DEFAULT_ROOM_NAME).expect("default room name is non-blank");
+        let mut s = Self {
+            rooms: Vec::new(),
+            next_id: 1,
+        };
+        s.create(DEFAULT_ROOM_NAME)
+            .expect("default room name is non-blank");
         s
     }
 }
@@ -403,7 +449,10 @@ pub struct RoomScopedEvent {
 }
 
 pub fn scoped(room_id: &str, event: WarRoomEvent) -> RoomScopedEvent {
-    RoomScopedEvent { room_id: room_id.to_string(), event }
+    RoomScopedEvent {
+        room_id: room_id.to_string(),
+        event,
+    }
 }
 
 pub struct JoinOutcome {
@@ -420,8 +469,15 @@ impl WarRooms {
         }
         let id = format!("room-{}", self.next_id);
         self.next_id += 1;
-        self.rooms.push(RoomEntry { id: id.clone(), name: name.to_string(), room: WarRoom::default() });
-        Ok(RoomMeta { room_id: id, name: name.to_string() })
+        self.rooms.push(RoomEntry {
+            id: id.clone(),
+            name: name.to_string(),
+            room: WarRoom::default(),
+        });
+        Ok(RoomMeta {
+            room_id: id,
+            name: name.to_string(),
+        })
     }
 
     pub fn rename(&mut self, room_id: &str, name: &str) -> Result<(), String> {
@@ -453,9 +509,16 @@ impl WarRooms {
             return Err("cannot delete the last room".into());
         }
         let mut entry = self.rooms.remove(idx);
-        let ids: Vec<String> =
-            entry.room.members_info().iter().map(|m| m.terminal_id.clone()).collect();
-        Ok(ids.iter().filter_map(|id| entry.room.leave(id, ts)).collect())
+        let ids: Vec<String> = entry
+            .room
+            .members_info()
+            .iter()
+            .map(|m| m.terminal_id.clone())
+            .collect();
+        Ok(ids
+            .iter()
+            .filter_map(|id| entry.room.leave(id, ts))
+            .collect())
     }
 
     /// The move semantics: joining room X while a member of room Y leaves Y
@@ -478,14 +541,24 @@ impl WarRooms {
             Some(_) => self.leave_everywhere(&terminal_id, ts),
             None => None,
         };
-        let entry = self.rooms.iter_mut().find(|r| r.id == room_id).expect("checked above");
-        let joined = entry.room.join(terminal_id, agent_id, cwd, display_name, ts);
+        let entry = self
+            .rooms
+            .iter_mut()
+            .find(|r| r.id == room_id)
+            .expect("checked above");
+        let joined = entry
+            .room
+            .join(terminal_id, agent_id, cwd, display_name, ts);
         Ok(JoinOutcome { left, joined })
     }
 
     /// Backs `war_room_leave` and both PTY-death auto-leave paths — the caller
     /// doesn't know (or care) which room the pane was in.
-    pub fn leave_everywhere(&mut self, terminal_id: &str, ts: u64) -> Option<(String, WarRoomEvent)> {
+    pub fn leave_everywhere(
+        &mut self,
+        terminal_id: &str,
+        ts: u64,
+    ) -> Option<(String, WarRoomEvent)> {
         for entry in self.rooms.iter_mut() {
             if let Some(ev) = entry.room.leave(terminal_id, ts) {
                 return Some((entry.id.clone(), ev));
@@ -497,7 +570,9 @@ impl WarRooms {
     /// The MCP gate: which room is this terminal in? The Moderator id would
     /// match every room, but MCP callers are always real terminal ids.
     pub fn find_room_of(&mut self, terminal_id: &str) -> Option<&mut RoomEntry> {
-        self.rooms.iter_mut().find(|r| r.room.is_member(terminal_id))
+        self.rooms
+            .iter_mut()
+            .find(|r| r.room.is_member(terminal_id))
     }
 
     pub fn get(&mut self, room_id: &str) -> Option<&mut RoomEntry> {
@@ -507,14 +582,21 @@ impl WarRooms {
     pub fn rooms_meta(&self) -> Vec<RoomMeta> {
         self.rooms
             .iter()
-            .map(|r| RoomMeta { room_id: r.id.clone(), name: r.name.clone() })
+            .map(|r| RoomMeta {
+                room_id: r.id.clone(),
+                name: r.name.clone(),
+            })
             .collect()
     }
 
     pub fn rooms_info(&self) -> Vec<RoomInfo> {
         self.rooms
             .iter()
-            .map(|r| RoomInfo { room_id: r.id.clone(), name: r.name.clone(), members: r.room.members_info() })
+            .map(|r| RoomInfo {
+                room_id: r.id.clone(),
+                name: r.name.clone(),
+                members: r.room.members_info(),
+            })
             .collect()
     }
 }
@@ -525,8 +607,20 @@ mod tests {
 
     fn room_with_two() -> WarRoom {
         let mut r = WarRoom::default();
-        r.join("t1".into(), Some("claude-code".into()), "/a".into(), "Claude".into(), 1);
-        r.join("t2".into(), Some("codex".into()), "/b".into(), "Codex".into(), 2);
+        r.join(
+            "t1".into(),
+            Some("claude-code".into()),
+            "/a".into(),
+            "Claude".into(),
+            1,
+        );
+        r.join(
+            "t2".into(),
+            Some("codex".into()),
+            "/b".into(),
+            "Codex".into(),
+            2,
+        );
         // Both agents complete the MCP handshake, like real ones do on intro.
         r.mark_connected("t1", 1);
         r.mark_connected("t2", 2);
@@ -537,7 +631,13 @@ mod tests {
     fn mark_connected_fires_once_and_needs_membership() {
         let mut r = WarRoom::default();
         assert!(r.mark_connected("ghost", 1).is_none());
-        r.join("t1".into(), Some("codex".into()), "/a".into(), "Codex".into(), 1);
+        r.join(
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "Codex".into(),
+            1,
+        );
         let ev = r.mark_connected("t1", 2).expect("first call flips");
         assert!(matches!(ev, WarRoomEvent::Connected { .. }));
         assert!(r.mark_connected("t1", 3).is_none()); // edge-triggered
@@ -546,25 +646,59 @@ mod tests {
     #[test]
     fn rejoin_preserves_connected_flag() {
         let mut r = WarRoom::default();
-        r.join("t1".into(), Some("codex".into()), "/a".into(), "Codex".into(), 1);
+        r.join(
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "Codex".into(),
+            1,
+        );
         r.mark_connected("t1", 2);
-        let ev = r.join("t1".into(), Some("codex".into()), "/a".into(), "Codex".into(), 3);
-        assert!(matches!(ev, WarRoomEvent::Join { connected: true, .. }));
+        let ev = r.join(
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "Codex".into(),
+            3,
+        );
+        assert!(matches!(
+            ev,
+            WarRoomEvent::Join {
+                connected: true,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn direct_send_to_pending_member_is_rejected() {
         let mut r = room_with_two();
-        r.join("t3".into(), Some("codex".into()), "/c".into(), "Pending".into(), 3);
-        let err = r.send("t1", Some("t3"), "hi", MessageMode::Probe, 4).unwrap_err();
+        r.join(
+            "t3".into(),
+            Some("codex".into()),
+            "/c".into(),
+            "Pending".into(),
+            3,
+        );
+        let err = r
+            .send("t1", Some("t3"), "hi", MessageMode::Probe, 4)
+            .unwrap_err();
         assert!(err.contains("not connected"));
     }
 
     #[test]
     fn broadcast_skips_pending_members() {
         let mut r = room_with_two();
-        r.join("t3".into(), Some("codex".into()), "/c".into(), "Pending".into(), 3);
-        let out = r.send("t1", None, "all hands", MessageMode::Probe, 4).unwrap();
+        r.join(
+            "t3".into(),
+            Some("codex".into()),
+            "/c".into(),
+            "Pending".into(),
+            3,
+        );
+        let out = r
+            .send("t1", None, "all hands", MessageMode::Probe, 4)
+            .unwrap();
         assert_eq!(out.deliveries.len(), 1); // only connected t2
         assert!(r.drain_inbox("t3").unwrap().is_empty());
         let mut solo = WarRoom::default();
@@ -586,7 +720,12 @@ mod tests {
         assert_eq!(info.len(), 3);
         assert_eq!(info[0].name, "AShell");
         assert!(!info[0].connected);
-        assert!(info.iter().find(|m| m.terminal_id == "t1").unwrap().connected);
+        assert!(
+            info.iter()
+                .find(|m| m.terminal_id == "t1")
+                .unwrap()
+                .connected
+        );
     }
 
     #[test]
@@ -594,11 +733,23 @@ mod tests {
         let mut r = WarRoom::default();
         let ev = r.join("t1".into(), None, "/a".into(), "Term".into(), 1);
         assert!(matches!(ev, WarRoomEvent::Join { .. }));
-        r.join("t1".into(), Some("codex".into()), "/b".into(), "Codex".into(), 2);
+        r.join(
+            "t1".into(),
+            Some("codex".into()),
+            "/b".into(),
+            "Codex".into(),
+            2,
+        );
         assert_eq!(r.peers().len(), 2); // t1 + the seeded Moderator
         assert_eq!(r.members_info().len(), 1); // roster excludes the Moderator
         assert_eq!(
-            r.peers().iter().find(|(id, _)| id == "t1").unwrap().1.agent_id.as_deref(),
+            r.peers()
+                .iter()
+                .find(|(id, _)| id == "t1")
+                .unwrap()
+                .1
+                .agent_id
+                .as_deref(),
             Some("codex")
         );
     }
@@ -615,7 +766,9 @@ mod tests {
     #[test]
     fn probe_send_lands_in_target_inbox_and_yields_delivery() {
         let mut r = room_with_two();
-        let out = r.send("t1", Some("t2"), "hello", MessageMode::Probe, 10).unwrap();
+        let out = r
+            .send("t1", Some("t2"), "hello", MessageMode::Probe, 10)
+            .unwrap();
         assert_eq!(out.deliveries.len(), 1);
         assert_eq!(out.deliveries[0].to_id, "t2");
         assert_eq!(out.deliveries[0].content, None); // probe body stays server-side
@@ -628,9 +781,17 @@ mod tests {
     #[test]
     fn broadcast_reaches_every_connected_peer_but_sender() {
         let mut r = room_with_two();
-        r.join("t3".into(), Some("opencode".into()), "/c".into(), "Open".into(), 3);
+        r.join(
+            "t3".into(),
+            Some("opencode".into()),
+            "/c".into(),
+            "Open".into(),
+            3,
+        );
         r.mark_connected("t3", 3);
-        let out = r.send("t1", None, "all hands", MessageMode::Probe, 11).unwrap();
+        let out = r
+            .send("t1", None, "all hands", MessageMode::Probe, 11)
+            .unwrap();
         assert_eq!(r.drain_inbox("t2").unwrap().len(), 1);
         assert_eq!(r.drain_inbox("t3").unwrap().len(), 1);
         assert_eq!(out.deliveries.len(), 2);
@@ -639,16 +800,26 @@ mod tests {
     #[test]
     fn send_rejections() {
         let mut r = room_with_two();
-        assert!(r.send("ghost", Some("t2"), "x", MessageMode::Probe, 1).is_err()); // non-member sender
-        assert!(r.send("t1", Some("ghost"), "x", MessageMode::Probe, 1).is_err()); // non-member target
-        assert!(r.send("t1", Some("t2"), "   ", MessageMode::Probe, 1).is_err()); // blank content
-        assert!(r.send("t1", Some("t1"), "x", MessageMode::Probe, 1).is_err()); // self-send
+        assert!(r
+            .send("ghost", Some("t2"), "x", MessageMode::Probe, 1)
+            .is_err()); // non-member sender
+        assert!(r
+            .send("t1", Some("ghost"), "x", MessageMode::Probe, 1)
+            .is_err()); // non-member target
+        assert!(r
+            .send("t1", Some("t2"), "   ", MessageMode::Probe, 1)
+            .is_err()); // blank content
+        assert!(r
+            .send("t1", Some("t1"), "x", MessageMode::Probe, 1)
+            .is_err()); // self-send
         assert!(r.send("t1", None, "x", MessageMode::Execute, 1).is_err()); // execute needs a target
-        // A shell CAN become connected (anything in the pane may curl the MCP
-        // endpoint) — the execute guard must still hold for it.
+                                                                            // A shell CAN become connected (anything in the pane may curl the MCP
+                                                                            // endpoint) — the execute guard must still hold for it.
         r.join("t3".into(), None, "/c".into(), "Shell".into(), 3);
         r.mark_connected("t3", 3);
-        assert!(r.send("t1", Some("t3"), "x", MessageMode::Execute, 1).is_err()); // execute into plain shell
+        assert!(r
+            .send("t1", Some("t3"), "x", MessageMode::Execute, 1)
+            .is_err()); // execute into plain shell
         let mut solo = WarRoom::default();
         solo.join("t1".into(), None, "/a".into(), "A".into(), 1);
         // Was "broadcast with no peers" — the Moderator is now always a peer.
@@ -656,13 +827,17 @@ mod tests {
         // The "no connected peers" branch IS still reachable, just from the
         // other direction: a Moderator broadcast into a room with no agent
         // panes at all finds no connected peer once it filters itself out.
-        assert!(WarRoom::default().send(MODERATOR_ID, None, "x", MessageMode::Probe, 1).is_err());
+        assert!(WarRoom::default()
+            .send(MODERATOR_ID, None, "x", MessageMode::Probe, 1)
+            .is_err());
     }
 
     #[test]
     fn execute_skips_inbox_and_carries_content() {
         let mut r = room_with_two();
-        let out = r.send("t1", Some("t2"), "run this", MessageMode::Execute, 12).unwrap();
+        let out = r
+            .send("t1", Some("t2"), "run this", MessageMode::Execute, 12)
+            .unwrap();
         assert_eq!(out.deliveries[0].content.as_deref(), Some("run this"));
         assert!(r.drain_inbox("t2").unwrap().is_empty());
     }
@@ -676,15 +851,27 @@ mod tests {
     #[test]
     fn mode_parses() {
         assert_eq!(MessageMode::parse(None).unwrap(), MessageMode::Probe);
-        assert_eq!(MessageMode::parse(Some("probe")).unwrap(), MessageMode::Probe);
-        assert_eq!(MessageMode::parse(Some("execute")).unwrap(), MessageMode::Execute);
+        assert_eq!(
+            MessageMode::parse(Some("probe")).unwrap(),
+            MessageMode::Probe
+        );
+        assert_eq!(
+            MessageMode::parse(Some("execute")).unwrap(),
+            MessageMode::Execute
+        );
         assert!(MessageMode::parse(Some("yolo")).is_err());
     }
 
     #[test]
     fn events_serialize_camelcase_with_kind_tag() {
         let mut r = WarRoom::default();
-        let ev = r.join("t1".into(), Some("codex".into()), "/a".into(), "Codex".into(), 5);
+        let ev = r.join(
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "Codex".into(),
+            5,
+        );
         let j = serde_json::to_value(&ev).unwrap();
         assert_eq!(j["kind"], "join");
         assert_eq!(j["terminalId"], "t1");
@@ -693,9 +880,17 @@ mod tests {
         let c = serde_json::to_value(r.mark_connected("t1", 6).unwrap()).unwrap();
         assert_eq!(c["kind"], "connected");
         assert_eq!(c["terminalId"], "t1");
-        r.join("t2".into(), Some("agent2".into()), "/b".into(), "B".into(), 6);
+        r.join(
+            "t2".into(),
+            Some("agent2".into()),
+            "/b".into(),
+            "B".into(),
+            6,
+        );
         r.mark_connected("t2", 6);
-        let out = r.send("t1", Some("t2"), "hi", MessageMode::Probe, 7).unwrap();
+        let out = r
+            .send("t1", Some("t2"), "hi", MessageMode::Probe, 7)
+            .unwrap();
         let m = serde_json::to_value(&out.event).unwrap();
         assert_eq!(m["kind"], "message");
         assert_eq!(m["fromName"], "Codex");
@@ -709,7 +904,9 @@ mod tests {
     #[test]
     fn seq_increments_across_all_event_kinds() {
         let mut r = room_with_two(); // seqs 1-4: two joins + two connects
-        let out = r.send("t1", Some("t2"), "hi", MessageMode::Probe, 9).unwrap();
+        let out = r
+            .send("t1", Some("t2"), "hi", MessageMode::Probe, 9)
+            .unwrap();
         let seq_of = |e: &WarRoomEvent| match e {
             WarRoomEvent::Join { seq, .. }
             | WarRoomEvent::Leave { seq, .. }
@@ -734,8 +931,15 @@ mod tests {
         // peers() feeds MCP list_peers — agents must see the human.
         assert!(r.peers().iter().any(|(id, _)| id == MODERATOR_ID));
         // members_info() feeds the renderer roster — the user needs no chip.
-        assert!(r.members_info().iter().all(|m| m.terminal_id != MODERATOR_ID));
-        let (_, m) = r.peers().into_iter().find(|(id, _)| id == MODERATOR_ID).unwrap();
+        assert!(r
+            .members_info()
+            .iter()
+            .all(|m| m.terminal_id != MODERATOR_ID));
+        let (_, m) = r
+            .peers()
+            .into_iter()
+            .find(|(id, _)| id == MODERATOR_ID)
+            .unwrap();
         assert_eq!(m.display_name, MODERATOR_NAME);
         assert!(m.connected);
         assert!(m.agent_id.is_none());
@@ -751,7 +955,15 @@ mod tests {
     #[test]
     fn probe_to_moderator_skips_the_inbox() {
         let mut r = room_with_two();
-        let out = r.send("t1", Some(MODERATOR_ID), "need a call on this", MessageMode::Probe, 5).unwrap();
+        let out = r
+            .send(
+                "t1",
+                Some(MODERATOR_ID),
+                "need a call on this",
+                MessageMode::Probe,
+                5,
+            )
+            .unwrap();
         // Transcript event only: no terminal to nudge, no inbox to drain.
         assert!(out.deliveries.is_empty());
         assert!(r.drain_inbox(MODERATOR_ID).unwrap().is_empty());
@@ -760,14 +972,18 @@ mod tests {
     #[test]
     fn execute_to_moderator_is_rejected_by_name() {
         let mut r = room_with_two();
-        let err = r.send("t1", Some(MODERATOR_ID), "do it", MessageMode::Execute, 5).unwrap_err();
+        let err = r
+            .send("t1", Some(MODERATOR_ID), "do it", MessageMode::Execute, 5)
+            .unwrap_err();
         assert!(err.contains("Moderator"));
     }
 
     #[test]
     fn moderator_broadcast_reaches_connected_agents_and_not_itself() {
         let mut r = room_with_two();
-        let out = r.send(MODERATOR_ID, None, "all hands", MessageMode::Probe, 6).unwrap();
+        let out = r
+            .send(MODERATOR_ID, None, "all hands", MessageMode::Probe, 6)
+            .unwrap();
         assert_eq!(out.deliveries.len(), 2);
         assert!(out.deliveries.iter().all(|d| d.to_id != MODERATOR_ID));
         assert_eq!(r.drain_inbox("t1").unwrap().len(), 1);
@@ -777,7 +993,9 @@ mod tests {
     #[test]
     fn moderator_send_carries_its_display_name() {
         let mut r = room_with_two();
-        let out = r.send(MODERATOR_ID, Some("t1"), "hi", MessageMode::Probe, 7).unwrap();
+        let out = r
+            .send(MODERATOR_ID, Some("t1"), "hi", MessageMode::Probe, 7)
+            .unwrap();
         let j = serde_json::to_value(&out.event).unwrap();
         assert_eq!(j["fromName"], MODERATOR_NAME);
         assert_eq!(j["fromId"], MODERATOR_ID);
@@ -786,7 +1004,9 @@ mod tests {
     #[test]
     fn agent_broadcast_reaches_the_moderator_without_a_delivery() {
         let mut r = room_with_two();
-        let out = r.send("t1", None, "status?", MessageMode::Probe, 8).unwrap();
+        let out = r
+            .send("t1", None, "status?", MessageMode::Probe, 8)
+            .unwrap();
         // t2 gets a delivery; the Moderator gets neither a delivery nor an inbox entry.
         assert_eq!(out.deliveries.len(), 1);
         assert_eq!(out.deliveries[0].to_id, "t2");
@@ -838,11 +1058,22 @@ mod tests {
     fn delete_returns_a_leave_per_member_and_never_for_the_moderator() {
         let mut r = registry();
         r.create("B").unwrap();
-        r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
-        r.join("room-2", "t2".into(), None, "/b".into(), "B".into(), 2).unwrap();
+        r.join(
+            "room-2",
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "A".into(),
+            1,
+        )
+        .unwrap();
+        r.join("room-2", "t2".into(), None, "/b".into(), "B".into(), 2)
+            .unwrap();
         let events = r.delete("room-2", 3).unwrap();
         assert_eq!(events.len(), 2);
-        assert!(events.iter().all(|e| matches!(e, WarRoomEvent::Leave { .. })));
+        assert!(events
+            .iter()
+            .all(|e| matches!(e, WarRoomEvent::Leave { .. })));
         assert!(r.find_room_of("t1").is_none());
     }
 
@@ -850,11 +1081,31 @@ mod tests {
     fn join_moves_between_rooms_and_rejects_unknown_room() {
         let mut r = registry();
         r.create("B").unwrap();
-        assert!(r.join("ghost", "t1".into(), None, "/a".into(), "A".into(), 1).is_err());
-        let first = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        assert!(r
+            .join("ghost", "t1".into(), None, "/a".into(), "A".into(), 1)
+            .is_err());
+        let first = r
+            .join(
+                "room-1",
+                "t1".into(),
+                Some("codex".into()),
+                "/a".into(),
+                "A".into(),
+                1,
+            )
+            .unwrap();
         assert!(first.left.is_none());
         assert_eq!(r.find_room_of("t1").unwrap().id, "room-1");
-        let moved = r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 2).unwrap();
+        let moved = r
+            .join(
+                "room-2",
+                "t1".into(),
+                Some("codex".into()),
+                "/a".into(),
+                "A".into(),
+                2,
+            )
+            .unwrap();
         let (old_room, ev) = moved.left.expect("move yields the old room's leave");
         assert_eq!(old_room, "room-1");
         assert!(matches!(ev, WarRoomEvent::Leave { .. }));
@@ -866,30 +1117,77 @@ mod tests {
     #[test]
     fn same_room_rejoin_does_not_leave_and_keeps_connected() {
         let mut r = registry();
-        r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        r.join(
+            "room-1",
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "A".into(),
+            1,
+        )
+        .unwrap();
         r.find_room_of("t1").unwrap().room.mark_connected("t1", 2);
-        let again = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 3).unwrap();
+        let again = r
+            .join(
+                "room-1",
+                "t1".into(),
+                Some("codex".into()),
+                "/a".into(),
+                "A".into(),
+                3,
+            )
+            .unwrap();
         assert!(again.left.is_none());
-        assert!(matches!(again.joined, WarRoomEvent::Join { connected: true, .. }));
+        assert!(matches!(
+            again.joined,
+            WarRoomEvent::Join {
+                connected: true,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn cross_room_move_resets_connected_to_pending() {
         let mut r = registry();
         r.create("B").unwrap();
-        r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        r.join(
+            "room-1",
+            "t1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "A".into(),
+            1,
+        )
+        .unwrap();
         r.find_room_of("t1").unwrap().room.mark_connected("t1", 2);
-        let moved = r.join("room-2", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 3).unwrap();
+        let moved = r
+            .join(
+                "room-2",
+                "t1".into(),
+                Some("codex".into()),
+                "/a".into(),
+                "A".into(),
+                3,
+            )
+            .unwrap();
         // Old inbox and handshake die with the old membership; the intro tells
         // the agent to call list_peers, which re-flips it immediately.
-        assert!(matches!(moved.joined, WarRoomEvent::Join { connected: false, .. }));
+        assert!(matches!(
+            moved.joined,
+            WarRoomEvent::Join {
+                connected: false,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn leave_everywhere_finds_the_right_room_and_ignores_strangers_and_moderator() {
         let mut r = registry();
         r.create("B").unwrap();
-        r.join("room-2", "t1".into(), None, "/a".into(), "A".into(), 1).unwrap();
+        r.join("room-2", "t1".into(), None, "/a".into(), "A".into(), 1)
+            .unwrap();
         assert!(r.leave_everywhere("ghost", 2).is_none());
         assert!(r.leave_everywhere(MODERATOR_ID, 2).is_none()); // seat is per-room and unevictable
         let (room_id, _) = r.leave_everywhere("t1", 3).unwrap();
@@ -901,27 +1199,75 @@ mod tests {
     fn rooms_are_isolated_for_broadcast_and_each_has_its_own_moderator() {
         let mut r = registry();
         r.create("B").unwrap();
-        r.join("room-1", "a1".into(), Some("codex".into()), "/a".into(), "A1".into(), 1).unwrap();
-        r.join("room-1", "a2".into(), Some("codex".into()), "/a".into(), "A2".into(), 2).unwrap();
-        r.join("room-2", "b1".into(), Some("codex".into()), "/b".into(), "B1".into(), 3).unwrap();
-        for id in ["a1", "a2"] { r.get("room-1").unwrap().room.mark_connected(id, 4); }
+        r.join(
+            "room-1",
+            "a1".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "A1".into(),
+            1,
+        )
+        .unwrap();
+        r.join(
+            "room-1",
+            "a2".into(),
+            Some("codex".into()),
+            "/a".into(),
+            "A2".into(),
+            2,
+        )
+        .unwrap();
+        r.join(
+            "room-2",
+            "b1".into(),
+            Some("codex".into()),
+            "/b".into(),
+            "B1".into(),
+            3,
+        )
+        .unwrap();
+        for id in ["a1", "a2"] {
+            r.get("room-1").unwrap().room.mark_connected(id, 4);
+        }
         r.get("room-2").unwrap().room.mark_connected("b1", 4);
-        let out = r.get("room-1").unwrap().room.send("a1", None, "hi", MessageMode::Probe, 5).unwrap();
+        let out = r
+            .get("room-1")
+            .unwrap()
+            .room
+            .send("a1", None, "hi", MessageMode::Probe, 5)
+            .unwrap();
         assert!(out.deliveries.iter().all(|d| d.to_id != "b1"));
-        assert!(r.get("room-2").unwrap().room.drain_inbox("b1").unwrap().is_empty());
+        assert!(r
+            .get("room-2")
+            .unwrap()
+            .room
+            .drain_inbox("b1")
+            .unwrap()
+            .is_empty());
         // Each room's Moderator is addressable independently.
         assert!(r.get("room-2").unwrap().room.is_member(MODERATOR_ID));
-        let out = r.get("room-2").unwrap().room
-            .send(MODERATOR_ID, Some("b1"), "only B", MessageMode::Probe, 6).unwrap();
+        let out = r
+            .get("room-2")
+            .unwrap()
+            .room
+            .send(MODERATOR_ID, Some("b1"), "only B", MessageMode::Probe, 6)
+            .unwrap();
         assert_eq!(out.deliveries.len(), 1);
-        assert!(r.get("room-1").unwrap().room.drain_inbox("a1").unwrap().is_empty());
+        assert!(r
+            .get("room-1")
+            .unwrap()
+            .room
+            .drain_inbox("a1")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
     fn rooms_info_reports_rooms_in_creation_order_with_members() {
         let mut r = registry();
         r.create("B").unwrap();
-        r.join("room-2", "t1".into(), None, "/x".into(), "X".into(), 1).unwrap();
+        r.join("room-2", "t1".into(), None, "/x".into(), "X".into(), 1)
+            .unwrap();
         let info = r.rooms_info();
         assert_eq!(info.len(), 2);
         assert_eq!(info[0].room_id, "room-1");
@@ -933,7 +1279,16 @@ mod tests {
     #[test]
     fn room_scoped_event_serializes_flat_with_room_id() {
         let mut r = registry();
-        let out = r.join("room-1", "t1".into(), Some("codex".into()), "/a".into(), "A".into(), 1).unwrap();
+        let out = r
+            .join(
+                "room-1",
+                "t1".into(),
+                Some("codex".into()),
+                "/a".into(),
+                "A".into(),
+                1,
+            )
+            .unwrap();
         let j = serde_json::to_value(scoped("room-1", out.joined)).unwrap();
         assert_eq!(j["roomId"], "room-1");
         assert_eq!(j["kind"], "join"); // flattened, not nested under "event"

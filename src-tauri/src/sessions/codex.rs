@@ -73,7 +73,9 @@ pub fn scan(sessions_root: &Path, folder: &str) -> Vec<SessionEntry> {
             continue;
         };
         let mut lines = head.lines();
-        let Some(meta) = lines.next().and_then(|l| serde_json::from_str::<Value>(l).ok())
+        let Some(meta) = lines
+            .next()
+            .and_then(|l| serde_json::from_str::<Value>(l).ok())
         else {
             continue;
         };
@@ -99,9 +101,7 @@ pub fn scan(sessions_root: &Path, folder: &str) -> Vec<SessionEntry> {
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
             .filter_map(|v| user_text(&v))
             .find_map(|raw| clean_title(&raw))
-            .unwrap_or_else(|| {
-                format!("Codex session {}", id.chars().take(8).collect::<String>())
-            });
+            .unwrap_or_else(|| format!("Codex session {}", id.chars().take(8).collect::<String>()));
         out.push(SessionEntry {
             agent_id: "codex".into(),
             session_id: id.to_owned(),
@@ -110,7 +110,7 @@ pub fn scan(sessions_root: &Path, folder: &str) -> Vec<SessionEntry> {
             updated_at_ms: mtime_ms(&path),
         });
     }
-    out.sort_by(|a, b| b.updated_at_ms.cmp(&a.updated_at_ms));
+    out.sort_by_key(|s| std::cmp::Reverse(s.updated_at_ms));
     out.truncate(PER_AGENT_CAP);
     out
 }
@@ -168,7 +168,17 @@ mod tests {
     #[test]
     fn scan_falls_back_to_short_id_title() {
         let tmp = tempfile::tempdir().unwrap();
-        write_rollout(tmp.path(), "rollout-x-22222222.jsonl", &format!("{}\n", META.replace("018f3b2a-7c1d-4e0a-9b2f-1a2b3c4d5e6f", "22222222-3333-4444-8555-666666666666")));
+        write_rollout(
+            tmp.path(),
+            "rollout-x-22222222.jsonl",
+            &format!(
+                "{}\n",
+                META.replace(
+                    "018f3b2a-7c1d-4e0a-9b2f-1a2b3c4d5e6f",
+                    "22222222-3333-4444-8555-666666666666"
+                )
+            ),
+        );
         let out = scan(tmp.path(), "/repo");
         assert_eq!(out[0].title, "Codex session 22222222");
     }
@@ -176,9 +186,21 @@ mod tests {
     #[test]
     fn scan_skips_other_cwd_exec_source_zst_and_garbage() {
         let tmp = tempfile::tempdir().unwrap();
-        write_rollout(tmp.path(), "rollout-a-33333333.jsonl", &format!("{}\n", META.replace("/repo", "/elsewhere")));
-        write_rollout(tmp.path(), "rollout-b-44444444.jsonl", &format!("{}\n", META.replace("cli", "exec")));
-        write_rollout(tmp.path(), "rollout-c-55555555.jsonl.zst", "binary-not-jsonl");
+        write_rollout(
+            tmp.path(),
+            "rollout-a-33333333.jsonl",
+            &format!("{}\n", META.replace("/repo", "/elsewhere")),
+        );
+        write_rollout(
+            tmp.path(),
+            "rollout-b-44444444.jsonl",
+            &format!("{}\n", META.replace("cli", "exec")),
+        );
+        write_rollout(
+            tmp.path(),
+            "rollout-c-55555555.jsonl.zst",
+            "binary-not-jsonl",
+        );
         write_rollout(tmp.path(), "rollout-d-66666666.jsonl", "not json\n");
         assert!(scan(tmp.path(), "/repo").is_empty());
     }
@@ -186,7 +208,11 @@ mod tests {
     #[test]
     fn cwd_match_normalizes_trailing_separator() {
         let tmp = tempfile::tempdir().unwrap();
-        write_rollout(tmp.path(), "rollout-e-77777777.jsonl", &format!("{}\n", META));
+        write_rollout(
+            tmp.path(),
+            "rollout-e-77777777.jsonl",
+            &format!("{}\n", META),
+        );
         assert_eq!(scan(tmp.path(), "/repo/").len(), 1);
     }
 }

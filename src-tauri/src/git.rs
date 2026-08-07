@@ -73,7 +73,7 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
     let mut is_first = true;
 
     for line in output.lines() {
-        if line.starts_with("worktree ") {
+        if let Some(rest) = line.strip_prefix("worktree ") {
             if !path.is_empty() {
                 results.push(WorktreeInfo {
                     path: path.clone(),
@@ -86,11 +86,10 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
                 head.clear();
                 branch.clear();
             }
-            path = line["worktree ".len()..].to_string();
-        } else if line.starts_with("HEAD ") {
-            head = line["HEAD ".len()..].to_string();
-        } else if line.starts_with("branch ") {
-            let refs = &line["branch ".len()..];
+            path = rest.to_string();
+        } else if let Some(rest) = line.strip_prefix("HEAD ") {
+            head = rest.to_string();
+        } else if let Some(refs) = line.strip_prefix("branch ") {
             branch = refs.strip_prefix("refs/heads/").unwrap_or(refs).to_string();
         } else if line == "detached" {
             branch = "(detached)".to_string();
@@ -108,7 +107,9 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 }
 
 pub fn list_worktrees(cwd: &Path, home: &Path) -> Result<Vec<WorktreeInfo>, String> {
-    let p = cwd.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
+    let p = cwd
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
     let out = git_command()
         .args(["-C", p, "worktree", "list", "--porcelain"])
         .output()
@@ -156,7 +157,9 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
 
     let mut files = Vec::new();
     for line in status_out.lines() {
-        if line.len() < 4 { continue; }
+        if line.len() < 4 {
+            continue;
+        }
         let xy = &line[..2];
         let path = line[3..].trim().to_string();
 
@@ -164,7 +167,7 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
             "?".to_string()
         } else {
             // X (index) takes priority over Y (working-tree); a file appears at most once per path.
-            let ch = if xy.chars().next() != Some(' ') {
+            let ch = if !xy.starts_with(' ') {
                 xy.chars().next().unwrap_or(' ')
             } else {
                 xy.chars().nth(1).unwrap_or(' ')
@@ -175,7 +178,12 @@ pub fn parse_changed_files(status_out: &str, numstat_out: &str) -> Vec<ChangedFi
         // Renames are emitted as "new-path\told-path"; take the new path only.
         let display_path = path.split('\t').next().unwrap_or(&path).to_string();
         let (added, removed) = counts.get(&display_path).copied().unwrap_or((0, 0));
-        files.push(ChangedFile { path: display_path, status, added, removed });
+        files.push(ChangedFile {
+            path: display_path,
+            status,
+            added,
+            removed,
+        });
     }
     files
 }
@@ -201,11 +209,18 @@ pub fn parse_commit_info(output: &str) -> CommitInfo {
             }
         }
     }
-    CommitInfo { head_sha, branch, ahead, behind }
+    CommitInfo {
+        head_sha,
+        branch,
+        ahead,
+        behind,
+    }
 }
 
 pub fn get_file_diff(worktree_path: &Path, file: &str) -> Result<String, String> {
-    let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
+    let p = worktree_path
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
     let out = git_command()
         .args(["-C", p, "diff", "HEAD", "--", file])
         .output()
@@ -217,7 +232,9 @@ pub fn get_file_diff(worktree_path: &Path, file: &str) -> Result<String, String>
 }
 
 pub fn get_commit_info(worktree_path: &Path) -> Result<CommitInfo, String> {
-    let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
+    let p = worktree_path
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
     let out = git_command()
         .args(["-C", p, "status", "--porcelain=v2", "--branch"])
         .output()
@@ -229,14 +246,18 @@ pub fn get_commit_info(worktree_path: &Path) -> Result<CommitInfo, String> {
 }
 
 pub fn get_changed_files(worktree_path: &Path) -> Result<Vec<ChangedFile>, String> {
-    let p = worktree_path.to_str().ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
+    let p = worktree_path
+        .to_str()
+        .ok_or_else(|| format!("non-UTF-8 path: {}", worktree_path.display()))?;
 
     let status_out = git_command()
         .args(["-C", p, "status", "--porcelain=v1"])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
     if !status_out.status.success() {
-        return Err(String::from_utf8_lossy(&status_out.stderr).trim().to_string());
+        return Err(String::from_utf8_lossy(&status_out.stderr)
+            .trim()
+            .to_string());
     }
 
     // numstat may fail on a fresh repo with no commits — treat as empty
@@ -330,7 +351,13 @@ pub fn resolve_main_root(cwd: &Path) -> Result<PathBuf, String> {
         .to_str()
         .ok_or_else(|| format!("non-UTF-8 path: {}", cwd.display()))?;
     let out = git_command()
-        .args(["-C", p, "rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .args([
+            "-C",
+            p,
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ])
         .output()
         .map_err(|e| format!("git not found: {e}"))?;
     if !out.status.success() {
@@ -415,8 +442,7 @@ pub fn ensure_repo_with_commit(path: &Path, home: &Path) -> Result<(), String> {
         // Unborn HEAD — repo exists but has no commits
         // Create .gitkeep placeholder so we have something to commit
         let gitkeep_path = path.join(".gitkeep");
-        std::fs::write(&gitkeep_path, "")
-            .map_err(|e| format!("failed to create .gitkeep: {e}"))?;
+        std::fs::write(&gitkeep_path, "").map_err(|e| format!("failed to create .gitkeep: {e}"))?;
 
         // Stage and commit
         let add_out = git_command()
@@ -434,7 +460,9 @@ pub fn ensure_repo_with_commit(path: &Path, home: &Path) -> Result<(), String> {
             .map_err(|e| format!("git not found: {e}"))?;
 
         if !commit_out.status.success() {
-            return Err(String::from_utf8_lossy(&commit_out.stderr).trim().to_string());
+            return Err(String::from_utf8_lossy(&commit_out.stderr)
+                .trim()
+                .to_string());
         }
     }
 
@@ -478,7 +506,10 @@ pub fn create_worktree(repo_cwd: &Path, branch: &str) -> Result<CreatedWorktree,
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
-    Ok(CreatedWorktree { path: target_s, branch: branch.to_string() })
+    Ok(CreatedWorktree {
+        path: target_s,
+        branch: branch.to_string(),
+    })
 }
 
 pub fn remove_worktree(repo_cwd: &Path, worktree_path: &Path) -> Result<(), String> {
@@ -583,7 +614,10 @@ mod tests {
     /// yet). One commit so `create_worktree`'s HEAD-exists precheck passes.
     fn init_repo(path: &Path) {
         let p = path.to_str().unwrap();
-        git_command().args(["-C", p, "init", "--quiet"]).output().unwrap();
+        git_command()
+            .args(["-C", p, "init", "--quiet"])
+            .output()
+            .unwrap();
         git_command()
             .args(["-C", p, "config", "user.email", "test@example.com"])
             .output()
@@ -603,11 +637,7 @@ mod tests {
     /// Run a git command inside `dir` for test setup (commits, adds, etc.) —
     /// mirrors how `init_repo` shells out, just parameterized on args/cwd.
     fn run_git(dir: &Path, args: &[&str]) {
-        let status = git_command()
-            .args(args)
-            .current_dir(dir)
-            .status()
-            .unwrap();
+        let status = git_command().args(args).current_dir(dir).status().unwrap();
         assert!(status.success(), "git {args:?} failed in {}", dir.display());
     }
 
@@ -639,7 +669,10 @@ mod tests {
         let outside = tmp.path().join("not-a-worktree");
         std::fs::create_dir_all(&outside).unwrap();
         let err = clear_worktree(&repo, &outside, "swarm/x").unwrap_err();
-        assert!(err.contains("not a swarmterm-managed worktree"), "got: {err}");
+        assert!(
+            err.contains("not a swarmterm-managed worktree"),
+            "got: {err}"
+        );
     }
 
     #[test]
@@ -656,7 +689,13 @@ mod tests {
 
         assert!(!wt.exists(), "worktree directory should be gone");
         let branches = git_command()
-            .args(["-C", repo.to_str().unwrap(), "branch", "--list", "swarm/gone"])
+            .args([
+                "-C",
+                repo.to_str().unwrap(),
+                "branch",
+                "--list",
+                "swarm/gone",
+            ])
             .output()
             .unwrap();
         assert!(
@@ -715,7 +754,10 @@ detached
         assert_eq!(auth.added, 4);
         assert_eq!(auth.removed, 1);
 
-        let hook = result.iter().find(|f| f.path == "src/hooks/useAuth.ts").unwrap();
+        let hook = result
+            .iter()
+            .find(|f| f.path == "src/hooks/useAuth.ts")
+            .unwrap();
         assert_eq!(hook.status, "A");
         assert_eq!(hook.added, 18);
 
@@ -787,7 +829,10 @@ detached
     #[test]
     fn test_should_ignore_repo_root_below_home_kept() {
         let home = Path::new("/home/user");
-        assert!(!should_ignore_repo_root(Path::new("/home/user/projects/app"), home));
+        assert!(!should_ignore_repo_root(
+            Path::new("/home/user/projects/app"),
+            home
+        ));
     }
 
     #[test]
@@ -833,9 +878,15 @@ detached
     #[test]
     fn inside_worktrees_dir_guards() {
         let main = Path::new("/dev/myapp");
-        assert!(is_inside_worktrees_dir(Path::new("/dev/myapp.worktrees/feat-login"), main));
+        assert!(is_inside_worktrees_dir(
+            Path::new("/dev/myapp.worktrees/feat-login"),
+            main
+        ));
         // The container itself, the main worktree, and arbitrary dirs are refused.
-        assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp.worktrees"), main));
+        assert!(!is_inside_worktrees_dir(
+            Path::new("/dev/myapp.worktrees"),
+            main
+        ));
         assert!(!is_inside_worktrees_dir(Path::new("/dev/myapp"), main));
         assert!(!is_inside_worktrees_dir(Path::new("/dev/other"), main));
         // Lexical `..`/`.` tricks must not defeat the guard.
@@ -875,12 +926,7 @@ detached
         assert!(path.join(".gitkeep").exists(), ".gitkeep should be created");
         // Verify it's a git repo
         let log_out = git_command()
-            .args([
-                "-C",
-                path.to_str().unwrap(),
-                "log",
-                "--oneline",
-            ])
+            .args(["-C", path.to_str().unwrap(), "log", "--oneline"])
             .output()
             .unwrap();
         let log = String::from_utf8_lossy(&log_out.stdout);
@@ -910,7 +956,9 @@ detached
             .args(["-C", repo.to_str().unwrap(), "rev-list", "--count", "HEAD"])
             .output()
             .unwrap();
-        let count = String::from_utf8_lossy(&log_out.stdout).trim().parse::<u32>();
+        let count = String::from_utf8_lossy(&log_out.stdout)
+            .trim()
+            .parse::<u32>();
         assert_eq!(count, Ok(1), "should still have only 1 commit");
     }
 
@@ -947,7 +995,10 @@ detached
             .unwrap()
             .status
             .success();
-        assert!(head_ok, "HEAD should be valid after ensure_repo_with_commit");
+        assert!(
+            head_ok,
+            "HEAD should be valid after ensure_repo_with_commit"
+        );
     }
 
     #[test]
@@ -983,7 +1034,12 @@ detached
             "child should have its own .gitkeep"
         );
         let toplevel = git_command()
-            .args(["-C", child.to_str().unwrap(), "rev-parse", "--show-toplevel"])
+            .args([
+                "-C",
+                child.to_str().unwrap(),
+                "rev-parse",
+                "--show-toplevel",
+            ])
             .output()
             .unwrap();
         let root = String::from_utf8_lossy(&toplevel.stdout);

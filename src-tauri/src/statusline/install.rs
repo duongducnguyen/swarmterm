@@ -173,7 +173,10 @@ mod tests {
     #[test]
     fn quotes_the_path_and_appends_the_flag() {
         assert_eq!(
-            format_command("/Applications/Swarmterm.app/Contents/MacOS/swarmterm", false),
+            format_command(
+                "/Applications/Swarmterm.app/Contents/MacOS/swarmterm",
+                false
+            ),
             OURS
         );
     }
@@ -184,7 +187,10 @@ mod tests {
         // unquoted backslashes as escapes, so a native Windows path never
         // resolves. Forward slashes work in both shells.
         assert_eq!(
-            format_command("C:\\Users\\me\\AppData\\Local\\Swarmterm\\swarmterm.exe", true),
+            format_command(
+                "C:\\Users\\me\\AppData\\Local\\Swarmterm\\swarmterm.exe",
+                true
+            ),
             "\"C:/Users/me/AppData/Local/Swarmterm/swarmterm.exe\" --statusline"
         );
     }

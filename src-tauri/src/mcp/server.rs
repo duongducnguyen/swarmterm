@@ -105,10 +105,7 @@ impl SwarmtermMcpServer {
     /// Gate + context for worktree tools: the calling terminal must belong to
     /// a workspace created with worktree isolation on. Returns the workspace's
     /// repo folder recorded at spawn time.
-    pub(crate) fn worktree_ctx(
-        &self,
-        terminal: &TerminalId,
-    ) -> Result<String, rmcp::ErrorData> {
+    pub(crate) fn worktree_ctx(&self, terminal: &TerminalId) -> Result<String, rmcp::ErrorData> {
         let state = self.app.state::<AppState>();
         let terminals = state.terminals.lock().unwrap();
         let t = terminals
@@ -122,7 +119,10 @@ impl SwarmtermMcpServer {
             ));
         }
         t.repo_root.clone().ok_or_else(|| {
-            rmcp::ErrorData::invalid_request("no repository folder recorded for this terminal", None)
+            rmcp::ErrorData::invalid_request(
+                "no repository folder recorded for this terminal",
+                None,
+            )
         })
     }
 }
@@ -136,8 +136,7 @@ impl ServerHandler for SwarmtermMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_protocol_version(ProtocolVersion::LATEST)
             .with_server_info(
-                Implementation::new("swarmterm", env!("CARGO_PKG_VERSION"))
-                    .with_title("Swarmterm"),
+                Implementation::new("swarmterm", env!("CARGO_PKG_VERSION")).with_title("Swarmterm"),
             )
             // The delegation guidance below is what makes agents reach for
             // worktree.spawn unprompted — MCP clients (Claude Code et al.)
