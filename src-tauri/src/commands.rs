@@ -69,6 +69,12 @@ pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     if let Some((room_id, event)) = left {
         let _ = app.emit("warroom:event", &crate::warroom::scoped(&room_id, event));
     }
+    // A dead pane's preview must not linger as an orphaned native webview
+    // painting over nothing. Idempotent with the renderer's GC sweep and with
+    // read_loop below — whoever runs second finds the label gone.
+    if let Some(webview) = app.get_webview(&crate::preview::preview_label(&id)) {
+        let _ = webview.close();
+    }
     // A respawned pane reuses its id, so a stale `connected` verdict would
     // survive into the new shell and hide the very failure the status line
     // exists to show. Drop it here and in `read_loop`, mirroring the two
