@@ -31,6 +31,7 @@ import {
   type SessionFilter
 } from '@/lib/agent-sessions'
 import { LayoutPreview } from './LayoutPreview'
+import { RecentsDialog } from './RecentsDialog'
 import { SessionRow } from './SessionRow'
 import { SessionsDialog } from './SessionsDialog'
 
@@ -54,7 +55,6 @@ export function Welcome(): ReactElement {
   const recents = useRecentsStore((s) => s.recents)
   const addRecentFolder = useRecentsStore((s) => s.add)
   const removeRecentFolder = useRecentsStore((s) => s.remove)
-  const requestRecentsSearch = useRecentsStore((s) => s.requestSearch)
   const availability = useAgentAvailabilityStore((s) => s.availability)
 
   const [terminalCount, setTerminalCount] = useState<number>(DEFAULT_TERMINAL_COUNT)
@@ -70,6 +70,9 @@ export function Welcome(): ReactElement {
   const [tickedSessions, setTickedSessions] = useState<ReadonlySet<string>>(new Set())
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all')
   const [sessionsDialogOpen, setSessionsDialogOpen] = useState(false)
+  // Recents are global, not per-folder, so unlike sessionsDialogOpen this is
+  // deliberately NOT reset by the folder-change effect below.
+  const [recentsDialogOpen, setRecentsDialogOpen] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -299,8 +302,8 @@ export function Welcome(): ReactElement {
           </div>
 
           {/* Recent folders — inline list capped at VISIBLE_RECENT_ROWS;
-              "Show all" hands off to the title-bar search dropdown, which
-              lists everything and filters as you type. */}
+              "Show all" opens the searchable pick-one dialog over the full
+              list (the title-bar search dropdown stays for quick picks). */}
           {visibleRecents.length > 0 && (
             <div className="mt-5">
               <p className="mb-2 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -350,7 +353,7 @@ export function Welcome(): ReactElement {
               {hiddenCount(recents.length, false, VISIBLE_RECENT_ROWS) > 0 && (
                 <button
                   type="button"
-                  onClick={requestRecentsSearch}
+                  onClick={() => setRecentsDialogOpen(true)}
                   className="mx-auto mt-1 block text-xs text-muted-foreground hover:text-foreground"
                 >
                   Show all ({recents.length})
@@ -646,6 +649,12 @@ export function Welcome(): ReactElement {
         onToggle={toggleSession}
         canTickMore={canTickMore}
         slotsLeft={maxTiles - totalPaneCount}
+      />
+
+      <RecentsDialog
+        open={recentsDialogOpen}
+        onClose={() => setRecentsDialogOpen(false)}
+        onPick={setFolder}
       />
     </div>
   )
