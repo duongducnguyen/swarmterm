@@ -204,8 +204,9 @@ Tick any of them — each becomes an extra pane that reopens the conversation
 right where it left off. Swarmterm never modifies the CLIs' session files.
 
 Tabs above the list filter it to one agent (All · Claude Code · Codex ·
-OpenCode), and both this list and Recent show a short head you can expand
-with "Show all".
+OpenCode), and both this list and Recent show a short head — "Show all"
+opens a searchable dialog over the full list (for Recent, clicking a row
+fills the Working-folder field).
 
 ### Worktree isolation
 

@@ -18,6 +18,9 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 - [ ] Navbar terminal list: clicking an entry focuses that pane.
 - [ ] Close the window → hides to tray (ptys stay alive); tray → Show restores;
       tray → Quit exits and kills every pty.
+- [ ] The tray/menu-bar icon shows the box-logo mark (macOS: monochrome
+      template that flips with the menu-bar theme; Windows/Linux: the color
+      compact tile).
 - [ ] Launch a second instance → only focuses the existing window.
 - [ ] Custom titlebar renders; dragging it moves the window; edges resize
       (Windows/Linux — macOS uses native traffic lights).
@@ -191,11 +194,12 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 - [ ] Pick a folder with prior Claude Code activity → "Resume sessions"
       (below Recent) lists them newest first, with agent icon, relative
       time, and All/Claude Code/Codex/OpenCode tabs (0-count tabs disabled).
-- [ ] More than 6 sessions → "Show all (N) ▾" expands into a scrollable
-      list; switching tabs collapses it; ticks survive tab switches and the
-      "k selected" badge stays visible while a filter hides them.
-- [ ] More than 5 recent folders → Recent shows 5 + "Show all (N) ▾";
-      expanding and collapsing works and never pushes Create off-screen.
+- [ ] More than 6 sessions → "Show all (N)" opens the two-column sessions
+      dialog (agent rail + search); ticks made there survive Done/Esc and
+      tab switches.
+- [ ] More than 5 recent folders → Recent shows 5 + "Show all (N)"; it opens
+      the Recent-folders dialog — search filters, clicking a row fills
+      Working folder and closes, ✕ removes, Esc/backdrop/Done dismiss.
 - [ ] Narrow window → session tabs wrap to a second line; rows truncate.
 - [ ] Tick one + Create → the new pane runs `claude … --resume <id>` and the
       old conversation is visible.
