@@ -235,12 +235,15 @@ It follows your focus — click a different agent's pane and the panel switches 
 
 ### Web preview
 
-The **Preview** tab is a browser column docked next to your terminals, with an address bar and back/forward.
+The **Preview** tab is a browser column docked next to your terminals, with a real address bar and working back/forward/reload.
 
 - **Each terminal keeps its own page.** Click between panes and the preview follows.
 - **Agents open pages themselves.** When an agent starts a dev server it can put the page on screen for you; calling again just navigates the existing preview.
 - An agent working in a **background pane updates its own preview silently** — it never steals the view you're looking at.
-- You can also type any URL into the address bar yourself.
+- You can also type any URL into the address bar yourself — free text becomes a Google search, and something like `localhost:3000` is understood as a page to open.
+- **Sites that refuse to be embedded render anyway.** GitHub, Google, and most SaaS dashboards work right in the column instead of staying blank.
+- **The address bar follows you.** Click a link inside the page and the URL and tab title update to match; Back and Forward move through that pane's real history, and the reload button spins while a page is loading.
+- **Popups open in place.** When a page calls `window.open` or a link targets a new tab (an OAuth "sign in", for example), the preview navigates to it directly instead of spawning a separate window — press Back to return to where you were, or use the pop-out button next to the address bar to break the page out into a real OS window.
 
 ### War Room
 
@@ -385,6 +388,9 @@ On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the term
 - **Nothing is saved between launches** — workspaces, layouts and previews all start fresh. This is intentional for now.
 - **One visual style.** VS Code Dark Modern only; a light theme is on the list.
 - **War Room membership doesn't survive a pane restart.** Re-drag the pane.
+- **The preview column has no devtools, zoom, multiple tabs, or per-terminal
+  cookie isolation.** A page that fails to load shows your OS's default error
+  page rather than a Swarmterm one.
 - **No terminal search yet.**
 - **Linux** paths are implemented but less thoroughly tested than Windows and macOS.
 

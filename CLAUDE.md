@@ -197,6 +197,18 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   never touched in either direction. On Windows the recorded path uses forward
   slashes: Claude Code runs the command through Git Bash, which eats
   backslashes.
+- **Native preview webviews.** The preview column is a per-terminal native
+  child webview (`preview.rs`, label `preview-<terminalId>`, Tauri `unstable`
+  feature for `add_child`). Invariant: a preview webview is visible iff
+  BrowserColumn's placeholder div is mounted AND no overlay is open
+  (`lib/overlay-watch.ts`) — native views paint over ALL DOM, so anything less
+  puts a web page on top of your menus. State flows one way: commands drive
+  the webview, `preview:state` events update `browser-store` (serde camelCase
+  in lockstep with `src/tauri/preview.ts`); never navigate from an event.
+  Back/forward are `eval("history.back()")` — there is no native API. Popups
+  are denied and navigate the same preview in place. Webviews close on
+  terminal death in `kill_terminal` AND `read_loop` (belt-and-braces, like the
+  War Room auto-leave).
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 - **Session resume.** The composer's "Resume sessions" list is read live from

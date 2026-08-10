@@ -87,14 +87,24 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 
 ## Web preview
 
-- [ ] Two panes, each agent opens a different URL via `browser.open_preview` →
-      clicking between panes swaps the page correctly.
-- [ ] An agent in a NON-focused pane calls the tool → the current view is not
-      stolen.
-- [ ] A pane with no preview shows the empty state; typing a URL in the address
-      bar creates the preview for that pane only.
-- [ ] A second tool call navigates the existing preview; back/forward work; no
-      extra preview is created.
+- [ ] Preview a framing-hostile site: type `github.com` in the address bar —
+      the page must render (not a blank frame).
+- [ ] Click links inside the page: the address bar URL and tab title follow;
+      Back returns and Forward re-advances.
+- [ ] Popup handling: on a page that calls `window.open` (e.g. an OAuth
+      "sign in" link), the preview navigates in place — no OS window appears;
+      Back returns to the opener page.
+- [ ] Overlay z-order: with a preview showing, open the workspace-tab context
+      menu and the Settings dialog — both must render ABOVE the page (the
+      preview hides while they're open, showing the dimmed placeholder).
+- [ ] Focus: have an agent call `browser.open_preview` while you type in a
+      terminal — keystrokes keep landing in the shell.
+- [ ] Resize: drag the panel separator — the page stays glued to the column
+      with no white gaps or smearing.
+- [ ] Pane switch keeps page state: two panes with previews — switching
+      between them must not reload either page.
+- [ ] Kill a pane with an open preview: the webview disappears with it; other
+      panes' previews are untouched.
 
 ## War Room — basics
 
