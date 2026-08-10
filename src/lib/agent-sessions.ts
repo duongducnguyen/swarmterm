@@ -42,6 +42,18 @@ export function filterSessions(
   return sessions.filter((e) => e.agentId === filter)
 }
 
+/** Title search for the all-sessions dialog — substring, case-insensitive.
+ *  Composes with `filterSessions` (the rail narrows by agent, this narrows
+ *  by text); a blank query is "no filter", matching an empty input. */
+export function searchSessions(
+  sessions: AgentSessionEntry[],
+  query: string
+): AgentSessionEntry[] {
+  const q = query.trim().toLowerCase()
+  if (q === '') return sessions
+  return sessions.filter((e) => e.title.toLowerCase().includes(q))
+}
+
 /** Row counts per tab id (`all` = total). Agents absent from the list are
  *  present with 0 — the UI needs the key to render a disabled tab. */
 export function sessionTabCounts(sessions: AgentSessionEntry[]): Record<string, number> {

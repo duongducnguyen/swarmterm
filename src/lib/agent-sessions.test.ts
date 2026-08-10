@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   filterSessions,
   mergeSessions,
+  searchSessions,
   sessionKey,
   sessionTabCounts,
   sessionTimeLabel,
@@ -101,6 +102,33 @@ describe('filterSessions', () => {
     expect(filterSessions(list, 'codex')).toHaveLength(2)
     expect(filterSessions(list, 'claude-code')).toHaveLength(1)
     expect(filterSessions(list, 'opencode')).toEqual([])
+  })
+})
+
+describe('searchSessions', () => {
+  const list = [
+    entry({ title: 'Fix login bug' }),
+    entry({
+      title: 'Refactor LOGIN flow',
+      sessionId: '11111111-2222-4333-8444-555555555555'
+    }),
+    entry({ title: 'Update docs', sessionId: '22222222-2222-4333-8444-555555555555' })
+  ]
+  it('empty and whitespace-only queries return the input unchanged', () => {
+    expect(searchSessions(list, '')).toEqual(list)
+    expect(searchSessions(list, '   ')).toEqual(list)
+  })
+  it('matches title substrings case-insensitively', () => {
+    expect(searchSessions(list, 'login').map((e) => e.title)).toEqual([
+      'Fix login bug',
+      'Refactor LOGIN flow'
+    ])
+  })
+  it('trims the query before matching', () => {
+    expect(searchSessions(list, '  docs ')).toHaveLength(1)
+  })
+  it('no match returns empty', () => {
+    expect(searchSessions(list, 'zzz')).toEqual([])
   })
 })
 
