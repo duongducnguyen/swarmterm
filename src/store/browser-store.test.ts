@@ -112,3 +112,48 @@ describe('browser-store', () => {
     expect(get().previews['t2']!.title).toBeUndefined()
   })
 })
+
+describe('applyNavState', () => {
+  beforeEach(reset)
+
+  it('pushes a new url into history', () => {
+    const { openPreview, applyNavState } = get()
+    openPreview('t1', 'http://a/')
+    applyNavState('t1', { url: 'http://b/' })
+    const p = get().previews['t1']
+    expect(p.url).toBe('http://b/')
+    expect(p.history).toEqual(['http://a/', 'http://b/'])
+    expect(p.historyIndex).toBe(1)
+  })
+  it('recognises a back navigation instead of pushing', () => {
+    const { openPreview, applyNavState } = get()
+    openPreview('t1', 'http://a/')
+    applyNavState('t1', { url: 'http://b/' })
+    applyNavState('t1', { url: 'http://a/' })
+    const p = get().previews['t1']
+    expect(p.history).toEqual(['http://a/', 'http://b/'])
+    expect(p.historyIndex).toBe(0)
+  })
+  it('recognises a forward navigation', () => {
+    const { openPreview, applyNavState } = get()
+    openPreview('t1', 'http://a/')
+    applyNavState('t1', { url: 'http://b/' })
+    applyNavState('t1', { url: 'http://a/' })
+    applyNavState('t1', { url: 'http://b/' })
+    const p = get().previews['t1']
+    expect(p.history).toEqual(['http://a/', 'http://b/'])
+    expect(p.historyIndex).toBe(1)
+  })
+  it('applies title and loading', () => {
+    const { openPreview, applyNavState } = get()
+    openPreview('t1', 'http://a/')
+    applyNavState('t1', { title: 'Docs', loading: true })
+    const p = get().previews['t1']
+    expect(p.title).toBe('Docs')
+    expect(p.loading).toBe(true)
+  })
+  it('ignores events for unknown terminals — never resurrects a closed preview', () => {
+    get().applyNavState('ghost', { url: 'http://a/' })
+    expect(get().previews['ghost']).toBeUndefined()
+  })
+})
