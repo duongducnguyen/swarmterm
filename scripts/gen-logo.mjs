@@ -196,6 +196,26 @@ ${markGroup(COMPACT, size, '    ')}
 }
 
 /**
+ * Menu-bar (tray) mark: a rounded-square outline carrying the compact prompt.
+ * The filled tile the other assets use cannot work here — macOS draws the
+ * tray icon as a template (alpha only), so a filled square would be a solid
+ * blob. Line work instead, inset half a stroke so the outline isn't clipped.
+ * Exported so the preview step of the asset pipeline can render it any color.
+ */
+export function traySvg(ink = '#000000') {
+  const inset = COMPACT_STROKE / 2
+  const edge = CANVAS - COMPACT_STROKE
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS}" height="${CANVAS}" viewBox="0 0 ${CANVAS} ${CANVAS}">
+  <!-- ${GENERATED} -->
+  <g stroke="${ink}" ${strokeAttrs(COMPACT)}>
+    <rect x="${f(inset)}" y="${f(inset)}" width="${f(edge)}" height="${f(edge)}" rx="24" ry="24"/>
+${markGroup(COMPACT, CANVAS, '    ')}
+  </g>
+</svg>
+`
+}
+
+/**
  * The in-app mark has to be inline TSX, not an imported `.svg`: Vite resolves
  * SVG imports to a URL, and a URL cannot inherit `currentColor`. The viewBox
  * puts ink at 73% of the box, within a point of Lucide's 75%, so it sits
@@ -302,6 +322,26 @@ export const components = { full: FULL, compact: COMPACT, canvas: CANVAS }
 export const png = (svg, size) =>
   new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng()
 
+/**
+ * Raw straight-alpha RGBA for `tray.rs`. The tauri crate ships without its
+ * PNG decoder feature, so the tray assets are raw bytes for `Image::new` —
+ * and tiny-skia's buffer is premultiplied, which `Image::new` does not
+ * expect, so alpha is divided back out here.
+ */
+export function rgba(svg, size) {
+  const img = new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render()
+  const px = Buffer.from(img.pixels)
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3]
+    if (a > 0 && a < 255) {
+      px[i] = Math.round((px[i] * 255) / a)
+      px[i + 1] = Math.round((px[i + 1] * 255) / a)
+      px[i + 2] = Math.round((px[i + 2] * 255) / a)
+    }
+  }
+  return px
+}
+
 /** Art follows physical pixels, so a 2x asset for a small slot still gets detail. */
 const iconPng = (size) => png(size <= COMPACT_MAX_PX ? DARK_COMPACT : DARK, size)
 
@@ -335,6 +375,10 @@ export function build({ icons = true } = {}) {
   write('src-tauri/icon-source.png', png(DARK, 1024))
   write('docs/images/logo-dark.png', png(DARK, 256))
   write('docs/images/logo-light.png', png(LIGHT, 256))
+  // Tray marks — see traySvg/rgba above. 32px = 16pt @2x; the tray-icon
+  // crate scales to the menu bar's 18pt itself.
+  write('src-tauri/icons/tray-template-32.rgba', rgba(traySvg(), 32))
+  write('src-tauri/icons/tray-color-32.rgba', rgba(DARK_COMPACT, 32))
 
   if (!icons) return
   console.log('running `tauri icon`…')
