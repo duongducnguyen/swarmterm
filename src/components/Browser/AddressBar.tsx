@@ -36,6 +36,13 @@ export function AddressBar({ terminalId, preview }: AddressBarProps): ReactEleme
     if (!terminalId) return
     const url = searchOrUrl(draft)
     if (!url) return
+    // openPreview's history push is a no-op on the currently shown url, so
+    // Enter on the identical address must fall through to a real reload
+    // instead of silently doing nothing.
+    if (url === preview?.url) {
+      reloadPreview(terminalId)
+      return
+    }
     // openPreview creates or navigates — the same gesture either way.
     openPreview(terminalId, url)
   }

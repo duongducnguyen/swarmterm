@@ -107,4 +107,11 @@ describe('applyNavState', () => {
     get().applyNavState('ghost', { url: 'http://a/' })
     expect(get().previews['ghost']).toBeUndefined()
   })
+  it('an event with no fields is a no-op and does not churn the previews object', () => {
+    const { openPreview, applyNavState } = get()
+    openPreview('t1', 'http://a/')
+    const before = get().previews
+    applyNavState('t1', {})
+    expect(get().previews).toBe(before) // same reference — no subscriber notified
+  })
 })

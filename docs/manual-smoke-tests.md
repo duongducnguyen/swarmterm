@@ -105,6 +105,14 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
       between them must not reload either page.
 - [ ] Kill a pane with an open preview: the webview disappears with it; other
       panes' previews are untouched.
+- [ ] Welcome z-order: with a preview showing, open Welcome ("+") — the page
+      must hide (no native paint over the Welcome page); closing Welcome
+      brings the preview back.
+- [ ] Switch agent/shell on a pane with an open preview (composer respawn) →
+      the address bar clears to its empty state; opening a new URL works and
+      shows.
+- [ ] Type `exit` in a pane with an open preview, then respawn/restart it →
+      same: address bar clears, a new URL opens and shows.
 
 ## War Room — basics
 

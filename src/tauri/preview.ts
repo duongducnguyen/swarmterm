@@ -33,6 +33,11 @@ export interface PreviewPopupEvent {
   url: string
 }
 
+/** Wire shape of `preview:closed` — must stay in lockstep with PreviewClosedEvent in preview.rs. */
+export interface PreviewClosedEvent {
+  terminalId: string
+}
+
 export function previewOpen(
   terminalId: string,
   url: string,
@@ -80,4 +85,14 @@ export function onPreviewState(handler: (e: PreviewStateEvent) => void): Promise
 /** Subscribe to denied window.open requests (popups navigate in place). */
 export function onPreviewPopup(handler: (e: PreviewPopupEvent) => void): Promise<UnlistenFn> {
   return listen<PreviewPopupEvent>('preview:popup', (event) => handler(event.payload))
+}
+
+/**
+ * Subscribe to Rust-initiated webview closes (pane killed, shell exited on
+ * its own). The renderer's own closePreview already handles the case it
+ * triggers; this is the other direction — Rust closed a webview the store
+ * doesn't know about yet.
+ */
+export function onPreviewClosed(handler: (e: PreviewClosedEvent) => void): Promise<UnlistenFn> {
+  return listen<PreviewClosedEvent>('preview:closed', (event) => handler(event.payload))
 }

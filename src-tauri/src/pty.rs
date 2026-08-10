@@ -480,12 +480,20 @@ fn read_loop(
         }
         // Same preview cleanup as kill_terminal: read_loop is the path a shell
         // takes when it exits on its own (typed `exit`, crashed), where no one
-        // called kill_terminal.
-        {
-            use tauri::Manager;
-            if let Some(webview) = app.get_webview(&crate::preview::preview_label(&id)) {
-                let _ = webview.close();
-            }
+        // called kill_terminal. preview:closed tells the renderer too — the
+        // store's visibility effects assume webview lifetime is bounded by
+        // their own setup/cleanup, and a Rust-side close they never observe
+        // would leave a stale preview + a permanently hidden webview on the
+        // next preview_open.
+        if let Some(webview) = app.get_webview(&crate::preview::preview_label(&id)) {
+            let _ = webview.close();
+            use tauri::Emitter;
+            let _ = app.emit(
+                "preview:closed",
+                &crate::preview::PreviewClosedEvent {
+                    terminal_id: id.clone(),
+                },
+            );
         }
     }
     let _ = on_data.send(PtyOut::Exit { exit_code });

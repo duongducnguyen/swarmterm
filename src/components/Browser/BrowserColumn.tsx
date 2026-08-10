@@ -23,8 +23,15 @@ export function BrowserColumn(): ReactElement {
   const preview = useBrowserStore((s) =>
     focusedTerminalId ? (s.previews[focusedTerminalId] ?? null) : null
   )
+  // Welcome renders as an absolute z-20 overlay above this column (App.tsx)
+  // but matches nothing in OVERLAY_SELECTOR, so watchOverlays never sees it —
+  // without this, the native webview keeps painting over Welcome regardless
+  // of DOM z-order (child webviews are always topmost). Folding it into
+  // previewTerminalId reuses the same teardown the visibility effect already
+  // does for every other "nothing to show" case.
+  const showWelcome = useAppStore((s) => s.welcomeFocused || s.workspaces.length === 0)
   const placeholderRef = useRef<HTMLDivElement | null>(null)
-  const previewTerminalId = preview && focusedTerminalId ? focusedTerminalId : null
+  const previewTerminalId = preview && focusedTerminalId && !showWelcome ? focusedTerminalId : null
 
   // Bounds: keep the native webview glued to the placeholder. ResizeObserver
   // misses position-only shifts (e.g. the macOS fullscreen chrome dodge
@@ -60,6 +67,14 @@ export function BrowserColumn(): ReactElement {
   // panel to War Room, focus moving to a pane without a preview, unmount).
   useEffect(() => {
     if (!previewTerminalId) return
+    // watchOverlays fires its callback synchronously on subscribe, which can
+    // be the first-ever show-IPC for this terminal (a fresh MCP-driven open
+    // has no cached bounds, or the bounds effect above simply hasn't run
+    // yet). Sync bounds once, synchronously, right here so show-IPC never
+    // precedes the first bounds-IPC — otherwise the webview paints at
+    // whatever stale/fallback 1×1 rect it was created with for one frame.
+    const rect = placeholderRef.current?.getBoundingClientRect()
+    if (rect) syncPreviewBounds(previewTerminalId, rect)
     const unwatch = watchOverlays((open) => setPreviewVisible(previewTerminalId, !open))
     return () => {
       unwatch()

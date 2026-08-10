@@ -1,5 +1,6 @@
 import { useBrowserStore } from '@/store/browser-store'
 import {
+  onPreviewClosed,
   onPreviewPopup,
   onPreviewState,
   previewBack,
@@ -80,8 +81,14 @@ export function wirePreviewEvents(): () => void {
   const unPopup = onPreviewPopup((e) => {
     void previewNavigate(e.terminalId, e.url).catch(logSoft)
   })
+  // Rust closed a webview we didn't ask it to (pane killed, shell exited, a
+  // same-id respawn): fold that into the store the same way the user's own
+  // close button does, so a stale preview doesn't survive it and the next
+  // preview_open doesn't recreate a webview with nothing left to show it.
+  const unClosed = onPreviewClosed((e) => closePreview(e.terminalId))
   return () => {
     void unState.then((f) => f())
     void unPopup.then((f) => f())
+    void unClosed.then((f) => f())
   }
 }

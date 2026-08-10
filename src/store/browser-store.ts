@@ -70,6 +70,10 @@ export const useBrowserStore = create<BrowserStore>((set) => ({
       if (ev.url !== undefined) next = applyUrl(next, ev.url)
       if (ev.title !== undefined) next = { ...next, title: ev.title }
       if (ev.loading !== undefined) next = { ...next, loading: ev.loading }
+      // next stays reference-equal to p only when ev carried no fields at all
+      // (every branch above was skipped) — an empty ping must not churn every
+      // subscriber with a fresh previews map for a genuinely no-op event.
+      if (next === p) return s
       return { previews: { ...s.previews, [terminalId]: next } }
     }),
 }))

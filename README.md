@@ -389,8 +389,8 @@ On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the term
 - **One visual style.** VS Code Dark Modern only; a light theme is on the list.
 - **War Room membership doesn't survive a pane restart.** Re-drag the pane.
 - **The preview column has no devtools, zoom, multiple tabs, or per-terminal
-  cookie isolation.** A page that fails to load shows your OS's default error
-  page rather than a Swarmterm one.
+  cookie isolation.** A page that fails to load shows an error page or a
+  blank view, depending on platform, rather than a Swarmterm one.
 - **No terminal search yet.**
 - **Linux** paths are implemented but less thoroughly tested than Windows and macOS.
 

@@ -72,8 +72,21 @@ pub fn kill_terminal(app: AppHandle, state: State<'_, AppState>, id: String) {
     // A dead pane's preview must not linger as an orphaned native webview
     // painting over nothing. Idempotent with the renderer's GC sweep and with
     // read_loop below — whoever runs second finds the label gone.
+    //
+    // Closing the webview here is a Rust-side event the renderer's own
+    // setup/cleanup effects never see (this can fire on a same-id respawn or
+    // an agent/cwd/shell switch, not just a pane close), so emit preview:closed
+    // to fold it into browser-store — otherwise the address bar shows a stale
+    // preview and the next preview_open recreates the webview hidden with no
+    // effect re-run left to show it.
     if let Some(webview) = app.get_webview(&crate::preview::preview_label(&id)) {
         let _ = webview.close();
+        let _ = app.emit(
+            "preview:closed",
+            &crate::preview::PreviewClosedEvent {
+                terminal_id: id.clone(),
+            },
+        );
     }
     // A respawned pane reuses its id, so a stale `connected` verdict would
     // survive into the new shell and hide the very failure the status line

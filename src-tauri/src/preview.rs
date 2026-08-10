@@ -56,6 +56,18 @@ pub struct PreviewPopupEvent {
     pub url: String,
 }
 
+/// Wire shape consumed by `onPreviewClosed` in src/tauri/preview.ts. Emitted
+/// whenever Rust closes a webview outside the renderer's own `closePreview`
+/// call (pane killed, shell exited on its own) — the renderer's visibility
+/// effects assume a webview's lifetime is bounded by their own setup/cleanup,
+/// so a Rust-side close must tell the store or the next `preview_open`
+/// recreates the webview hidden with nothing left to show it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewClosedEvent {
+    pub terminal_id: String,
+}
+
 fn emit_state(app: &AppHandle, ev: PreviewStateEvent) {
     let _ = app.emit("preview:state", &ev);
 }
@@ -89,7 +101,7 @@ pub fn preview_open(
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(target))
         // The gate agent-supplied and in-page navigations share; the omnibox
         // is looser (it turns junk into searches) but only ever submits http(s).
-        .on_navigation(|url| matches!(url.scheme(), "http" | "https"))
+        .on_navigation(is_http)
         .on_page_load(move |webview, payload| {
             emit_state(
                 webview.app_handle(),
@@ -116,7 +128,7 @@ pub fn preview_open(
         // the OS window, hand the URL to the renderer, which navigates this
         // same preview — session history keeps Back working.
         .on_new_window(move |url, _features| {
-            if matches!(url.scheme(), "http" | "https") {
+            if is_http(&url) {
                 let _ = app_popup.emit(
                     "preview:popup",
                     &PreviewPopupEvent {
@@ -244,6 +256,15 @@ mod tests {
         let json = serde_json::to_value(&ev).unwrap();
         assert_eq!(json["terminalId"], "t1");
         assert_eq!(json["url"], "https://a/");
+    }
+
+    #[test]
+    fn closed_event_serializes_camelcase() {
+        let ev = PreviewClosedEvent {
+            terminal_id: "t1".into(),
+        };
+        let json = serde_json::to_value(&ev).unwrap();
+        assert_eq!(json["terminalId"], "t1");
     }
 
     #[test]
