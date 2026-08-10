@@ -32,6 +32,7 @@ import {
 } from '@/lib/agent-sessions'
 import { LayoutPreview } from './LayoutPreview'
 import { SessionRow } from './SessionRow'
+import { SessionsDialog } from './SessionsDialog'
 
 const DEFAULT_TERMINAL_COUNT = 2
 
@@ -68,7 +69,7 @@ export function Welcome(): ReactElement {
   const [sessions, setSessions] = useState<AgentSessionEntry[]>([])
   const [tickedSessions, setTickedSessions] = useState<ReadonlySet<string>>(new Set())
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all')
-  const [sessionsExpanded, setSessionsExpanded] = useState(false)
+  const [sessionsDialogOpen, setSessionsDialogOpen] = useState(false)
 
   // Pre-fill the home directory on mount, unless a folder is already chosen.
   useEffect(() => {
@@ -144,9 +145,10 @@ export function Welcome(): ReactElement {
   useEffect(() => {
     setSessions([])
     setTickedSessions(new Set())
-    // A filter chosen for one project is meaningless for the next.
+    // A filter chosen for one project is meaningless for the next — and so
+    // is a dialog left open over the next folder's list.
     setSessionFilter('all')
-    setSessionsExpanded(false)
+    setSessionsDialogOpen(false)
     if (trimmedFolder === '') return
     let cancelled = false
     void listAgentSessions(trimmedFolder)
@@ -173,7 +175,7 @@ export function Welcome(): ReactElement {
   // under one filter still counts once the user switches tabs.
   const tabCounts = sessionTabCounts(sessions)
   const filteredSessions = filterSessions(sessions, sessionFilter)
-  const visibleSessions = visibleSlice(filteredSessions, sessionsExpanded, VISIBLE_SESSION_ROWS)
+  const visibleSessions = visibleSlice(filteredSessions, false, VISIBLE_SESSION_ROWS)
 
   const toggleSession = (key: string): void => {
     setTickedSessions((prev) => {
@@ -385,12 +387,7 @@ export function Welcome(): ReactElement {
                       type="button"
                       aria-pressed={active}
                       disabled={empty}
-                      onClick={() => {
-                        if (tab === sessionFilter) return
-                        setSessionFilter(tab)
-                        // A new filter is a new list — restart from the head.
-                        setSessionsExpanded(false)
-                      }}
+                      onClick={() => setSessionFilter(tab)}
                       className={cn(
                         'flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs',
                         // Matches the terminal-count tile buttons' selected/idle
@@ -410,7 +407,7 @@ export function Welcome(): ReactElement {
                   )
                 })}
               </div>
-              <div className={cn('space-y-0.5 overflow-y-auto', sessionsExpanded && 'max-h-56')}>
+              <div className="space-y-0.5">
                 {visibleSessions.map((s) => {
                   const key = sessionKey(s)
                   const ticked = tickedSessions.has(key)
@@ -428,10 +425,10 @@ export function Welcome(): ReactElement {
               {hiddenCount(filteredSessions.length, false, VISIBLE_SESSION_ROWS) > 0 && (
                 <button
                   type="button"
-                  onClick={() => setSessionsExpanded((v) => !v)}
+                  onClick={() => setSessionsDialogOpen(true)}
                   className="mx-auto mt-1 block text-xs text-muted-foreground hover:text-foreground"
                 >
-                  {sessionsExpanded ? 'Show less ▴' : `Show all (${filteredSessions.length}) ▾`}
+                  Show all ({filteredSessions.length})
                 </button>
               )}
             </div>
@@ -640,6 +637,16 @@ export function Welcome(): ReactElement {
           </div>
         </section>
       </div>
+
+      <SessionsDialog
+        open={sessionsDialogOpen}
+        onClose={() => setSessionsDialogOpen(false)}
+        sessions={sessions}
+        tickedKeys={tickedSessions}
+        onToggle={toggleSession}
+        canTickMore={canTickMore}
+        slotsLeft={maxTiles - totalPaneCount}
+      />
     </div>
   )
 }
