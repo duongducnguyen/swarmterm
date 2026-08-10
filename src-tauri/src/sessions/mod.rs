@@ -22,9 +22,6 @@ pub struct SessionEntry {
     pub updated_at_ms: u64,
 }
 
-/// Newest-N per store before the frontend merges — bounds IPC payload size.
-pub const PER_AGENT_CAP: usize = 20;
-
 /// First 128 KB of a session file, lossily decoded. Session files can be
 /// hundreds of MB; the title always lives in the first few lines.
 const HEAD_CAP: usize = 128 * 1024;

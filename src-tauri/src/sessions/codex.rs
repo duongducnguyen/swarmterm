@@ -4,7 +4,7 @@
 //! filter key). v1 skips zstd-compressed cold rollouts (`.jsonl.zst`) and
 //! `codex exec` runs (the CLI's own picker hides those too).
 
-use super::{clean_title, mtime_ms, read_head, SessionEntry, PER_AGENT_CAP};
+use super::{clean_title, mtime_ms, read_head, SessionEntry};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -110,8 +110,8 @@ pub fn scan(sessions_root: &Path, folder: &str) -> Vec<SessionEntry> {
             updated_at_ms: mtime_ms(&path),
         });
     }
+    // No cap — see claude.rs: scan cost is already paid, payload is tiny.
     out.sort_by_key(|s| std::cmp::Reverse(s.updated_at_ms));
-    out.truncate(PER_AGENT_CAP);
     out
 }
 

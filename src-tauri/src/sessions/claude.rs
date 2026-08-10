@@ -5,7 +5,7 @@
 //! best-effort per line — an unreadable line is skipped, an unreadable file
 //! contributes nothing.
 
-use super::{clean_title, mtime_ms, read_head, SessionEntry, PER_AGENT_CAP};
+use super::{clean_title, mtime_ms, read_head, SessionEntry};
 use serde_json::Value;
 use std::path::Path;
 
@@ -88,8 +88,9 @@ pub fn scan(projects_root: &Path, folder: &str) -> Vec<SessionEntry> {
             updated_at_ms: mtime_ms(&path),
         });
     }
+    // No cap: the scan already paid to read every file's head, entries are
+    // ~200 bytes each, and the all-sessions dialog makes long lists usable.
     out.sort_by_key(|s| std::cmp::Reverse(s.updated_at_ms));
-    out.truncate(PER_AGENT_CAP);
     out
 }
 

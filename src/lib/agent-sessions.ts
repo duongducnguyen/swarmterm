@@ -67,8 +67,9 @@ export function sessionTabCounts(sessions: AgentSessionEntry[]): Record<string, 
 /**
  * Filter (installed CLI, known template, valid id), dedupe, sort newest-
  * first. Invalid ids are dropped here — not at render time — so nothing
- * downstream ever handles an id that could not be resumed. No cap: the
- * backend already bounds payload (≤20/agent); visibility is a view concern.
+ * downstream ever handles an id that could not be resumed. No cap anywhere:
+ * the stores return everything (entries are ~200 bytes) and visibility is a
+ * view concern — the inline list slices, the dialog scrolls and searches.
  */
 export function mergeSessions(
   entries: AgentSessionEntry[],

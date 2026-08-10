@@ -5,7 +5,7 @@
 //! list --format json` is the public interface: run with cwd = the composer
 //! folder, it scopes to that project and already excludes child sessions.
 
-use super::{SessionEntry, PER_AGENT_CAP};
+use super::SessionEntry;
 use serde_json::Value;
 use std::time::Duration;
 
@@ -53,7 +53,6 @@ pub(crate) fn parse_session_list(json: &str) -> Vec<SessionEntry> {
                 updated_at_ms,
             })
         })
-        .take(PER_AGENT_CAP)
         .collect()
 }
 
