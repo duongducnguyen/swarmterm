@@ -228,19 +228,15 @@ function logoTsx() {
 
 ${component(
   'Logo',
-  COMPACT,
+  FULL,
   `/**
- * The Swarmterm mark for in-app chrome.
- *
- * This is the reduced form: the prompt alone, drawn heavy, with no extrusion.
- * The only surface that renders it is the title bar at 16px, and at that size
- * the extruded box collapses into a smudge — its strokes land below one pixel.
- * The chrome behind the glyph stands in for the box's front face.
- *
- * The full extruded mark ships as artwork instead, where it is seen large:
- * \`src-tauri/icon-source.svg\` and \`docs/images/logo-*.png\`.
- *
+ * The Swarmterm mark: a terminal prompt on the front face of an extruded box.
  * Strokes inherit \`currentColor\`, so it themes with whatever chrome hosts it.
+ *
+ * Render it at **24px or larger**. Below that the extrusion collapses — at 16px
+ * its strokes land under one pixel — and the mark also stops out-weighing the
+ * icon buttons beside it, so a toolbar button reads as the brand instead.
+ * Small rasters use the compact art in this script rather than this component.
  */`,
 )}`
 }

@@ -92,10 +92,15 @@ Tile radius is 22.5% of the square — Apple's squircle approximation, and
 Notion's. The mark sits at 72% of the tile.
 
 `Logo.tsx` has to be a TSX component, not an imported `.svg`: Vite resolves SVG
-imports to a URL, and a URL cannot inherit `currentColor`. It exports the
-**compact** art and nothing else — the title bar at 16px is the only surface in
-the app that renders the logo, and shipping an unused full-mark component would
-be dead code.
+imports to a URL, and a URL cannot inherit `currentColor`. It carries the full
+mark and the title bar renders it at **24px**, not at the 16px of the Lucide
+icons around it.
+
+Two things forced that size up. The extrusion collapses below it — the same
+sub-pixel problem the rasters have. And at 16px the bare mark weighs less than
+the sidebar-toggle button sitting immediately to its left, so the eye reads that
+button as the brand: a boxed glyph next to an unboxed one wins regardless of
+which is the logo. A logo that loses to a toolbar button is not a logo.
 
 The favicon likewise carries the compact mark: an SVG cannot swap art by
 rendered size, and a favicon is only ever drawn at 16-32px.
@@ -110,6 +115,20 @@ lines and stays cross-platform — no `iconutil`, which is macOS-only.
 The `.icns` is emitted with PNG chunk types only (`icp4` … `ic10`). The legacy
 RLE types (`is32`/`il32` and their masks) have not been needed since 10.7 and
 `iconutil` itself no longer writes them.
+
+### Icons are compiled into the binary
+
+`tauri_build` embeds the bundle icons at compile time — they become the default
+window icon, and on macOS the Dock icon under `tauri dev`, which runs an
+unbundled executable with no `Info.plist` to read. Cargo only reruns a build
+script when something it was told to watch changes, and `tauri_build` does not
+declare the icon directory, so regenerating icons alone left the **old** icon
+compiled in with nothing in the build output to say so. `build.rs` now declares
+`cargo:rerun-if-changed=icons`.
+
+This was caught by searching the running binary for the new PNG's bytes, which
+is also the way to re-check it: the file on disk being correct proves nothing
+about what the running process is drawing.
 
 ## Theme
 
@@ -152,9 +171,9 @@ Done:
   all ten slots, so macOS accepts it.
 - `npm test` (651 passing), `npx tsc --noEmit` clean.
 
-Still to do by hand:
-
-- `npm run tauri dev` — title bar mark and the real window and tray icons.
+- `npm run tauri dev` on macOS: the Dock icon shows the extruded box and the
+  title bar shows it at 24px. Confirmed against a screen capture, and the new
+  PNG's bytes were found inside the running binary.
 
 ## Known limit
 
