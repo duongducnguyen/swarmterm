@@ -1,19 +1,3 @@
-/**
- * Turn user address-bar input into a canonical http(s) URL string, or null when
- * it cannot be interpreted as a web address. A bare `host:port` (or host) gets
- * an `http://` prefix; existing http/https URLs are normalised via the URL parser.
- */
-export function normalizeUrl(input: string): string | null {
-  const trimmed = input.trim()
-  if (trimmed === '') return null
-  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
-  try {
-    return new URL(candidate).href
-  } catch {
-    return null
-  }
-}
-
 /** `:3000` is a port, not a scheme — hence the digit lookahead. */
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:(?!\d)/i
 const LOOPBACK_RE = /^(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i

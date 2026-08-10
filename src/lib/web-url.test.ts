@@ -1,22 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeUrl, searchOrUrl } from './web-url'
-
-describe('normalizeUrl', () => {
-  it('keeps http/https urls as-is', () => {
-    expect(normalizeUrl('http://localhost:3000')).toBe('http://localhost:3000/')
-    expect(normalizeUrl('https://example.com/x')).toBe('https://example.com/x')
-  })
-  it('adds http:// to a bare host:port', () => {
-    expect(normalizeUrl('localhost:5173')).toBe('http://localhost:5173/')
-  })
-  it('trims surrounding whitespace', () => {
-    expect(normalizeUrl('  localhost:8080  ')).toBe('http://localhost:8080/')
-  })
-  it('returns null for empty or junk', () => {
-    expect(normalizeUrl('')).toBeNull()
-    expect(normalizeUrl('   ')).toBeNull()
-  })
-})
+import { searchOrUrl } from './web-url'
 
 describe('searchOrUrl', () => {
   it('passes through explicit http/https urls', () => {

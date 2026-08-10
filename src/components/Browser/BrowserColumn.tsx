@@ -1,15 +1,18 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, type ReactElement } from 'react'
 import { useAppStore } from '@/store/app-store'
 import { useBrowserStore } from '@/store/browser-store'
 import { findLeaf } from '@/lib/layout-tree'
+import { watchOverlays } from '@/lib/overlay-watch'
+import { setPreviewVisible, syncPreviewBounds } from '@/lib/preview-registry'
 import { AddressBar } from './AddressBar'
 
 /**
  * The 3rd column, scoped to the focused terminal: each terminal owns at most
- * one preview URL, so "switching tabs" is just focusing another pane. The web
- * renders in an in-DOM iframe (no focus steal, no z-order/paint bugs); a
- * pop-out button in AddressBar opens a real WebviewWindow for sites that
- * block framing.
+ * one preview URL, so "switching tabs" is just focusing another pane. The page
+ * renders in a NATIVE child webview glued to the placeholder div below —
+ * that's what lets sites that refuse framing (X-Frame-Options) render at all.
+ * The invariant that keeps the native view honest: it is visible iff this
+ * placeholder is mounted AND no overlay (menu/dialog) is open above it.
  */
 export function BrowserColumn(): ReactElement {
   const focusedTerminalId = useAppStore((s) => {
@@ -20,27 +23,66 @@ export function BrowserColumn(): ReactElement {
   const preview = useBrowserStore((s) =>
     focusedTerminalId ? (s.previews[focusedTerminalId] ?? null) : null
   )
-  const [reloadNonce, setReloadNonce] = useState(0)
+  const placeholderRef = useRef<HTMLDivElement | null>(null)
+  const previewTerminalId = preview && focusedTerminalId ? focusedTerminalId : null
+
+  // Bounds: keep the native webview glued to the placeholder. ResizeObserver
+  // misses position-only shifts (e.g. the macOS fullscreen chrome dodge
+  // translates the whole app), so a slow interval backstops it — the registry
+  // dedupes identical bounds, making the idle cost one getBoundingClientRect.
+  useEffect(() => {
+    if (!previewTerminalId) return
+    const el = placeholderRef.current
+    if (!el) return
+    let raf = 0
+    const sync = (): void => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect()
+        syncPreviewBounds(previewTerminalId, rect)
+      })
+    }
+    sync()
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    window.addEventListener('resize', sync)
+    const backstop = window.setInterval(sync, 500)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      window.removeEventListener('resize', sync)
+      window.clearInterval(backstop)
+    }
+  }, [previewTerminalId])
+
+  // Visibility invariant: shown while mounted with no overlay open; hidden the
+  // moment this effect tears down (panel tab switch, pane drag flipping the
+  // panel to War Room, focus moving to a pane without a preview, unmount).
+  useEffect(() => {
+    if (!previewTerminalId) return
+    const unwatch = watchOverlays((open) => setPreviewVisible(previewTerminalId, !open))
+    return () => {
+      unwatch()
+      setPreviewVisible(previewTerminalId, false)
+    }
+  }, [previewTerminalId])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background">
-      <AddressBar
-        terminalId={focusedTerminalId}
-        preview={preview}
-        onReload={() => setReloadNonce((n) => n + 1)}
-      />
+      <AddressBar terminalId={focusedTerminalId} preview={preview} />
       <div className="flex min-h-0 flex-1 flex-col">
         {preview && focusedTerminalId ? (
-          /* Keyed by terminal (not url): switching panes or reloading remounts
-             the frame, while in-terminal navigation just swaps src and lets
-             the iframe navigate itself. */
-          <iframe
-            key={`${focusedTerminalId}:${reloadNonce}`}
-            src={preview.url}
-            title={preview.title ?? preview.url}
-            className="min-h-0 w-full flex-1 border-0 bg-white"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+          /* The native webview paints over this div; the dimmed URL beneath is
+             what shows whenever the webview is suppressed (overlay open) or
+             still loading its first paint — never a bare white flash. */
+          <div
+            ref={placeholderRef}
+            className="flex min-h-0 w-full flex-1 items-center justify-center bg-muted/30"
+          >
+            <span className="max-w-[80%] truncate text-xs text-muted-foreground">
+              {preview.title ?? preview.url}
+            </span>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
             No preview for this terminal

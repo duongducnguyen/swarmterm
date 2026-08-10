@@ -19,10 +19,6 @@ export interface BrowserStore {
   /** Create the terminal's preview, or navigate it if one already exists. */
   openPreview: (terminalId: string, url: string) => void
   closePreview: (terminalId: string) => void
-  navigate: (terminalId: string, url: string) => void
-  setTitle: (terminalId: string, title: string) => void
-  goBack: (terminalId: string) => void
-  goForward: (terminalId: string) => void
   /** Fold a `preview:state` event (real navigation/title/loading) into the store. */
   applyNavState: (terminalId: string, ev: { url?: string; title?: string; loading?: boolean }) => void
 }
@@ -64,40 +60,6 @@ export const useBrowserStore = create<BrowserStore>((set) => ({
       const previews = { ...s.previews }
       delete previews[terminalId]
       return { previews }
-    }),
-
-  navigate: (terminalId, url) =>
-    set((s) => {
-      const p = s.previews[terminalId]
-      if (!p) return s
-      return { previews: { ...s.previews, [terminalId]: pushUrl(p, url) } }
-    }),
-
-  setTitle: (terminalId, title) =>
-    set((s) => {
-      const p = s.previews[terminalId]
-      if (!p) return s
-      return { previews: { ...s.previews, [terminalId]: { ...p, title } } }
-    }),
-
-  goBack: (terminalId) =>
-    set((s) => {
-      const p = s.previews[terminalId]
-      if (!p || p.historyIndex <= 0) return s
-      const historyIndex = p.historyIndex - 1
-      return {
-        previews: { ...s.previews, [terminalId]: { ...p, historyIndex, url: p.history[historyIndex] } },
-      }
-    }),
-
-  goForward: (terminalId) =>
-    set((s) => {
-      const p = s.previews[terminalId]
-      if (!p || p.historyIndex >= p.history.length - 1) return s
-      const historyIndex = p.historyIndex + 1
-      return {
-        previews: { ...s.previews, [terminalId]: { ...p, historyIndex, url: p.history[historyIndex] } },
-      }
     }),
 
   applyNavState: (terminalId, ev) =>

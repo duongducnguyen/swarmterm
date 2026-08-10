@@ -1,20 +1,22 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, RotateCw, X } from 'lucide-react'
-import { useBrowserStore, type Preview } from '@/store/browser-store'
-import { normalizeUrl } from '@/lib/web-url'
+import { type Preview } from '@/store/browser-store'
+import { searchOrUrl } from '@/lib/web-url'
+import {
+  closePreview,
+  openPreview,
+  previewGoBack,
+  previewGoForward,
+  reloadPreview
+} from '@/lib/preview-registry'
 import { openExternalWindow } from '@/tauri/popout'
 
 interface AddressBarProps {
   terminalId: string | null
   preview: Preview | null
-  onReload: () => void
 }
 
-export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): ReactElement {
-  const openPreview = useBrowserStore((s) => s.openPreview)
-  const closePreview = useBrowserStore((s) => s.closePreview)
-  const goBack = useBrowserStore((s) => s.goBack)
-  const goForward = useBrowserStore((s) => s.goForward)
+export function AddressBar({ terminalId, preview }: AddressBarProps): ReactElement {
   const [draft, setDraft] = useState(preview?.url ?? '')
 
   // Rendered unconditionally (not gated on `preview`) so the bar's layout
@@ -32,7 +34,7 @@ export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): 
     e.preventDefault()
     // No focused terminal (Welcome overlay, empty workspace) — nowhere to bind.
     if (!terminalId) return
-    const url = normalizeUrl(draft)
+    const url = searchOrUrl(draft)
     if (!url) return
     // openPreview creates or navigates — the same gesture either way.
     openPreview(terminalId, url)
@@ -44,7 +46,7 @@ export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): 
         type="button"
         aria-label="Back"
         disabled={backDisabled}
-        onClick={() => terminalId && goBack(terminalId)}
+        onClick={() => terminalId && previewGoBack(terminalId)}
         className="rounded p-1 hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
       >
         <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
@@ -53,7 +55,7 @@ export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): 
         type="button"
         aria-label="Forward"
         disabled={forwardDisabled}
-        onClick={() => terminalId && goForward(terminalId)}
+        onClick={() => terminalId && previewGoForward(terminalId)}
         className="rounded p-1 hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
       >
         <ArrowRight aria-hidden className="h-3.5 w-3.5" />
@@ -61,10 +63,10 @@ export function AddressBar({ terminalId, preview, onReload }: AddressBarProps): 
       <button
         type="button"
         aria-label="Reload"
-        onClick={onReload}
+        onClick={() => terminalId && reloadPreview(terminalId)}
         className="rounded p-1 hover:bg-muted"
       >
-        <RotateCw aria-hidden className="h-3.5 w-3.5" />
+        <RotateCw aria-hidden className={'h-3.5 w-3.5' + (preview?.loading ? ' animate-spin' : '')} />
       </button>
       <form onSubmit={submit} className="flex-1">
         <input

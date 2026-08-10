@@ -60,6 +60,7 @@ import {
   onWarRoomRooms
 } from '@/tauri/warroom'
 import { onPreviewOpen } from '@/tauri/preview'
+import { closePreview, openPreview, wirePreviewEvents } from '@/lib/preview-registry'
 import { onWorktreeSpawn, onWorktreeRemoved } from '@/tauri/worktree'
 import { showWindow } from '@/tauri/window'
 import type { CategoryId } from '@/components/Settings/SettingsView'
@@ -412,7 +413,7 @@ export default function App(): ReactElement {
       useAppStore.subscribe((state) => {
         const live = liveTerminalIds(state.workspaces)
         disposeOrphanTerminals(live)
-        const { previews, closePreview } = useBrowserStore.getState()
+        const { previews } = useBrowserStore.getState()
         for (const terminalId of Object.keys(previews)) {
           if (!live.has(terminalId)) closePreview(terminalId)
         }
@@ -443,16 +444,26 @@ export default function App(): ReactElement {
   // belongs to the terminal the user is looking at.
   useEffect(() => {
     const unlisten = onPreviewOpen((e) => {
-      useBrowserStore.getState().openPreview(e.terminalId, e.url)
+      openPreview(e.terminalId, e.url)
       const st = useAppStore.getState()
       const ws = st.workspaces.find((w) => w.id === st.activeWorkspaceId)
       const focused = ws ? findLeaf(ws.layout, ws.focusedLeafId)?.terminalId : undefined
-      if (focused === e.terminalId) useGitStore.getState().setMode('browser')
+      if (focused === e.terminalId) {
+        useGitStore.getState().setMode('browser')
+        // Creating a native webview can grab OS focus out from under the
+        // pane — same landing-after-everyone defence the drag/menu paths use.
+        deferReturnFocusToTerminal()
+      }
     })
     return () => {
       void unlisten.then((fn) => fn())
     }
-  }, [])
+  }, [deferReturnFocusToTerminal])
+
+  // Wire native webview navigation/title/loading and denied-popup events into
+  // the store — see lib/preview-registry.ts. Mount-once: the registry itself
+  // is a module singleton, this just attaches its listeners for the app's life.
+  useEffect(() => wirePreviewEvents(), [])
 
   // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
   // removed clears the binding and relocates the pane back to the workspace folder.
