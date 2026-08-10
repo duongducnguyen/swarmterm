@@ -7,43 +7,21 @@ use tauri::{App, Manager};
 
 use crate::pty::AppState;
 
-/// Build a 16x16 RGBA tray icon at runtime: a light rounded square with a dark
-/// ">" chevron (mirrors the Electron original, no shipped asset).
+/// Tray marks are rendered by `scripts/gen-logo.mjs` (`npm run logo`) as raw
+/// straight-alpha RGBA: this crate is built without tauri's `image-png`
+/// feature, so a PNG asset would need a decoder the runtime doesn't have —
+/// raw bytes feed `Image::new` directly.
+const TRAY_PX: u32 = 32;
+/// macOS shows the icon as a template image (alpha only, black ink), so the
+/// mark follows the menu bar's light/dark appearance like the system icons.
+#[cfg(target_os = "macos")]
+const TRAY_MARK: &[u8] = include_bytes!("../icons/tray-template-32.rgba");
+/// Windows/Linux trays keep color: the same compact tile as the app icon.
+#[cfg(not(target_os = "macos"))]
+const TRAY_MARK: &[u8] = include_bytes!("../icons/tray-color-32.rgba");
+
 fn tray_image() -> Image<'static> {
-    const SIZE: usize = 16;
-    let mut buf = vec![0u8; SIZE * SIZE * 4]; // RGBA, zero = transparent
-    let mut set = |x: i32, y: i32, r: u8, g: u8, b: u8| {
-        if x < 0 || y < 0 || x >= SIZE as i32 || y >= SIZE as i32 {
-            return;
-        }
-        let i = (y as usize * SIZE + x as usize) * 4;
-        buf[i] = r;
-        buf[i + 1] = g;
-        buf[i + 2] = b;
-        buf[i + 3] = 255;
-    };
-    for y in 1..15 {
-        for x in 1..15 {
-            let corner = (x == 1 || x == 14) && (y == 1 || y == 14);
-            if corner {
-                continue;
-            }
-            set(x, y, 0xe4, 0xe4, 0xe7);
-        }
-    }
-    for k in 0..4 {
-        set(5 + k, 4 + k, 0x18, 0x18, 0x1b);
-        set(6 + k, 4 + k, 0x18, 0x18, 0x1b);
-        set(5 + k, 11 - k, 0x18, 0x18, 0x1b);
-        set(6 + k, 11 - k, 0x18, 0x18, 0x1b);
-    }
-    // Cursor bar bên phải chevron — chỉnh sang cols 11-14 để tách rõ khỏi chevron
-    // (cols 5-9) ở 16x16, thay vì scale thẳng path "M11 13h4" của lucide.
-    for x in 11..=14 {
-        set(x, 8, 0x18, 0x18, 0x1b);
-        set(x, 9, 0x18, 0x18, 0x1b);
-    }
-    Image::new_owned(buf, SIZE as u32, SIZE as u32)
+    Image::new(TRAY_MARK, TRAY_PX, TRAY_PX)
 }
 
 pub fn show_main(app: &tauri::AppHandle) {
@@ -75,6 +53,9 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("main")
         .icon(tray_image())
+        // No-op off macOS, so `cfg!` beats a second attribute-gated builder
+        // statement for readability.
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip("Swarmterm")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -95,4 +76,17 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
         })
         .build(app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Image::new` trusts the declared dimensions — a regenerated blob of
+    /// the wrong size would render as sheared garbage rather than fail, so
+    /// pin the byte count to the declared 32×32 RGBA.
+    #[test]
+    fn tray_blob_matches_declared_size() {
+        assert_eq!(TRAY_MARK.len(), (TRAY_PX * TRAY_PX * 4) as usize);
+    }
 }
