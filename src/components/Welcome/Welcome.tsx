@@ -23,7 +23,6 @@ import { visibleSlice, hiddenCount } from '@/lib/list-paging'
 import {
   mergeSessions,
   sessionKey,
-  sessionTimeLabel,
   filterSessions,
   sessionTabCounts,
   SESSION_FILTER_TABS,
@@ -32,6 +31,7 @@ import {
   type SessionFilter
 } from '@/lib/agent-sessions'
 import { LayoutPreview } from './LayoutPreview'
+import { SessionRow } from './SessionRow'
 
 const DEFAULT_TERMINAL_COUNT = 2
 
@@ -174,6 +174,15 @@ export function Welcome(): ReactElement {
   const tabCounts = sessionTabCounts(sessions)
   const filteredSessions = filterSessions(sessions, sessionFilter)
   const visibleSessions = visibleSlice(filteredSessions, sessionsExpanded, VISIBLE_SESSION_ROWS)
+
+  const toggleSession = (key: string): void => {
+    setTickedSessions((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
   const totalPaneCount = terminalCount + resumePanes.length
   const maxTiles = TERMINAL_COUNTS[TERMINAL_COUNTS.length - 1] // 12
   const canTickMore = totalPaneCount < maxTiles
@@ -405,37 +414,14 @@ export function Welcome(): ReactElement {
                 {visibleSessions.map((s) => {
                   const key = sessionKey(s)
                   const ticked = tickedSessions.has(key)
-                  const disabled = !ticked && !canTickMore
                   return (
-                    <label
+                    <SessionRow
                       key={key}
-                      className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent',
-                        disabled && 'cursor-not-allowed opacity-50'
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={ticked}
-                        disabled={disabled}
-                        onChange={() =>
-                          setTickedSessions((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(key)) next.delete(key)
-                            else next.add(key)
-                            return next
-                          })
-                        }
-                        className="h-3.5 w-3.5 shrink-0 accent-primary"
-                      />
-                      <AgentIcon template={templateById(s.agentId)} className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={s.title}>
-                        {s.title}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {sessionTimeLabel(s.updatedAtMs, Date.now())}
-                      </span>
-                    </label>
+                      session={s}
+                      ticked={ticked}
+                      disabled={!ticked && !canTickMore}
+                      onToggle={() => toggleSession(key)}
+                    />
                   )
                 })}
               </div>
