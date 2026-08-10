@@ -3,6 +3,7 @@ mod commands;
 mod git;
 mod links;
 mod mcp;
+mod preview;
 mod pty;
 mod sessions;
 mod shell;
@@ -110,6 +111,14 @@ pub fn run() {
             commands::git_clear_worktree,
             commands::git_branch_unmerged_count,
             commands::ensure_repo_with_commit,
+            preview::preview_open,
+            preview::preview_navigate,
+            preview::preview_reload,
+            preview::preview_back,
+            preview::preview_forward,
+            preview::preview_set_bounds,
+            preview::preview_set_visible,
+            preview::preview_close,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
