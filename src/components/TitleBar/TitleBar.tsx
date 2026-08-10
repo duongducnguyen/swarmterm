@@ -8,9 +8,9 @@ import {
   PanelRightOpen,
   Radio,
   Square,
-  SquareTerminal,
   X
 } from 'lucide-react'
+import { Logo } from '@/components/Logo'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
@@ -90,7 +90,10 @@ export function TitleBar({ fullscreen }: TitleBarProps): ReactElement {
         >
           {visible ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
         </button>
-        <SquareTerminal className="h-4 w-4" />
+        {/* 24px, not the 16px of the icons around it: below that the extruded
+            box collapses, and the mark stops out-weighing the sidebar toggle
+            beside it — the button ends up reading as the brand. */}
+        <Logo className="h-6 w-6" />
         <span className="text-xs font-semibold">Swarmterm</span>
       </div>
 

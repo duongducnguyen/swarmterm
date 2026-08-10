@@ -32,6 +32,7 @@ Run from the repo root unless noted.
 | `npm run test:watch` | Vitest in watch mode. |
 | `npx tsc --noEmit` | Type-check the whole frontend (strict). |
 | `npm run build` | Frontend-only build (`tsc && vite build`) — no Rust. |
+| `npm run logo` | Regenerate every logo asset from `scripts/gen-logo.mjs` (also runs `tauri icon`). |
 | `npm run tauri build` | Production bundle (installer). |
 | `npm run tauri build -- --no-bundle` | Release binary, skip installer. |
 | `cargo test` *(from `src-tauri/`)* | Rust unit tests (pty/shell helpers). |
