@@ -15,9 +15,13 @@ exact file names, and update the `src` of the matching `<img>` tag in
 
 ## Shot list
 
+`logo-dark.png` and `logo-light.png` are **not** on this list — they are
+generated. Run `npm run logo` to rebuild them along with every other logo asset;
+editing them by hand gets overwritten. The README picks between the two with a
+`<picture>` element so the mark contrasts in either GitHub theme.
+
 | File | Suggested size | What should be in frame |
 |---|---|---|
-| `logo.png` | 256×256, transparent | The app icon. `src-tauri/icons/128x128@2x.png` works as a source. |
 | `hero.png` | 1600×900 | The whole app: navbar, three or four agent panes mid-work, right panel open. This is the shot that sells it — catch the agents while their output looks good. |
 | `composer.png` | 1200×750 | The Welcome screen: folder chosen, recent folders visible, agent steppers set, layout preview, worktree toggle on. |
 | `split-panes.png` | 1200×750 | A split layout with broadcast active — banner visible and the selected panes highlighted. |

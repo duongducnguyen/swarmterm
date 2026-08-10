@@ -1,7 +1,9 @@
 <div align="center">
 
-<!-- IMAGE: replace with docs/images/logo.png (256×256) — see docs/images/README.md -->
-<img src="https://placehold.co/128x128/1e1e1e/6b7280/png?text=LOGO" alt="Swarmterm" width="96" height="96">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.png">
+  <img src="docs/images/logo-light.png" alt="Swarmterm" width="96" height="96">
+</picture>
 
 # Swarmterm
 

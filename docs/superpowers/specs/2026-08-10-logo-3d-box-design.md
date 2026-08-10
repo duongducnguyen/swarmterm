@@ -45,6 +45,24 @@ Corners are quadratic Béziers, so a fillet's 45-degree point sits at
 No fills, no gradients, no colour. The mark is defined once and every asset is
 a projection of it.
 
+### The compact mark
+
+At a 16px icon the art canvas spans 11.5px and the 9.5-unit stroke lands at
+0.91px — below one pixel. The full mark fuses into a smudge, and neither a
+heavier stroke nor a shallower extrusion recovers it: five strokes do not fit.
+
+So rasters at or below **32 physical pixels** carry a reduced mark instead — the
+prompt alone, no extrusion, stroke 12, with the tile itself standing in for the
+front face. The glyph is redrawn rather than scaled up, because Lucide's chevron
+is as wide as its own stroke and reads as a blob once that stroke is 1.6px.
+
+The threshold follows physical pixels, not logical ones, so a 2x asset for a
+small slot still gets the detail its pixels can hold: `ic11` (16pt @2x, 32px) is
+compact while `ic12` (32pt @2x, 64px) is full.
+
+`tray.rs` reached the same conclusion by hand for its 16x16 pixel art, which is
+the strongest evidence the threshold is real and not a tuning failure.
+
 ### Rejected
 
 - **True isometric cube.** The most convincing volume, but the prompt has to lie
@@ -68,14 +86,30 @@ hand-edits drifting apart.
 | `public/favicon.svg` | adaptive: a `prefers-color-scheme` block inside the SVG flips the tile |
 | `src/components/Logo.tsx` | bare mark, inline, `currentColor` |
 | `docs/images/logo-dark.png`, `logo-light.png` | 256×256, for the README |
+| `src-tauri/icons/*` | every platform raster, via `tauri icon` |
 
 Tile radius is 22.5% of the square — Apple's squircle approximation, and
 Notion's. The mark sits at 72% of the tile.
 
 `Logo.tsx` has to be a TSX component, not an imported `.svg`: Vite resolves SVG
-imports to a URL, and a URL cannot inherit `currentColor`. Its viewBox stays
-`0 0 120 120`, which puts ink at 73% of the box — within a point of Lucide's
-75%, so it sits correctly beside the Lucide icons already in the title bar.
+imports to a URL, and a URL cannot inherit `currentColor`. It exports the
+**compact** art and nothing else — the title bar at 16px is the only surface in
+the app that renders the logo, and shipping an unused full-mark component would
+be dead code.
+
+The favicon likewise carries the compact mark: an SVG cannot swap art by
+rendered size, and a favicon is only ever drawn at 16-32px.
+
+`npm run logo` writes the sources, shells out to `tauri icon`, then overwrites
+the three outputs where small sizes matter. `tauri icon` scales one source to
+every size, so `icon.ico`, `icon.icns` and `32x32.png` come out of it as smudge
+at the low end; they are rebuilt from mixed art by encoders in the same script.
+Both container formats are a header plus PNG payloads, so this is a few dozen
+lines and stays cross-platform — no `iconutil`, which is macOS-only.
+
+The `.icns` is emitted with PNG chunk types only (`icp4` … `ic10`). The legacy
+RLE types (`is32`/`il32` and their masks) have not been needed since 10.7 and
+`iconutil` itself no longer writes them.
 
 ## Theme
 
@@ -107,11 +141,20 @@ Deliberately untouched:
 
 ## Verification
 
-- Render 16 / 24 / 32 / 48 / 128 / 512 px on both tiles and inspect. If 16px
-  muddies, lower `D` or raise the stroke; the fallback is hand-authoring the
-  16 and 32 px entries of the `.ico`.
-- `npm test`, `npx tsc --noEmit`.
-- `npm run tauri dev` — title bar mark and real window icon.
+Done:
+
+- Rasterised 16 / 20 / 24 / 32 / 48 / 64 px on both tiles and inspected at
+  nearest-neighbour zoom. The full mark failed at and below 32px, which is what
+  produced the compact mark above.
+- Re-checked by reading the **shipped** containers back rather than re-rendering:
+  every `.ico` and `.icns` entry carries the art its size calls for.
+- `iconutil --convert iconset` round-trips the hand-built `.icns` and recovers
+  all ten slots, so macOS accepts it.
+- `npm test` (651 passing), `npx tsc --noEmit` clean.
+
+Still to do by hand:
+
+- `npm run tauri dev` — title bar mark and the real window and tray icons.
 
 ## Known limit
 
