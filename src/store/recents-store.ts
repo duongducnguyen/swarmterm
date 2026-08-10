@@ -11,19 +11,13 @@ import { readRecents, addRecent, removeRecent, storeRecents } from '@/lib/recent
  */
 interface RecentsState {
   recents: string[]
-  /** Monotonic nonce — Welcome's "Show all" bumps it to ask the title-bar
-   *  search to open its dropdown. 0 means "never requested" so the search
-   *  can ignore the initial value on mount. */
-  searchRequest: number
   hydrate: () => void
   add: (path: string) => void
   remove: (path: string) => void
-  requestSearch: () => void
 }
 
 export const useRecentsStore = create<RecentsState>((set, get) => ({
   recents: [],
-  searchRequest: 0,
   hydrate: () => set({ recents: readRecents(window.localStorage) }),
   add: (path) => {
     const next = addRecent(get().recents, path)
@@ -34,6 +28,5 @@ export const useRecentsStore = create<RecentsState>((set, get) => ({
     const next = removeRecent(get().recents, path)
     set({ recents: next })
     storeRecents(window.localStorage, next)
-  },
-  requestSearch: () => set((s) => ({ searchRequest: s.searchRequest + 1 }))
+  }
 }))

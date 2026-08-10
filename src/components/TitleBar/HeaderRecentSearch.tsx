@@ -15,7 +15,6 @@ import { cn } from '@/lib/utils'
 export function HeaderRecentSearch(): ReactElement {
   const recents = useRecentsStore((s) => s.recents)
   const removeRecent = useRecentsStore((s) => s.remove)
-  const searchRequest = useRecentsStore((s) => s.searchRequest)
   const setWelcomeFolder = useAppStore((s) => s.setWelcomeFolder)
 
   const [query, setQuery] = useState('')
@@ -25,17 +24,6 @@ export function HeaderRecentSearch(): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const filtered = filterRecents(recents, query)
-
-  // Welcome's "Show all" asks us to open. Clear any stale filter first so the
-  // dropdown really shows ALL recents. The explicit setOpen matters when the
-  // input already has focus — focus() won't re-fire onFocus then. 0 is the
-  // store's initial value, so skipping it avoids auto-opening on mount.
-  useEffect(() => {
-    if (searchRequest === 0) return
-    setQuery('')
-    setOpen(true)
-    inputRef.current?.focus()
-  }, [searchRequest])
 
   // Keep the highlighted row in range as the filtered list changes.
   useEffect(() => {
