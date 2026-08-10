@@ -1,0 +1,538 @@
+# Tray Logo Refresh + Recents Dialog Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Ship the 3D-box logo to the tray/menu-bar icon (template mono on macOS, color tile elsewhere) and replace Welcome's Recent "Show all" title-bar-dropdown remote-control with a `RecentsDialog` modeled on `SessionsDialog`.
+
+**Architecture:** `scripts/gen-logo.mjs` (the logo's single source of truth) gains a tray art variant and emits two raw straight-alpha RGBA blobs; `tray.rs` embeds them with `include_bytes!` and deletes its hand-drawn pixel art. On the frontend, a new pick-one `RecentsDialog` component opens from Welcome's "Show all", after which the `searchRequest` nonce plumbing in `recents-store`/`HeaderRecentSearch` is dead code and is removed.
+
+**Tech Stack:** Node (resvg-js) for asset generation, Rust (tauri 2.11 tray API), React 19 + zustand + Tailwind.
+
+**Spec:** `docs/superpowers/specs/2026-08-10-tray-logo-and-recents-dialog-design.md`
+
+## Global Constraints
+
+- TypeScript is strict incl. `noUnusedLocals`/`noUnusedParameters` — dead code fails `npx tsc --noEmit`.
+- Comments explain *why*, not *what*; match the dense-rationale style of `tray.rs`/`terminal-registry.ts`.
+- Platform code behind `#[cfg(...)]`; no Windows/macOS-only assumptions elsewhere.
+- Before claiming done: `npm test`, `npx tsc --noEmit`, and `cargo test` (from `src-tauri/`) with output shown.
+- Verified facts (do not re-derive): resvg-js `render()` returns `{ pixels, width, height, asPng() }` and `pixels` **is premultiplied** (white@50% → `[128,128,128,128]`); tauri `Image::new(&[u8], u32, u32)` exists; the tauri crate is built **without** `image-png`; `TrayIconBuilder::icon_as_template` is available un-cfg'd (no-op off macOS); tray-icon 0.23.1 on macOS scales any icon to 18 pt height, so 32 px source = retina-sharp.
+
+---
+
+### Task 1: gen-logo.mjs — tray art + raw RGBA emit
+
+**Files:**
+- Modify: `scripts/gen-logo.mjs`
+
+**Interfaces:**
+- Produces: committed assets `src-tauri/icons/tray-template-32.rgba` (mono outline mark, black ink + alpha) and `src-tauri/icons/tray-color-32.rgba` (`DARK_COMPACT` tile), each exactly 32×32×4 = 4096 bytes, straight (un-premultiplied) alpha. Task 2 `include_bytes!`s these paths.
+
+- [ ] **Step 1: Add the tray SVG + rgba emitter to `scripts/gen-logo.mjs`**
+
+After `faviconSvg` (around line 196), add:
+
+```js
+/**
+ * Menu-bar (tray) mark: a rounded-square outline carrying the compact prompt.
+ * The filled tile the other assets use cannot work here — macOS draws the
+ * tray icon as a template (alpha only), so a filled square would be a solid
+ * blob. Line work instead, inset half a stroke so the outline isn't clipped.
+ */
+export function traySvg(ink = '#000000') {
+  const inset = COMPACT_STROKE / 2
+  const edge = CANVAS - COMPACT_STROKE
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS}" height="${CANVAS}" viewBox="0 0 ${CANVAS} ${CANVAS}">
+  <!-- ${GENERATED} -->
+  <g stroke="${ink}" ${strokeAttrs(COMPACT)}>
+    <rect x="${f(inset)}" y="${f(inset)}" width="${f(edge)}" height="${f(edge)}" rx="24" ry="24"/>
+${markGroup(COMPACT, CANVAS, '    ')}
+  </g>
+</svg>
+`
+}
+```
+
+After the `png` export (around line 303), add:
+
+```js
+/**
+ * Raw straight-alpha RGBA for `tray.rs`. The tauri crate ships without its
+ * PNG decoder feature, so the tray assets are raw bytes for `Image::new` —
+ * and tiny-skia's buffer is premultiplied, which `Image::new` does not
+ * expect, so alpha is divided back out here.
+ */
+export function rgba(svg, size) {
+  const img = new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render()
+  const px = Buffer.from(img.pixels)
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3]
+    if (a > 0 && a < 255) {
+      px[i] = Math.round((px[i] * 255) / a)
+      px[i + 1] = Math.round((px[i + 1] * 255) / a)
+      px[i + 2] = Math.round((px[i + 2] * 255) / a)
+    }
+  }
+  return px
+}
+```
+
+In `build()`, after the `docs/images/logo-light.png` write and **before** `if (!icons) return` (the blobs are committed inputs to `cargo test`, so they belong in the always-run section):
+
+```js
+  // Tray marks — see traySvg/rgba above. 32px = 16pt @2x; the tray-icon
+  // crate scales to the menu bar's 18pt itself.
+  write('src-tauri/icons/tray-template-32.rgba', rgba(traySvg(), 32))
+  write('src-tauri/icons/tray-color-32.rgba', rgba(DARK_COMPACT, 32))
+```
+
+- [ ] **Step 2: Generate and verify sizes**
+
+Run: `node scripts/gen-logo.mjs --no-icons && stat -f%z src-tauri/icons/tray-template-32.rgba src-tauri/icons/tray-color-32.rgba && git status --short`
+
+Expected: both files 4096 bytes; git shows only `scripts/gen-logo.mjs` modified + the two new `.rgba` files (proves the other outputs regenerated byte-identical).
+
+- [ ] **Step 3: Eyeball the art**
+
+Write the two marks as 128px PNGs into the scratchpad and view them (`traySvg` is exported for exactly this):
+
+```bash
+node -e "
+import('./scripts/gen-logo.mjs').then((m) => {
+  const fs = require('node:fs')
+  fs.writeFileSync('<scratchpad>/tray-template.png', m.png(m.traySvg('#ffffff'), 128))
+  fs.writeFileSync('<scratchpad>/tray-color.png', m.png(m.svgs.darkCompact, 128))
+})"
+```
+
+(The preview renders the template art in white because the real asset is black ink — invisible against a dark image viewer; only the ink color differs.)
+
+Expected: outline rounded square + `>_` prompt (template), dark tile + white `>_` (color).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/gen-logo.mjs src-tauri/icons/tray-template-32.rgba src-tauri/icons/tray-color-32.rgba
+git commit -m "feat(logo): emit raw-RGBA tray marks (template + color)"
+```
+
+---
+
+### Task 2: tray.rs — embed generated marks, template on macOS
+
+**Files:**
+- Modify: `src-tauri/src/tray.rs` (delete hand-drawn `tray_image`, lines ~10-47)
+
+**Interfaces:**
+- Consumes: the two `.rgba` assets from Task 1.
+- Produces: `fn tray_image() -> Image<'static>` (same name/signature the builder already calls); builder gains `.icon_as_template(cfg!(target_os = "macos"))`.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `src-tauri/src/tray.rs`:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Image::new` trusts the declared dimensions — a regenerated blob of
+    /// the wrong size would render as sheared garbage rather than fail, so
+    /// pin the byte count to the declared 32×32 RGBA.
+    #[test]
+    fn tray_blob_matches_declared_size() {
+        assert_eq!(TRAY_MARK.len(), (TRAY_PX * TRAY_PX * 4) as usize);
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run (from `src-tauri/`): `cargo test tray_blob`
+Expected: compile error — `TRAY_MARK`/`TRAY_PX` not found.
+
+- [ ] **Step 3: Implement**
+
+Replace the whole hand-drawn `tray_image()` (the doc comment + `fn tray_image` block, lines ~10-47) with:
+
+```rust
+/// Tray marks are rendered by `scripts/gen-logo.mjs` (`npm run logo`) as raw
+/// straight-alpha RGBA: this crate is built without tauri's `image-png`
+/// feature, so a PNG asset would need a decoder the runtime doesn't have —
+/// raw bytes feed `Image::new` directly.
+const TRAY_PX: u32 = 32;
+/// macOS shows the icon as a template image (alpha only, black ink), so the
+/// mark follows the menu bar's light/dark appearance like the system icons.
+#[cfg(target_os = "macos")]
+const TRAY_MARK: &[u8] = include_bytes!("../icons/tray-template-32.rgba");
+/// Windows/Linux trays keep color: the same compact tile as the app icon.
+#[cfg(not(target_os = "macos"))]
+const TRAY_MARK: &[u8] = include_bytes!("../icons/tray-color-32.rgba");
+
+fn tray_image() -> Image<'static> {
+    Image::new(TRAY_MARK, TRAY_PX, TRAY_PX)
+}
+```
+
+In `setup_tray`, chain the template flag right after `.icon(tray_image())` (the method is a no-op off macOS, so `cfg!` beats an attribute-gated second builder statement for readability):
+
+```rust
+        .icon(tray_image())
+        .icon_as_template(cfg!(target_os = "macos"))
+```
+
+- [ ] **Step 4: Run tests**
+
+Run (from `src-tauri/`): `cargo test`
+Expected: all pass, including `tray_blob_matches_declared_size`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src-tauri/src/tray.rs
+git commit -m "feat(tray): use generated logo marks, template icon on macOS"
+```
+
+---
+
+### Task 3: RecentsDialog + Welcome wiring
+
+**Files:**
+- Create: `src/components/Welcome/RecentsDialog.tsx`
+- Modify: `src/components/Welcome/Welcome.tsx`
+
+**Interfaces:**
+- Consumes: `filterRecents(recents, query)` / `folderName(path)` from `@/lib/recent-folders`; `useRecentsStore` (`recents`, `remove`); `SessionsDialog`'s overlay conventions (`role="dialog"` + `aria-modal` keep `overlay-watch`/`terminal-focus` working for free).
+- Produces: `RecentsDialog({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (path: string) => void })` — Task 5's docs describe this behavior.
+
+- [ ] **Step 1: Create `src/components/Welcome/RecentsDialog.tsx`**
+
+```tsx
+import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { Search, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { filterRecents, folderName } from '@/lib/recent-folders'
+import { useRecentsStore } from '@/store/recents-store'
+
+interface RecentsDialogProps {
+  open: boolean
+  onClose: () => void
+  /** The picked path — Welcome points this at the Working-folder field. */
+  onPick: (path: string) => void
+}
+
+/**
+ * Modal over EVERY recent folder: search on top, pick-one list below. Unlike
+ * SessionsDialog's tick-many, choosing a row is terminal — it fills the
+ * Working-folder field and closes. Recents live in the global store (not
+ * per-folder props) so removal here updates the composer list and the
+ * title-bar dropdown alike. Hand-rolled overlay per SessionsDialog;
+ * role="dialog" is what overlay-watch and terminal-focus key on.
+ */
+export function RecentsDialog({ open, onClose, onPick }: RecentsDialogProps): ReactElement | null {
+  const recents = useRecentsStore((s) => s.recents)
+  const removeRecent = useRecentsStore((s) => s.remove)
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // "Show all" means ALL: every visit restarts unfiltered with the caret in
+  // the search box. Runs after the open render, so the input exists.
+  useEffect(() => {
+    if (open) {
+      setQuery('')
+      inputRef.current?.focus()
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  const visible = filterRecents(recents, query)
+
+  const choose = (path: string): void => {
+    onPick(path)
+    onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Recent folders"
+        className="flex h-[440px] max-h-[85vh] w-[520px] max-w-[90vw] flex-col overflow-hidden rounded-lg border border-border bg-card text-sm shadow-lg"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="m-3 mb-2 flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 focus-within:ring-1 focus-within:ring-ring">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search recent folders…"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1.5">
+          {visible.length === 0 ? (
+            <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
+              No matching folders
+            </div>
+          ) : (
+            visible.map((path) => (
+              <div
+                key={path}
+                role="button"
+                tabIndex={0}
+                onClick={() => choose(path)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    choose(path)
+                  }
+                }}
+                className="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+              >
+                <span
+                  title={folderName(path)}
+                  className="min-w-0 max-w-[50%] shrink-0 truncate text-sm font-medium text-foreground"
+                >
+                  {folderName(path)}
+                </span>
+                <span title={path} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  {path}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeRecent(path)
+                  }}
+                  aria-label={`Remove ${folderName(path)} from recents`}
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2.5">
+          <span className="mr-auto text-xs tabular-nums text-muted-foreground">
+            {recents.length} {recents.length === 1 ? 'folder' : 'folders'}
+          </span>
+          <Button size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+- [ ] **Step 2: Wire it into `Welcome.tsx`**
+
+Four edits:
+
+1. Import (next to the `SessionsDialog` import):
+
+```tsx
+import { RecentsDialog } from './RecentsDialog'
+```
+
+2. Replace the store hook (line ~57)
+
+```tsx
+  const requestRecentsSearch = useRecentsStore((s) => s.requestSearch)
+```
+
+with local dialog state (next to `sessionsDialogOpen`, line ~72):
+
+```tsx
+  const [recentsDialogOpen, setRecentsDialogOpen] = useState(false)
+```
+
+3. In the Recent section, update the comment (lines ~301-303) and the "Show all" button's `onClick` (line ~353):
+
+```tsx
+          {/* Recent folders — inline list capped at VISIBLE_RECENT_ROWS;
+              "Show all" opens the searchable pick-one dialog over the full
+              list (the title-bar search dropdown stays for quick picks). */}
+```
+
+```tsx
+                  onClick={() => setRecentsDialogOpen(true)}
+```
+
+4. Render the dialog next to `<SessionsDialog>` at the bottom. Recents are
+   global, not per-folder, so the open flag is deliberately NOT reset by the
+   folder-change effect that closes the sessions dialog:
+
+```tsx
+      <RecentsDialog
+        open={recentsDialogOpen}
+        onClose={() => setRecentsDialogOpen(false)}
+        onPick={setFolder}
+      />
+```
+
+- [ ] **Step 3: Verify**
+
+Run: `npx tsc --noEmit && npm test`
+Expected: type-check clean (note `requestSearch` still exists in the store — it goes away in Task 4), all Vitest suites pass.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/components/Welcome/RecentsDialog.tsx src/components/Welcome/Welcome.tsx
+git commit -m "feat(welcome): Recent 'Show all' opens a pick-one folders dialog"
+```
+
+---
+
+### Task 4: Remove the searchRequest nonce plumbing
+
+**Files:**
+- Modify: `src/store/recents-store.ts`
+- Modify: `src/components/TitleBar/HeaderRecentSearch.tsx`
+
+**Interfaces:**
+- Consumes: nothing new. After Task 3, nothing bumps the nonce — this deletes the dead remote-control path.
+- Produces: `RecentsState` without `searchRequest`/`requestSearch`.
+
+- [ ] **Step 1: Trim `recents-store.ts`**
+
+Delete the `searchRequest` doc comment + field, the `requestSearch` declaration (lines ~14-17, 21), and the `requestSearch` implementation (line ~38). Update the store's header comment by dropping nothing else — it only describes `recents`. Resulting interface/store:
+
+```ts
+interface RecentsState {
+  recents: string[]
+  hydrate: () => void
+  add: (path: string) => void
+  remove: (path: string) => void
+}
+
+export const useRecentsStore = create<RecentsState>((set, get) => ({
+  recents: [],
+  hydrate: () => set({ recents: readRecents(window.localStorage) }),
+  add: (path) => {
+    const next = addRecent(get().recents, path)
+    set({ recents: next })
+    storeRecents(window.localStorage, next)
+  },
+  remove: (path) => {
+    const next = removeRecent(get().recents, path)
+    set({ recents: next })
+    storeRecents(window.localStorage, next)
+  }
+}))
+```
+
+- [ ] **Step 2: Trim `HeaderRecentSearch.tsx`**
+
+Delete the `searchRequest` selector (line ~18) and the whole "Welcome's Show all asks us to open" effect (lines ~29-38). Everything else (focus → dropdown, filtering, ✕ removal) stays.
+
+- [ ] **Step 3: Verify**
+
+Run: `npx tsc --noEmit && npm test`
+Expected: clean — strict `noUnusedLocals` proves no consumer of the nonce remains.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/store/recents-store.ts src/components/TitleBar/HeaderRecentSearch.tsx
+git commit -m "refactor(recents): drop the Show-all searchRequest nonce"
+```
+
+---
+
+### Task 5: Docs — README + smoke checklist
+
+**Files:**
+- Modify: `README.md` (~line 206-208)
+- Modify: `docs/manual-smoke-tests.md` (~lines 19-25 area and 194-197)
+
+- [ ] **Step 1: README**
+
+Replace (lines ~206-208):
+
+```
+Tabs above the list filter it to one agent (All · Claude Code · Codex ·
+OpenCode), and both this list and Recent show a short head you can expand
+with "Show all".
+```
+
+with:
+
+```
+Tabs above the list filter it to one agent (All · Claude Code · Codex ·
+OpenCode), and both this list and Recent show a short head — "Show all"
+opens a searchable dialog over the full list (for Recent, clicking a row
+fills the Working-folder field).
+```
+
+- [ ] **Step 2: Smoke checklist**
+
+In the app-shell/tray section (after the close-to-tray items, ~line 25), add:
+
+```
+- [ ] The tray/menu-bar icon shows the box-logo mark (macOS: monochrome
+      template that flips with the menu-bar theme; Windows/Linux: the color
+      compact tile).
+```
+
+Replace the two stale "Show all" items (~lines 194-197):
+
+```
+- [ ] More than 6 sessions → "Show all (N) ▾" expands into a scrollable
+      list; switching tabs collapses it; ticks survive tab switches and the
+      "k selected" badge stays visible while a filter hides them.
+- [ ] More than 5 recent folders → Recent shows 5 + "Show all (N) ▾";
+      expanding and collapsing works and never pushes Create off-screen.
+```
+
+with:
+
+```
+- [ ] More than 6 sessions → "Show all (N)" opens the two-column sessions
+      dialog (agent rail + search); ticks made there survive Done/Esc and
+      tab switches.
+- [ ] More than 5 recent folders → Recent shows 5 + "Show all (N)"; it opens
+      the Recent-folders dialog — search filters, clicking a row fills
+      Working folder and closes, ✕ removes, Esc/backdrop/Done dismiss.
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add README.md docs/manual-smoke-tests.md
+git commit -m "docs: tray logo + recents dialog behavior"
+```
+
+---
+
+### Task 6: Full verification + live smoke
+
+- [ ] **Step 1: Full gates**
+
+Run: `npm test && npx tsc --noEmit && (cd src-tauri && cargo test)`
+Expected: all green; paste output.
+
+- [ ] **Step 2: Live smoke (macOS, this machine)**
+
+Run `npm run tauri dev` in the background; verify in the running app: menu-bar icon is the new outline mark and adapts to menu-bar appearance; Recent "Show all" opens the dialog; search/pick/remove/Esc work; title-bar search dropdown still works on focus. Note results (CJK/Windows/Linux visuals can't be verified here — say so rather than claim).
