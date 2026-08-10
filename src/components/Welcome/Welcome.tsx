@@ -53,6 +53,7 @@ export function Welcome(): ReactElement {
   const recents = useRecentsStore((s) => s.recents)
   const addRecentFolder = useRecentsStore((s) => s.add)
   const removeRecentFolder = useRecentsStore((s) => s.remove)
+  const requestRecentsSearch = useRecentsStore((s) => s.requestSearch)
   const availability = useAgentAvailabilityStore((s) => s.availability)
 
   const [terminalCount, setTerminalCount] = useState<number>(DEFAULT_TERMINAL_COUNT)
@@ -66,7 +67,6 @@ export function Welcome(): ReactElement {
 
   const [sessions, setSessions] = useState<AgentSessionEntry[]>([])
   const [tickedSessions, setTickedSessions] = useState<ReadonlySet<string>>(new Set())
-  const [recentsExpanded, setRecentsExpanded] = useState(false)
   const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all')
   const [sessionsExpanded, setSessionsExpanded] = useState(false)
 
@@ -250,7 +250,7 @@ export function Welcome(): ReactElement {
   // so the legend exactly matches what the preview shows.
   const legendIds = [...new Set([...agentIds, ...resumePanes.map((p) => p.agentId)])]
 
-  const visibleRecents = visibleSlice(recents, recentsExpanded, VISIBLE_RECENT_ROWS)
+  const visibleRecents = visibleSlice(recents, false, VISIBLE_RECENT_ROWS)
 
   return (
     <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center px-10 py-6">
@@ -287,13 +287,15 @@ export function Welcome(): ReactElement {
             </div>
           </div>
 
-          {/* Recent folders — inline list, expandable past VISIBLE_RECENT_ROWS */}
+          {/* Recent folders — inline list capped at VISIBLE_RECENT_ROWS;
+              "Show all" hands off to the title-bar search dropdown, which
+              lists everything and filters as you type. */}
           {visibleRecents.length > 0 && (
             <div className="mt-5">
               <p className="mb-2 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Recent
               </p>
-              <div className={cn('space-y-0.5 overflow-y-auto', recentsExpanded && 'max-h-56')}>
+              <div className="space-y-0.5">
                 {visibleRecents.map((path) => (
                   <div
                     key={path}
@@ -337,10 +339,10 @@ export function Welcome(): ReactElement {
               {hiddenCount(recents.length, false, VISIBLE_RECENT_ROWS) > 0 && (
                 <button
                   type="button"
-                  onClick={() => setRecentsExpanded((v) => !v)}
+                  onClick={requestRecentsSearch}
                   className="mx-auto mt-1 block text-xs text-muted-foreground hover:text-foreground"
                 >
-                  {recentsExpanded ? 'Show less ▴' : `Show all (${recents.length}) ▾`}
+                  Show all ({recents.length})
                 </button>
               )}
             </div>
