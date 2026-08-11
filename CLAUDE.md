@@ -12,9 +12,11 @@ shell back), plus an optional Chrome-style web-preview column. Built on
 **Tauri 2 + Rust** (frontend: **React 19 + TypeScript + Vite**). Ported from an
 earlier Electron app; no state is persisted between launches by design.
 
-`README.md` is the end-user guide (English) — what the app does and how to use
-it, no code guidance. The manual smoke-test checklist is
-`docs/manual-smoke-tests.md`. Update both when you ship user-visible behaviour.
+`README.md` is a short user-facing intro (the pitch, install, first run) and
+`docs/user-guide.md` is the detailed end-user guide — both English, no code
+guidance. The manual smoke-test checklist is `docs/manual-smoke-tests.md`.
+Update them when you ship user-visible behaviour: new features go into the
+guide (and README only if they change one of its three core ideas).
 
 **Cross-platform intent:** build for macOS and Linux as well as Windows, even
 though primary development happens on Windows. Don't hard-code Windows-only
@@ -227,10 +229,12 @@ first for anything non-trivial.
 
 ## Docs map
 
-- `README.md` — user-facing guide (English): what problems the app solves,
-  feature walkthrough, install, shortcuts, troubleshooting, limits. No
-  architecture or folder tree — that lives here. Screenshots are placehold.co
+- `README.md` — short user-facing intro (English): the pitch as three core
+  ideas, install, first run. No feature walkthrough (that's the user guide) and
+  no architecture or folder tree — that lives here. Screenshots are placehold.co
   placeholders until real ones land; `docs/images/README.md` has the shot list.
+- `docs/user-guide.md` — the detailed end-user guide: feature walkthrough,
+  shortcuts, troubleshooting, known limits.
 - `CONTRIBUTING.md` — how to build, test, and submit changes; the CI contract.
 - `docs/manual-smoke-tests.md` — release smoke checklist.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).
