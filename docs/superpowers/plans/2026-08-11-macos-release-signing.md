@@ -139,7 +139,10 @@ Expected: either `No submission history` or a table of past submissions. Any
 `HTTP 401` / `403` means the key's role is too low — raise it to **App Manager**
 in App Store Connect and retry.
 
-- [ ] **Step 6: Back up the certificate**
+- [ ] **Step 6: Back up the certificate** — *deferred by decision on 2026-08-12.*
+  Losing the keychain is recoverable (revoke, re-issue from a new CSR, ~10
+  minutes) and the `.p12` is only strictly needed when CI arrives, so this step
+  moves to the GitHub Actions work. The commands stay here for that day.
 
 The private key exists in exactly one keychain on one machine; losing it means
 re-issuing the certificate and re-signing every future release. Export an

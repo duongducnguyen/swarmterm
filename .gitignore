@@ -26,3 +26,12 @@ dist-ssr
 
 # superpowers brainstorming mockups
 .superpowers/
+
+# Apple signing material — never commit. `.env*` above already covers
+# .env.release; these patterns stop a stray key copied into the repo root,
+# and the negation keeps the credential-less template trackable.
+*.p8
+*.p12
+*.cer
+*.certSigningRequest
+!.env.release.example
