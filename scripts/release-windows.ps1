@@ -38,7 +38,9 @@ if (($env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'PRIVATE KEY') -and
 
 $version = (Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
 Write-Host "==> building NSIS installer (v$version)"
-npm run tauri build -- --bundles nsis
+# npx, not `npm run tauri -- …`: PowerShell swallows a bare `--`, npm then
+# eats `--bundles` as its own flag, and cargo receives a stray `nsis`.
+npx tauri build --bundles nsis
 if ($LASTEXITCODE -ne 0) { Die "tauri build failed" }
 
 $setup = "src-tauri/target/release/bundle/nsis/Swarmterm_${version}_x64-setup.exe"
