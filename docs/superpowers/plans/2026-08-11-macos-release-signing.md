@@ -249,6 +249,9 @@ git commit -m "build(macos): bundle config floor + TCC usage descriptions"
 **Files:**
 - Create: `scripts/release-macos.sh`
 - Modify: `package.json` (the `scripts` object, currently lines 12-20)
+- Modify: `.gitignore` — `.env*` (line 25) also swallows `.env.release.example`,
+  so a `!.env.release.example` negation is required for the template to be
+  trackable. Verify with `git add --dry-run .env.release.example`.
 
 **Interfaces:**
 - Consumes: `.env.release` from Task 1; the bundle config from Task 2.
@@ -309,7 +312,11 @@ else
   rustup target list --installed | grep -qx x86_64-apple-darwin \
     || die "missing rust target — run: rustup target add x86_64-apple-darwin"
   TARGET=universal-apple-darwin
-  BUNDLES=dmg
+  # `app` is listed alongside `dmg` on purpose: asked for the disk image alone,
+  # the bundler deletes the .app it built from once the image is sealed, and
+  # the signature assertions below would have nothing left to inspect.
+  # (Learned the hard way on the first real run, 2026-08-12.)
+  BUNDLES=app,dmg
 fi
 
 echo "==> building ($TARGET, --bundles $BUNDLES)"

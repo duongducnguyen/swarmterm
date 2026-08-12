@@ -46,7 +46,10 @@ else
   rustup target list --installed | grep -qx x86_64-apple-darwin \
     || die "missing rust target — run: rustup target add x86_64-apple-darwin"
   TARGET=universal-apple-darwin
-  BUNDLES=dmg
+  # `app` is listed alongside `dmg` on purpose: asked for the disk image alone,
+  # the bundler deletes the .app it built from once the image is sealed, and
+  # the signature assertions below would have nothing left to inspect.
+  BUNDLES=app,dmg
 fi
 
 echo "==> building ($TARGET, --bundles $BUNDLES)"
