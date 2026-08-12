@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "logo": "node scripts/gen-logo.mjs",
+    "release:mac": "bash scripts/release-macos.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },

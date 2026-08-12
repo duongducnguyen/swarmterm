@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated bundle plist by the Tauri bundler.
+
+  A pane's shell runs whatever the user types, so it reaches Desktop,
+  Documents and Downloads routinely. macOS attributes the resulting TCC prompt
+  to Swarmterm; without these strings the prompt body is empty and reads like a
+  malfunction, which is a good way to get denied.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Swarmterm runs the shell commands you type, which may read or write files on your Desktop.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Swarmterm runs the shell commands you type, which may read or write files in your Documents folder.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Swarmterm runs the shell commands you type, which may read or write files in your Downloads folder.</string>
+</dict>
+</plist>

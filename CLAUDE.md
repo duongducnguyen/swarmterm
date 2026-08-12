@@ -237,4 +237,7 @@ first for anything non-trivial.
   shortcuts, troubleshooting, known limits.
 - `CONTRIBUTING.md` — how to build, test, and submit changes; the CI contract.
 - `docs/manual-smoke-tests.md` — release smoke checklist.
+- `docs/release-macos.md` — signing and notarizing a macOS release: one-time
+  Apple setup, the four `.env.release` variables, `npm run release:mac`, and the
+  Gatekeeper troubleshooting table.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).
