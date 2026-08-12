@@ -45,6 +45,10 @@ import { Workspace, PaneDragGhost } from '@/components/Workspace/Workspace'
 import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
+import { useUpdaterStore } from '@/store/updater-store'
+import { STARTUP_CHECK_DELAY_MS } from '@/lib/updater-flow'
+import { onUpdateCheckRequested } from '@/tauri/updater'
+import { UpdateToast } from '@/components/UpdateToast'
 import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
@@ -465,6 +469,23 @@ export default function App(): ReactElement {
   // is a module singleton, this just attaches its listeners for the app's life.
   useEffect(() => wirePreviewEvents(), [])
 
+  // One silent update check per launch, a few seconds after boot so it never
+  // competes with pty spawn; failures are swallowed by the flow reducer.
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => void useUpdaterStore.getState().check(false),
+      STARTUP_CHECK_DELAY_MS
+    )
+    return () => window.clearTimeout(t)
+  }, [])
+
+  // Tray "Check for Updates…" → manual check (talkative: reports up-to-date
+  // and failures in the toast).
+  useEffect(() => {
+    const unlisten = onUpdateCheckRequested(() => void useUpdaterStore.getState().check(true))
+    return () => void unlisten.then((fn) => fn())
+  }, [])
+
   // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
   // removed clears the binding and relocates the pane back to the workspace folder.
   useEffect(() => {
@@ -609,6 +630,8 @@ export default function App(): ReactElement {
           />
         )}
       </div>
+
+      <UpdateToast />
     </div>
   )
 }
