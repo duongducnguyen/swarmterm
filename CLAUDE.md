@@ -211,6 +211,15 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   are denied and navigate the same preview in place. Webviews close on
   terminal death in `kill_terminal` AND `read_loop` (belt-and-braces, like the
   War Room auto-leave).
+- **Auto-update.** `tauri-plugin-updater` against GitHub Releases
+  (`latest.json` assembled by `scripts/release/publish.mjs` onto a draft
+  release — see `docs/release-process.md`). Updater trust is the minisign key
+  in `~/Developer/apple-signing/` — losing it strands every shipped app.
+  Decision rules live in `lib/updater-flow.ts` (silent startup check vs
+  talkative tray check). The update toast is bottom-left on purpose (the
+  native preview webview paints over DOM on the right) and is deliberately
+  not an overlay-watch overlay. Windows: `downloadAndInstall` never resolves
+  — the NSIS installer exits the app.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 - **Session resume.** The composer's "Resume sessions" list is read live from
@@ -237,7 +246,12 @@ first for anything non-trivial.
   shortcuts, troubleshooting, known limits.
 - `CONTRIBUTING.md` — how to build, test, and submit changes; the CI contract.
 - `docs/manual-smoke-tests.md` — release smoke checklist.
+- `docs/release-process.md` — the cross-platform release flow: version bump,
+  the draft-release meeting point, `latest.json`, and updater key management.
+  Start here when releasing.
 - `docs/release-macos.md` — signing and notarizing a macOS release: one-time
-  Apple setup, the four `.env.release` variables, `npm run release:mac`, and the
+  Apple setup, the `.env.release` variables, `npm run release:mac`, and the
   Gatekeeper troubleshooting table.
+- `docs/release-windows.md` — the Windows NSIS build: one-time machine setup,
+  `npm run release:win`, and the SmartScreen (unsigned build) story.
 - `docs/war-room-demo.md` — scripted War Room demo (Claude Code × Codex).

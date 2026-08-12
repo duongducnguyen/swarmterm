@@ -227,3 +227,32 @@ has never run Swarmterm from source. Details in
 - [ ] A War Room message reaches a second pane.
 - [ ] Prompts for Desktop/Documents/Downloads access name Swarmterm and carry a
       readable explanation (the `Info.plist` usage strings).
+
+## Windows release
+
+Run against the installer produced by `npm run release:win`, ideally on a
+machine that never built Swarmterm. Details in
+[`release-windows.md`](release-windows.md).
+
+- [ ] A freshly downloaded `…x64-setup.exe` shows SmartScreen's "Windows
+      protected your PC"; **More info → Run anyway** proceeds.
+- [ ] Install completes per-user with no admin prompt; the app launches.
+- [ ] A terminal pane spawns and runs `dir`; closing the pane leaves no
+      orphaned shell in Task Manager.
+- [ ] Uninstall via Settings → Apps removes the Start Menu entry.
+
+## Auto-update
+
+Needs two published releases (the older installed locally). Full flow in
+[`release-process.md`](release-process.md).
+
+- [ ] Install the previous version; within ~10 s of launch the update toast
+      appears bottom-left naming the newer version.
+- [ ] **Dismiss** hides it; tray → **Check for Updates…** brings it back.
+- [ ] **Download** shows progress; macOS then offers **Restart to update**
+      and relaunching lands on the new version (check the tray tooltip /
+      About); on Windows the installer runs and the app comes back updated.
+- [ ] On the freshly updated build, tray → **Check for Updates…** reports
+      "Swarmterm is up to date".
+- [ ] With Wi-Fi off, launching the app shows no update UI at all; the tray
+      check surfaces a dismissible error toast.

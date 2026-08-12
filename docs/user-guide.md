@@ -89,6 +89,10 @@ Toggle it in **Settings → Terminal**. Swarmterm merge-writes the entry into `~
 
 **Closing the window hides Swarmterm to the tray** and everything keeps running; tray → **Quit** is what actually exits. Launching a second copy just focuses the window you already have. On Windows, closing a pane kills the entire process tree it started — no orphaned build servers.
 
+## Updates
+
+Shortly after launch, Swarmterm quietly checks GitHub Releases for a newer version. If one exists, a small notification appears bottom-left — nothing downloads until you click **Download**. When the download finishes, macOS offers **Restart to update**; on Windows the installer takes over and relaunches the app itself. To check on demand, use tray → **Check for Updates…** — that one also tells you when you're already up to date. Offline or flaky network? The automatic check stays silent; it never nags.
+
 ## What your agents can do
 
 Every pane is automatically connected to the app over MCP for exactly as long as it lives — nothing to configure. Agents that speak MCP (Claude Code, Codex, and others) can drive Swarmterm themselves: **open a web preview** beside their own pane, **spawn / list / remove worktrees** to hand tasks to fresh parallel agents (removal refuses uncommitted changes), and use the **War Room** — list peers, message them in probe or execute mode, read their inbox and reply.
