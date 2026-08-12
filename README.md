@@ -11,8 +11,8 @@
 
 Real split terminals, one git worktree per agent — and an app your agents can drive themselves.
 
-<!-- IMAGE: replace with docs/images/hero.gif (a ~20s tour beats a still — see docs/images/README.md) -->
-<img src="https://placehold.co/1600x900/1e1e1e/6b7280/png?text=Demo" alt="Swarmterm demo" width="100%">
+<!-- IMAGE: upgrade to docs/images/hero.gif when a ~20s tour is recorded — see docs/images/README.md -->
+<img src="docs/images/hero.png" alt="Swarmterm — one window for a whole swarm of AI coding agents" width="100%">
 
 [<a href="https://swarmterm.dev">swarmterm.dev</a>] [<a href="#install--run">Install</a>] [<a href="docs/user-guide.md">User guide</a>] [<a href="docs/war-room-demo.md">War Room demo</a>] [<a href="CONTRIBUTING.md">Contributing</a>]
 
@@ -20,8 +20,6 @@ Real split terminals, one git worktree per agent — and an app your agents can 
 [![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#install--run)
 [![Status](https://img.shields.io/badge/status-pre--1.0-f97316)](#status)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-
-<sub>Screenshots are placeholders until real ones land — the shot list is in <a href="docs/images/README.md"><code>docs/images/README.md</code></a>.</sub>
 
 </div>
 

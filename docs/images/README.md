@@ -22,7 +22,7 @@ editing them by hand gets overwritten. The README picks between the two with a
 
 | File | Suggested size | What should be in frame |
 |---|---|---|
-| `hero.gif` (or `hero.png`) | 1600×900 | The whole app: navbar, three or four agent panes mid-work, right panel open. This is the shot that sells it — and an animated ~20 s tour (create workspace → agents typing → preview opens → War Room message) sells it far better than a still, which is why the big terminal projects (Zellij, Atuin, lazygit) all lead with a GIF. Fall back to a `.png` until one is recorded. |
+| `hero.gif` (or `hero.png`) | 1600×900 | The whole app: navbar, three or four agent panes mid-work, right panel open. This is the shot that sells it — and an animated ~20 s tour (create workspace → agents typing → preview opens → War Room message) sells it far better than a still, which is why the big terminal projects (Zellij, Atuin, lazygit) all lead with a GIF. **Current `hero.png` is a generated banner** (`node scripts/gen-banner.mjs` — code, not a blob; edit the script to tweak it) standing in until a real tour is recorded. |
 | `composer.png` | 1200×750 | The Welcome screen: folder chosen, recent folders visible, agent steppers set, layout preview, worktree toggle on. |
 | `split-panes.png` | 1200×750 | A split layout with broadcast active — banner visible and the selected panes highlighted. |
 | `war-room.png` | 1200×750 | The War Room panel: several room tabs, a transcript containing both a probe and an execute entry, member chips, moderator composer. |
