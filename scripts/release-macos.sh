@@ -32,6 +32,13 @@ fi
 security find-identity -v -p codesigning | grep -qF "$APPLE_SIGNING_IDENTITY" \
   || die "identity not usable in this keychain: $APPLE_SIGNING_IDENTITY"
 
+# createUpdaterArtifacts makes every build emit the updater's .app.tar.gz +
+# minisign signature; without the key the build itself fails halfway, so fail
+# fast and name the fix.
+for v in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+  [ -n "${!v:-}" ] || die "$v is unset — see .env.release.example (updater signing)"
+done
+
 if [ "$SMOKE" = 1 ]; then
   # Tauri notarizes whenever the notary variables are present, so the smoke
   # pass must actively remove them rather than merely not setting them.
@@ -70,6 +77,11 @@ EXPECTED_TEAM="$(sed -n 's/.*(\([A-Z0-9]\{10\}\))[[:space:]]*$/\1/p' <<<"$APPLE_
 [ -n "$EXPECTED_TEAM" ] || die "cannot parse a team id out of APPLE_SIGNING_IDENTITY"
 grep -q "^TeamIdentifier=$EXPECTED_TEAM" <<<"$SIGINFO" \
   || die "team identifier mismatch: expected $EXPECTED_TEAM"
+
+echo "==> verifying updater artifacts"
+UPDATER_TGZ="$APP.tar.gz"
+[ -f "$UPDATER_TGZ" ]     || die "updater artifact missing: $UPDATER_TGZ"
+[ -f "$UPDATER_TGZ.sig" ] || die "updater signature missing: $UPDATER_TGZ.sig"
 
 if [ "$SMOKE" = 1 ]; then
   echo "==> smoke build OK (signed, not notarized): $REPO_ROOT/$APP"
