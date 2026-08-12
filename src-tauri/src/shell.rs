@@ -264,7 +264,7 @@ fn probe_wsl() -> ShellEntry {
 /// Falls back to UTF-8 lossy when the buffer is not valid UTF-16.
 #[cfg(windows)]
 fn decode_utf16_lossy(bytes: &[u8]) -> String {
-    if bytes.len() >= 2 && bytes.len() % 2 == 0 {
+    if bytes.len() >= 2 && bytes.len().is_multiple_of(2) {
         let words: Vec<u16> = bytes
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
