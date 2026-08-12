@@ -1,6 +1,6 @@
 [package]
 name = "swarmterm"
-version = "1.0.0"
+version = "1.0.1"
 description = "One window for a whole swarm of AI coding agents — split terminals, per-agent git worktrees, live web previews, and a War Room where agents collaborate"
 authors = ["Duong Duc Nguyen"]
 license = "GPL-3.0-only"
