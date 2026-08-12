@@ -20,14 +20,22 @@ jobs:
       - run: npm test
 
   rust:
-    name: Rust (fmt + clippy + tests)
-    runs-on: ubuntu-latest
+    name: Rust (${{ matrix.os }})
+    # Windows is in the matrix so `#[cfg(windows)]` code actually compiles in
+    # CI — an Ubuntu-only matrix never sees it, and its warnings/breakage
+    # surface for the first time on a release machine.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: src-tauri
     steps:
       - uses: actions/checkout@v4
       - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev

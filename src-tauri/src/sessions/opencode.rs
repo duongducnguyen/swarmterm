@@ -70,8 +70,9 @@ pub async fn scan(folder: &str) -> Vec<SessionEntry> {
     #[cfg(windows)]
     {
         // CREATE_NO_WINDOW — same flag git.rs/shell.rs use so a GUI-launched
-        // release binary doesn't flash a console per probe.
-        use std::os::windows::process::CommandExt;
+        // release binary doesn't flash a console per probe. tokio's Command
+        // carries creation_flags natively; importing std's CommandExt here is
+        // an unused-import warning on Windows builds.
         cmd.creation_flags(0x0800_0000);
     }
     let output = match tokio::time::timeout(LIST_TIMEOUT, cmd.output()).await {

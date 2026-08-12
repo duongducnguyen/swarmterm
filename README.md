@@ -18,7 +18,7 @@ Real split terminals, one git worktree per agent — and an app your agents can 
 
 [![Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#install--run)
-[![Status](https://img.shields.io/badge/status-pre--1.0-f97316)](#status)
+[![Release](https://img.shields.io/github/v/release/duongducnguyen/swarmterm?color=22c55e)](https://github.com/duongducnguyen/swarmterm/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 </div>
@@ -75,7 +75,7 @@ From here, the **[user guide](docs/user-guide.md)** covers the rest.
 
 ## Status
 
-Pre-1.0 and moving fast, but already a daily driver for parallel agent work on Windows and macOS. Honest reasons to wait:
+1.0 is out — signed macOS and Windows builds with in-app auto-update — and it moves fast as a daily driver for parallel agent work. Honest reasons to wait:
 
 - you want workspaces to **survive a restart** — nothing persists between launches yet, by design;
 - you need a **light theme** or **terminal search** — neither exists yet;
