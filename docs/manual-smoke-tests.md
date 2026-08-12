@@ -210,3 +210,20 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
       the resume pane spawns at the session's original folder.
 - [ ] Switch agent on a resume pane via the header dropdown → pane respawns
       fresh (no --resume in the typed command).
+
+## Signed release (macOS)
+
+Run against the `.dmg` produced by `npm run release:mac`, ideally on a Mac that
+has never run Swarmterm from source. Details in
+[`release-macos.md`](release-macos.md).
+
+- [ ] The disk image opens with no Gatekeeper warning after
+      `xattr -w com.apple.quarantine "0083;00000000;Safari;" <dmg>`.
+- [ ] Dragging to Applications and launching shows no "unidentified developer"
+      or "damaged" dialog.
+- [ ] A terminal pane spawns and runs `ls`; a split pane spawns a second shell.
+- [ ] The web preview column loads `https://github.com`.
+- [ ] `echo $SWARMTERM_MCP_URL` inside a pane prints a loopback URL.
+- [ ] A War Room message reaches a second pane.
+- [ ] Prompts for Desktop/Documents/Downloads access name Swarmterm and carry a
+      readable explanation (the `Info.plist` usage strings).
