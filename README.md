@@ -14,10 +14,8 @@ Real split terminals, one git worktree per agent — and an app your agents can 
 <!-- IMAGE: upgrade to docs/images/hero.gif when a ~20s tour is recorded — see docs/images/README.md -->
 <img src="docs/images/hero.png" alt="Swarmterm — one window for a whole swarm of AI coding agents" width="100%">
 
-[<a href="https://swarmterm.dev">swarmterm.dev</a>] [<a href="#install--run">Install</a>] [<a href="docs/user-guide.md">User guide</a>] [<a href="docs/war-room-demo.md">War Room demo</a>] [<a href="CONTRIBUTING.md">Contributing</a>]
-
-[![Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
-[![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#install--run)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-0078d4)](https://github.com/duongducnguyen/swarmterm/releases/latest)
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-black)](https://github.com/duongducnguyen/swarmterm/releases/latest)
 [![Release](https://img.shields.io/github/v/release/duongducnguyen/swarmterm?color=22c55e)](https://github.com/duongducnguyen/swarmterm/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
@@ -43,7 +41,16 @@ Everything else hangs off those three ideas. The full tour — panes, broadcast,
 
 ## Install & run
 
-No prebuilt downloads yet — run it from source:
+Download from the [latest release](https://github.com/duongducnguyen/swarmterm/releases/latest):
+
+- **Windows** — `Swarmterm_x.y.z_x64-setup.exe`. Not code-signed yet, so SmartScreen warns on first run: **More info → Run anyway**.
+- **macOS** — `Swarmterm_x.y.z_universal.dmg`, signed and notarized (Intel + Apple Silicon).
+
+Both update themselves in-app from then on. Install whichever agent CLIs you plan to use (`claude`, `codex`, `opencode`) — anything missing just appears disabled.
+
+### Build from source
+
+The route for **Linux** (no packaged build yet) and for hacking on Swarmterm:
 
 ```bash
 git clone https://github.com/duongducnguyen/swarmterm.git
@@ -53,13 +60,7 @@ npm run tauri dev                    # develop / just use it
 npm run tauri build                  # installer / app bundle
 ```
 
-You need **Node.js 18+** (npm 10+) and a stable **Rust** toolchain from [rustup.rs](https://rustup.rs), plus per platform:
-
-- **Windows** — [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually preinstalled) and Microsoft C++ Build Tools.
-- **macOS** — Xcode Command Line Tools: `xcode-select --install`.
-- **Linux** — `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator3`, `build-essential` — see [Tauri prerequisites](https://tauri.app/start/prerequisites/).
-
-Install whichever agent CLIs you plan to use (`claude`, `codex`, `opencode`) — anything missing just appears disabled. The first build compiles the Rust side and takes a few minutes; later runs are fast.
+You need **Node.js 18+** (npm 10+) and a stable **Rust** toolchain from [rustup.rs](https://rustup.rs), plus per platform: on **Windows**, the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually preinstalled) and Microsoft C++ Build Tools; on **macOS**, Xcode Command Line Tools (`xcode-select --install`); on **Linux**, `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator3` and `build-essential` — see [Tauri prerequisites](https://tauri.app/start/prerequisites/). The first build compiles the Rust side and takes a few minutes.
 
 ---
 
@@ -75,11 +76,11 @@ From here, the **[user guide](docs/user-guide.md)** covers the rest.
 
 ## Status
 
-1.0 is out — signed macOS and Windows builds with in-app auto-update — and it moves fast as a daily driver for parallel agent work. Honest reasons to wait:
+1.0 is out — installers for macOS (signed & notarized) and Windows, with in-app auto-update — and it moves fast as a daily driver for parallel agent work. Honest reasons to wait:
 
 - you want workspaces to **survive a restart** — nothing persists between launches yet, by design;
 - you need a **light theme** or **terminal search** — neither exists yet;
-- you're on **Linux** — implemented, but the least-tested platform.
+- you're on **Linux** — no packaged build yet; it compiles from source, but it hasn't really been exercised there.
 
 The full list lives in the guide's [known limits](docs/user-guide.md#known-limits).
 
