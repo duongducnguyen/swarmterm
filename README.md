@@ -14,7 +14,7 @@ Real split terminals, one git worktree per agent — and an app your agents can 
 <!-- IMAGE: replace with docs/images/hero.gif (a ~20s tour beats a still — see docs/images/README.md) -->
 <img src="https://placehold.co/1600x900/1e1e1e/6b7280/png?text=Demo" alt="Swarmterm demo" width="100%">
 
-[<a href="#install--run">Install</a>] [<a href="docs/user-guide.md">User guide</a>] [<a href="docs/war-room-demo.md">War Room demo</a>] [<a href="CONTRIBUTING.md">Contributing</a>]
+[<a href="https://swarmterm.dev">swarmterm.dev</a>] [<a href="#install--run">Install</a>] [<a href="docs/user-guide.md">User guide</a>] [<a href="docs/war-room-demo.md">War Room demo</a>] [<a href="CONTRIBUTING.md">Contributing</a>]
 
 [![Tauri 2](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-6b7280)](#install--run)
