@@ -15,7 +15,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "logo": "node scripts/gen-logo.mjs",
+    "bump": "node scripts/bump-version.mjs",
     "release:mac": "bash scripts/release-macos.sh",
+    "release:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-windows.ps1",
+    "release:publish": "node scripts/release/publish.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
