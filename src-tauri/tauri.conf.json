@@ -28,10 +28,19 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420"
     }
   },
-  "plugins": {},
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCNjI3MkEwM0Q2MjdFOTYKUldTV2ZtSTlvSEppYTBvbndzYm55ZkkvZFVFUUt2MDFzZ2x5enZvU0pLNjMycjQyeTBqQ0JXc1EK",
+      "endpoints": [
+        "https://github.com/duongducnguyen/swarmterm/releases/latest/download/latest.json"
+      ],
+      "windows": { "installMode": "passive" }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",

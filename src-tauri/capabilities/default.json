@@ -22,6 +22,8 @@
     "core:webview:allow-create-webview-window",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
+    "updater:default",
+    "process:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
