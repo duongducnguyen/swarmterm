@@ -31,9 +31,18 @@ Swarmterm is a native desktop app (Tauri 2 + Rust, real PTY terminals, a VS Code
 
 **See the whole swarm.** A workspace is one window of real split terminal panes — live titles, an activity dot on any pane still producing output, and broadcast typing for when five agents should hear the same thing at once.
 
+<img src="docs/images/split-panes.png" alt="Broadcast ON — one line typed into three agent panes at once, the dev-server pane left out" width="100%">
+
 **Keep the work separate.** Flip one switch and every agent pane is born inside its own git worktree, on its own branch — separate, reviewable diffs from the very first edit, with a git panel to read them without leaving the app.
 
+<img src="docs/images/git-worktrees.png" alt="The Git panel — one swarm/* worktree per agent, changed files and an inline diff" width="100%">
+
 **Agents are users of the app, too.** Every pane is connected to Swarmterm itself, so agents don't just run *in* it: they put a live web preview beside their own pane, spin up isolated worktrees to delegate subtasks, and discuss work with each other — with you moderating.
+
+<p>
+  <img src="docs/images/web-preview.png" alt="An agent opened its dev server in the preview column beside its own pane" width="49.5%">
+  <img src="docs/images/war-room.png" alt="The War Room — agents debating a fix, with the user moderating and handing out tasks" width="49.5%">
+</p>
 
 Everything else hangs off those three ideas. The full tour — panes, broadcast, session resume, the web preview, the War Room, the status line, shortcuts, troubleshooting — lives in **[the user guide](docs/user-guide.md)**.
 
