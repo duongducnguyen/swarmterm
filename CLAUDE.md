@@ -215,11 +215,16 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   (`latest.json` assembled by `scripts/release/publish.mjs` onto a draft
   release — see `docs/release-process.md`). Updater trust is the minisign key
   in `~/Developer/apple-signing/` — losing it strands every shipped app.
-  Decision rules live in `lib/updater-flow.ts` (silent startup check vs
-  talkative tray check). The update toast is bottom-left on purpose (the
-  native preview webview paints over DOM on the right) and is deliberately
-  not an overlay-watch overlay. Windows: `downloadAndInstall` never resolves
-  — the NSIS installer exits the app.
+  Decision rules live in `lib/updater-flow.ts` (silent startup + periodic
+  checks vs talkative tray check). There is no toast and no in-app manual
+  check: the navbar `UpdateButton` (under Settings) only exists while an
+  update is known — its presence is the notification (`updateButtonView` maps
+  phase → button). Tray-check verdicts (up to date / failed) are native OS
+  dialogs via `showMessage` — which needs `dialog:allow-message` in
+  `capabilities/default.json`, or it rejects silently — dispatched from an
+  App.tsx store subscription so download progress never re-renders App.
+  Windows: `downloadAndInstall` never resolves — the NSIS installer exits the
+  app.
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 - **Session resume.** The composer's "Resume sessions" list is read live from

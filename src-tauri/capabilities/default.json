@@ -17,6 +17,7 @@
     "core:window:allow-start-dragging",
     "core:event:default",
     "dialog:allow-open",
+    "dialog:allow-message",
     "core:event:allow-listen",
     "core:event:allow-emit",
     "core:webview:allow-create-webview-window",

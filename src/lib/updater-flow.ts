@@ -31,6 +31,10 @@ export type UpdaterEvent =
 /** Delayed so the check never competes with pty spawn on boot. */
 export const STARTUP_CHECK_DELAY_MS = 5_000
 
+/** Swarmterm runs for days — without an in-app "check" button the periodic
+ * re-check is the only way a long-lived instance ever learns of a release. */
+export const PERIODIC_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
+
 export function reduceUpdater(state: UpdaterState, ev: UpdaterEvent): UpdaterState {
   switch (ev.type) {
     case 'check':
@@ -73,4 +77,33 @@ export function reduceUpdater(state: UpdaterState, ev: UpdaterEvent): UpdaterSta
 export function progressPercent(state: UpdaterState): number | null {
   if (state.phase !== 'downloading' || state.total === undefined || state.total <= 0) return null
   return Math.min(100, Math.round((state.downloaded / state.total) * 100))
+}
+
+/** What the navbar update button should show — or null, which is the normal
+ * state: the button only exists while there is an update to act on, so its
+ * mere presence is the notification. */
+export type UpdateButtonView =
+  | { kind: 'update'; label: string; tooltip: string }
+  | { kind: 'downloading'; label: string }
+  | { kind: 'restart'; label: string }
+
+export function updateButtonView(state: UpdaterState): UpdateButtonView | null {
+  switch (state.phase) {
+    case 'available':
+      return state.error
+        ? { kind: 'update', label: 'Retry update', tooltip: `Download failed: ${state.error}` }
+        : {
+            kind: 'update',
+            label: `Update to v${state.version}`,
+            tooltip: `Update to v${state.version}`
+          }
+    case 'downloading': {
+      const pct = progressPercent(state)
+      return { kind: 'downloading', label: pct === null ? 'Downloading…' : `Downloading… ${pct}%` }
+    }
+    case 'ready':
+      return { kind: 'restart', label: 'Restart to update' }
+    default:
+      return null
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { progressPercent, reduceUpdater, type UpdaterState } from './updater-flow'
+import { progressPercent, reduceUpdater, updateButtonView, type UpdaterState } from './updater-flow'
 
 const idle: UpdaterState = { phase: 'idle' }
 
@@ -78,5 +78,49 @@ describe('progressPercent', () => {
       progressPercent({ phase: 'downloading', version: 'v', downloaded: 50, total: 200 })
     ).toBe(25)
     expect(progressPercent({ phase: 'idle' })).toBeNull()
+  })
+})
+
+describe('updateButtonView', () => {
+  it('renders nothing until an update is actually known', () => {
+    expect(updateButtonView({ phase: 'idle' })).toBeNull()
+    expect(updateButtonView({ phase: 'checking', manual: true })).toBeNull()
+    expect(updateButtonView({ phase: 'upToDate' })).toBeNull()
+    expect(updateButtonView({ phase: 'error', message: 'm' })).toBeNull()
+  })
+
+  it('offers the update by version once available', () => {
+    expect(updateButtonView({ phase: 'available', version: '0.2.0' })).toEqual({
+      kind: 'update',
+      label: 'Update to v0.2.0',
+      tooltip: 'Update to v0.2.0'
+    })
+  })
+
+  it('turns into a retry with the error as tooltip after a failed download', () => {
+    expect(
+      updateButtonView({ phase: 'available', version: '0.2.0', error: 'sig mismatch' })
+    ).toEqual({
+      kind: 'update',
+      label: 'Retry update',
+      tooltip: 'Download failed: sig mismatch'
+    })
+  })
+
+  it('shows progress while downloading, indeterminate without a total', () => {
+    expect(
+      updateButtonView({ phase: 'downloading', version: 'v', downloaded: 50, total: 200 })
+    ).toEqual({ kind: 'downloading', label: 'Downloading… 25%' })
+    expect(updateButtonView({ phase: 'downloading', version: 'v', downloaded: 5 })).toEqual({
+      kind: 'downloading',
+      label: 'Downloading…'
+    })
+  })
+
+  it('asks for a restart once the download is staged', () => {
+    expect(updateButtonView({ phase: 'ready', version: '0.2.0' })).toEqual({
+      kind: 'restart',
+      label: 'Restart to update'
+    })
   })
 })

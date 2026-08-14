@@ -91,7 +91,7 @@ Toggle it in **Settings → Terminal**. Swarmterm merge-writes the entry into `~
 
 ## Updates
 
-Shortly after launch, Swarmterm quietly checks GitHub Releases for a newer version. If one exists, a small notification appears bottom-left — nothing downloads until you click **Download**. When the download finishes, macOS offers **Restart to update**; on Windows the installer takes over and relaunches the app itself. To check on demand, use tray → **Check for Updates…** — that one also tells you when you're already up to date. Offline or flaky network? The automatic check stays silent; it never nags.
+Swarmterm quietly checks GitHub Releases for a newer version shortly after launch, then every few hours while it stays open. When one exists, an **Update to vX.Y.Z** button appears at the bottom of the navbar, under Settings — nothing downloads until you click it. The button shows download progress, then turns into **Restart to update** (on Windows the installer takes over and relaunches the app itself). No update, no button — that's the whole notification. To check on demand, use tray → **Check for Updates…** — that one also tells you when you're already up to date, in a native dialog. Offline or flaky network? The automatic check stays silent; it never nags.
 
 ## What your agents can do
 

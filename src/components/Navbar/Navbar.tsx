@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { TerminalList } from '@/components/Navbar/TerminalList'
+import { UpdateButton } from '@/components/Navbar/UpdateButton'
 import { getAppVersion } from '@/tauri/app'
 
 interface NavbarProps {
@@ -180,6 +181,7 @@ export function Navbar({ onNewWorkspace, settingsOpen, onToggleSettings }: Navba
             <Settings className="h-4 w-4" />
             Settings
           </Button>
+          <UpdateButton />
           {version && (
             <p className="mt-1 border-t border-border pt-2 text-center text-[11px] tracking-wider text-muted-foreground/70">
               v{version}

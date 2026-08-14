@@ -46,9 +46,9 @@ import { Welcome } from '@/components/Welcome/Welcome'
 import { WorkspaceTabs } from '@/components/WorkspaceTabs/WorkspaceTabs'
 import { useBrowserStore } from '@/store/browser-store'
 import { useUpdaterStore } from '@/store/updater-store'
-import { STARTUP_CHECK_DELAY_MS } from '@/lib/updater-flow'
+import { PERIODIC_CHECK_INTERVAL_MS, STARTUP_CHECK_DELAY_MS } from '@/lib/updater-flow'
 import { onUpdateCheckRequested } from '@/tauri/updater'
-import { UpdateToast } from '@/components/UpdateToast'
+import { showMessage } from '@/tauri/dialog'
 import { useGitStore } from '@/store/git-store'
 import { useRecentsStore } from '@/store/recents-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
@@ -469,21 +469,46 @@ export default function App(): ReactElement {
   // is a module singleton, this just attaches its listeners for the app's life.
   useEffect(() => wirePreviewEvents(), [])
 
-  // One silent update check per launch, a few seconds after boot so it never
-  // competes with pty spawn; failures are swallowed by the flow reducer.
+  // Silent update checks: one a few seconds after boot (never competing with
+  // pty spawn), then periodically — Swarmterm runs for days, and the navbar
+  // update button only ever appears through these. Failures are swallowed by
+  // the flow reducer. The periodic tick only fires from idle so it can never
+  // clobber a known update or an in-flight download.
   useEffect(() => {
-    const t = window.setTimeout(
-      () => void useUpdaterStore.getState().check(false),
-      STARTUP_CHECK_DELAY_MS
-    )
-    return () => window.clearTimeout(t)
+    const check = () => void useUpdaterStore.getState().check(false)
+    const t = window.setTimeout(check, STARTUP_CHECK_DELAY_MS)
+    const i = window.setInterval(() => {
+      if (useUpdaterStore.getState().state.phase === 'idle') check()
+    }, PERIODIC_CHECK_INTERVAL_MS)
+    return () => {
+      window.clearTimeout(t)
+      window.clearInterval(i)
+    }
   }, [])
 
   // Tray "Check for Updates…" → manual check (talkative: reports up-to-date
-  // and failures in the toast).
+  // and failures in a native dialog).
   useEffect(() => {
     const unlisten = onUpdateCheckRequested(() => void useUpdaterStore.getState().check(true))
     return () => void unlisten.then((fn) => fn())
+  }, [])
+
+  // Manual-check verdicts land as native OS dialogs, not DOM — nothing to
+  // position over the terminal. Subscribed outside the render path so the
+  // per-chunk download progress never re-renders App. Dismiss BEFORE the
+  // dialog: the machine is already idle while the dialog waits for OK.
+  useEffect(() => {
+    return useUpdaterStore.subscribe((cur, prev) => {
+      if (cur.state.phase === prev.state.phase) return
+      if (cur.state.phase === 'upToDate') {
+        useUpdaterStore.getState().dismiss()
+        void showMessage('Swarmterm is up to date.', { title: 'Swarmterm' })
+      } else if (cur.state.phase === 'error') {
+        const detail = cur.state.message
+        useUpdaterStore.getState().dismiss()
+        void showMessage(`Update check failed:\n${detail}`, { title: 'Swarmterm', kind: 'error' })
+      }
+    })
   }, [])
 
   // Wire MCP worktree tool events to store actions: spawn opens a worker pane,
@@ -630,8 +655,6 @@ export default function App(): ReactElement {
           />
         )}
       </div>
-
-      <UpdateToast />
     </div>
   )
 }
