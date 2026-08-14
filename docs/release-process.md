@@ -25,7 +25,11 @@ The **GitHub draft release is the transfer medium** — the two machines never
 copy files to each other. `release:publish` uploads whatever the local build
 produced (`--clobber`, so re-runs are harmless), then reassembles
 `latest.json` from every asset currently on the draft. Run it from either
-machine, in either order, as many times as you like.
+machine, in either order, as many times as you like — while the release is a
+draft. Once it is published the script refuses to touch it; pass
+`-- --live` only to deliberately repair a live release. (The refusal exists
+because a failed `git pull` once left a build machine on the previous
+version, and its `release:publish` clobbered the already-shipped installer.)
 
 Drafts are inherently safe: the updater endpoint
 `releases/latest/download/latest.json` only resolves against **published**

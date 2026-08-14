@@ -8,6 +8,8 @@
 //   npm run release:publish              upload + refresh latest.json
 //   npm run release:publish -- --publish also flip the draft public (refuses
 //                                        while any platform is missing)
+//   npm run release:publish -- --live    allow touching an already-published
+//                                        release (deliberate repairs only)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,8 +55,13 @@ try {
 } catch {
   gh('release', 'create', tag, '--draft', '--title', tag, '--notes', '')
 }
-if (!isDraft && !wantPublish) {
-  console.warn(`release-publish: ${tag} is already public — uploads will hit a live release`)
+// A published release is live for every installed app, so clobbering its
+// assets rewrites what `releases/latest` serves. This has bitten for real: a
+// failed `git pull` left a build machine on the previous version and its
+// `release:publish` silently swapped the shipped v1.0.1 installer. Refuse
+// unless the operator explicitly opts in to repairing a live release.
+if (!isDraft && !process.argv.includes('--live')) {
+  die(`${tag} is already public — refusing to touch a live release (pass -- --live to repair one on purpose)`)
 }
 
 // This platform's artifacts, wherever the local build put them.
