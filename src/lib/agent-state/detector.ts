@@ -67,15 +67,24 @@ export class AgentStateDetector {
   }
 
   /** Pty exited or errored: stop detecting, drop to unknown so the UI falls
-   *  back to the plain activity dot instead of freezing a stale state. */
+   *  back to the plain activity dot instead of freezing a stale state. Clear
+   *  the pending timer too — tick()'s exited early-return already declines to
+   *  reschedule, so this is just hygiene, but it stops a stale timer handle
+   *  from lingering (and being mistaken for live) between exit and reset(). */
   noteExit(): void {
     this.exited = true
     this.pending = null
     this.setState('unknown')
+    if (this.timer !== null) this.deps.clearTimer(this.timer)
+    this.timer = null
   }
 
   /** Respawn (agent/cwd/shell switch or retry): the screen and OSC evidence
-   *  describe a pty that no longer exists. Re-arm the spawn grace. */
+   *  describe a pty that no longer exists. Re-arm the spawn grace. tick()
+   *  deliberately stops rescheduling once `exited`, so nothing else will ever
+   *  fire again unless we schedule here — without this, a same-id respawn
+   *  (retryTerminal, or refreshDetector reusing the existing detector because
+   *  the manifest didn't change) leaves the loop dead forever. */
   reset(): void {
     this.oscTitle = ''
     this.oscProgress = ''
@@ -84,6 +93,7 @@ export class AgentStateDetector {
     this.spawnedAt = this.deps.now()
     this.lastScannedSeq = -1
     this.setState('unknown')
+    this.schedule(TICK_MS)
   }
 
   dispose(): void {
@@ -154,11 +164,15 @@ export class AgentStateDetector {
       }
     } catch (err) {
       // A broken rule must degrade to the old activity-dot behavior, never
-      // take the terminal down with it. Log once per detector.
+      // take the terminal down with it. Log once per detector, and actually
+      // publish unknown — paneDot() only falls back to the activity dot for
+      // unknown/undetected, so without this the pane would freeze on
+      // whatever state it last held instead of degrading.
       if (!this.warned) {
         this.warned = true
         console.warn('agent-state detection failed; pane falls back to activity dot', err)
       }
+      this.setState('unknown')
     }
     if (verdictState !== null) this.setState(verdictState)
     this.schedule(this.pending !== null ? PENDING_IDLE_RECHECK_MS : TICK_MS)

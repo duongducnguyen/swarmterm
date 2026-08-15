@@ -112,4 +112,25 @@ describe('AgentStateDetector', () => {
     h.detector.noteExit()
     expect(h.published).toEqual(['idle', 'working', 'unknown'])
   })
+
+  it('resumes detection after a pty exit + respawn (reset), instead of dying forever', () => {
+    const h = makeHarness()
+    h.detector.start()
+    h.tick(SPAWN_GRACE_MS) // empty screen settles to idle
+    h.setScreen('thinking… esc to interrupt')
+    h.tick()
+    expect(h.published).toEqual(['idle', 'working'])
+    h.detector.noteExit()
+    expect(h.published).toEqual(['idle', 'working', 'unknown'])
+    // The tick scheduled before the exit fires once more, hits the `exited`
+    // early-return, and (correctly) does not reschedule itself — this is the
+    // realistic gap between a pty dying and a later respawn's reset() call.
+    h.tick()
+    h.detector.reset()
+    h.setScreen('Do you want to proceed?')
+    h.tick(SPAWN_GRACE_MS) // fresh grace window armed by reset()
+    // Detection must have resumed: the new screen's verdict gets published,
+    // not silence forever.
+    expect(h.published).toEqual(['idle', 'working', 'unknown', 'blocked'])
+  })
 })
