@@ -61,7 +61,7 @@ function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
           )
         ) : (
           <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#57f287]"
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50"
             title="Connected, idle"
           />
         )
