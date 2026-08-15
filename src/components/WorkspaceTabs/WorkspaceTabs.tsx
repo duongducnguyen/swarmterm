@@ -21,9 +21,12 @@ import { GuardedPointerSensor } from '@/lib/dnd-sensors'
 import { useAppStore, type Workspace } from '@/store/app-store'
 import { cn } from '@/lib/utils'
 import { collectLeaves } from '@/lib/layout-tree'
-import { anyLeafActive } from '@/lib/activity-selectors'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { useAgentStateStore } from '@/store/agent-state-store'
+import { displayState, workspaceDot } from '@/lib/agent-state/rollup'
+import type { DisplayState } from '@/lib/agent-state/types'
 import { ActivityDot } from '@/components/ActivityDot'
+import { StateDot } from '@/components/StateDot'
 
 interface WorkspaceTabsProps {
   /** Open the setup wizard to create a new workspace. */
@@ -57,6 +60,7 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
   const focusWelcome = useAppStore((s) => s.focusWelcome)
   const closeWelcome = useAppStore((s) => s.closeWelcome)
   const activity = useTerminalActivityStore((s) => s.active)
+  const agentStates = useAgentStateStore((s) => s.byId)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
@@ -108,15 +112,20 @@ export function WorkspaceTabs({ onNewWorkspace }: WorkspaceTabsProps): ReactElem
           >
             {workspaces.map((ws) => {
               const isActive = !welcomeFocused && ws.id === activeWorkspaceId
-              const showActivity =
-                !isActive &&
-                anyLeafActive(collectLeaves(ws.layout).map((l) => l.terminalId), activity)
+              const dot = isActive
+                ? null
+                : workspaceDot(
+                    collectLeaves(ws.layout).map((l) => ({
+                      display: displayState(agentStates[l.terminalId]),
+                      outputActive: activity[l.terminalId] === true
+                    }))
+                  )
               return (
                 <SortableWorkspaceTab
                   key={ws.id}
                   workspace={ws}
                   active={isActive}
-                  showActivity={showActivity}
+                  dot={dot}
                   renaming={renamingId === ws.id}
                   onSelect={() => setActiveWorkspace(ws.id)}
                   onStartRename={() => setRenamingId(ws.id)}
@@ -195,7 +204,7 @@ function WelcomeTab({ active, closable, onSelect, onClose }: WelcomeTabProps): R
 interface WorkspaceTabProps {
   workspace: Workspace
   active: boolean
-  showActivity: boolean
+  dot: DisplayState | 'activity' | null
   renaming: boolean
   onSelect: () => void
   onStartRename: () => void
@@ -208,7 +217,7 @@ interface WorkspaceTabProps {
 function SortableWorkspaceTab({
   workspace,
   active,
-  showActivity,
+  dot,
   renaming,
   onSelect,
   onStartRename,
@@ -244,7 +253,9 @@ function SortableWorkspaceTab({
         />
       ) : (
         <>
-          {showActivity && <ActivityDot />}
+          {dot !== null && dot !== 'idle' && dot !== 'unknown' && (
+            dot === 'activity' ? <ActivityDot /> : <StateDot state={dot} />
+          )}
           <span className="flex-1 truncate" title="Double-click to rename">
             {workspace.name}
           </span>

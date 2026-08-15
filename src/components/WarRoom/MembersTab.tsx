@@ -4,10 +4,14 @@ import { X } from 'lucide-react'
 import { useWarRoomStore, type WarRoomMember } from '@/store/war-room-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { useTerminalTypingStore } from '@/store/terminal-typing-store'
+import { useAgentStateStore } from '@/store/agent-state-store'
+import { displayState, paneDot } from '@/lib/agent-state/rollup'
 import { warRoomLeave } from '@/tauri/warroom'
 import { MEMBER_DRAG_PREFIX } from '@/lib/war-room-drop'
 import { memberColor } from '@/lib/war-room-identity'
 import { cn } from '@/lib/utils'
+import { ActivityDot } from '@/components/ActivityDot'
+import { StateDot } from '@/components/StateDot'
 import { Avatar, jumpToTerminal } from './Avatar'
 
 const MANUAL_HINT =
@@ -17,6 +21,8 @@ const MANUAL_HINT =
 
 function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
   const active = useTerminalActivityStore((s) => s.active[member.terminalId] ?? false)
+  const agentState = useAgentStateStore((s) => s.byId[member.terminalId])
+  const dot = paneDot(displayState(agentState), active)
   const heldCount = useWarRoomStore((s) =>
     s.held[member.terminalId] === true ? (s.queues[member.terminalId]?.length ?? 0) : 0
   )
@@ -47,13 +53,18 @@ function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
         <div className="truncate text-[10px] text-muted-foreground">{member.cwd}</div>
       </div>
       {member.connected ? (
-        <span
-          className={cn(
-            'h-1.5 w-1.5 shrink-0 rounded-full',
-            active ? 'bg-yellow-400' : 'bg-[#57f287]'
-          )}
-          title={active ? 'Working' : 'Connected, idle'}
-        />
+        dot !== null && dot !== 'idle' && dot !== 'unknown' ? (
+          dot === 'activity' ? (
+            <ActivityDot className="h-1.5 w-1.5" />
+          ) : (
+            <StateDot state={dot} className="h-1.5 w-1.5" />
+          )
+        ) : (
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#57f287]"
+            title="Connected, idle"
+          />
+        )
       ) : (
         <span
           className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-amber-400"

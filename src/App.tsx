@@ -14,6 +14,7 @@ import {
 } from '@/store/app-store'
 import { useNavbarVisibilityStore } from '@/store/navbar-visibility-store'
 import { useStatuslineStore } from '@/store/statusline-store'
+import { useAgentStateStore } from '@/store/agent-state-store'
 import { matchAppShortcut } from '@/lib/keybindings'
 import { collectLeaves, findLeaf } from '@/lib/layout-tree'
 import { isMacPlatform } from '@/lib/platform'
@@ -381,6 +382,27 @@ export default function App(): ReactElement {
     window.addEventListener('focus', deferReturnFocusToTerminal)
     return () => window.removeEventListener('focus', deferReturnFocusToTerminal)
   }, [deferReturnFocusToTerminal])
+
+  // A done badge means "finished while you weren't looking" — so it clears
+  // the moment the pane is actually being looked at: focus changes within
+  // the app (store subscription covers setFocusedLeaf AND workspace
+  // switches) and the window regaining OS focus. Watched-ness at completion
+  // time is judged inside the store publish; this effect handles the other
+  // direction — the user coming TO an already-done pane.
+  useEffect(() => {
+    const markFocusedSeen = (): void => {
+      if (!document.hasFocus()) return
+      const terminalId = selectFocusedTerminalId(useAppStore.getState())
+      if (terminalId) useAgentStateStore.getState().markSeen(terminalId)
+    }
+    markFocusedSeen()
+    const unsubscribe = useAppStore.subscribe(markFocusedSeen)
+    window.addEventListener('focus', markFocusedSeen)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', markFocusedSeen)
+    }
+  }, [])
 
   // --- macOS full screen: get out from under the auto-hiding system chrome ---
   // In full screen macOS slides the menu bar + titlebar down ON TOP of the app

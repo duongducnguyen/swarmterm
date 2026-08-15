@@ -5,8 +5,11 @@ import { resolvePaneTitle } from '@/lib/pane-title'
 import { useAppStore } from '@/store/app-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
+import { useAgentStateStore } from '@/store/agent-state-store'
+import { displayState, paneDot } from '@/lib/agent-state/rollup'
 import { AgentIcon } from '@/components/AgentIcon'
 import { ActivityDot } from '@/components/ActivityDot'
+import { StateDot } from '@/components/StateDot'
 import { cn } from '@/lib/utils'
 
 /**
@@ -23,6 +26,7 @@ export function TerminalList(): ReactElement | null {
   const setFocusedLeaf = useAppStore((s) => s.setFocusedLeaf)
   const titles = useTerminalTitleStore((s) => s.titles)
   const activity = useTerminalActivityStore((s) => s.active)
+  const agentStates = useAgentStateStore((s) => s.byId)
 
   const active = workspaces.find((w) => w.id === activeWorkspaceId)
   // Nothing to mirror while the Welcome tab is foreground or before any
@@ -61,7 +65,14 @@ export function TerminalList(): ReactElement | null {
               >
                 <AgentIcon template={template} className="h-3.5 w-3.5 shrink-0" />
                 <span className="flex-1 truncate">{title}</span>
-                {activity[leaf.terminalId] && <ActivityDot />}
+                {(() => {
+                  const dot = paneDot(
+                    displayState(agentStates[leaf.terminalId]),
+                    activity[leaf.terminalId] === true
+                  )
+                  if (dot === null || dot === 'idle' || dot === 'unknown') return null
+                  return dot === 'activity' ? <ActivityDot /> : <StateDot state={dot} />
+                })()}
               </div>
             </li>
           )
