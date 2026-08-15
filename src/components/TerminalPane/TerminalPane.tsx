@@ -163,18 +163,25 @@ export function TerminalPane({
   const appliedRef = useRef({
     cwd: resolvedCwd,
     shellId: resolvedShellId,
-    command: resolvedCommand
+    command: resolvedCommand,
+    agentId: resolvedAgentId
   })
   useEffect(() => {
     const prev = appliedRef.current
     if (
       prev.cwd === resolvedCwd &&
       prev.shellId === resolvedShellId &&
-      prev.command === resolvedCommand
+      prev.command === resolvedCommand &&
+      prev.agentId === resolvedAgentId
     ) {
       return
     }
-    appliedRef.current = { cwd: resolvedCwd, shellId: resolvedShellId, command: resolvedCommand }
+    appliedRef.current = {
+      cwd: resolvedCwd,
+      shellId: resolvedShellId,
+      command: resolvedCommand,
+      agentId: resolvedAgentId
+    }
     respawnTerminal(terminalId, {
       cwd: resolvedCwd,
       shellId: resolvedShellId,
@@ -186,7 +193,7 @@ export function TerminalPane({
     // A same-id respawn (agent/cwd/shell switch) starts a new session; the old
     // agent's title no longer describes it. Clear it — the new agent re-titles.
     useTerminalTitleStore.getState().clearTitle(terminalId)
-  }, [terminalId, resolvedCwd, resolvedShellId, resolvedCommand])
+  }, [terminalId, resolvedCwd, resolvedShellId, resolvedCommand, resolvedAgentId])
 
   // Pull keyboard focus into xterm when this pane becomes the focused one.
   useEffect(() => {
