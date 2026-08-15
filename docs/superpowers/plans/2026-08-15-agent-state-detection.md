@@ -604,11 +604,20 @@ describe('claude-code manifest', () => {
     const screen = ['───', 'Create file src/foo.ts?', '', 'enter to confirm · esc to cancel'].join('\n')
     expect(evaluateManifest(claudeCodeManifest, input(screen)).state).toBe('blocked')
   })
-  it('the ❯ prompt box body is idle, but not when a menu is open inside it', () => {
+  it('the ❯ prompt box is PROVEN idle; a menu open inside it only falls back to idle', () => {
     const idleScreen = ['some output', '───', ' ❯ ', '───'].join('\n')
-    expect(evaluateManifest(claudeCodeManifest, input(idleScreen)).state).toBe('idle')
-    const menuScreen = ['some output', '───', ' ❯ pick one — enter to select · tab/arrow keys to navigate', '───'].join('\n')
-    expect(evaluateManifest(claudeCodeManifest, input(menuScreen)).state).not.toBe('idle')
+    const idle = evaluateManifest(claudeCodeManifest, input(idleScreen))
+    expect(idle.state).toBe('idle')
+    expect(idle.visibleIdle).toBe(true)
+    // A menu inside the box trips the rule's not-gates, so nothing matches and
+    // the verdict is the idle FALLBACK (visibleIdle=false) — herdr semantics:
+    // the debounce treats proven idle and fallback idle differently.
+    const menu = evaluateManifest(claudeCodeManifest, input(menuScreen()))
+    expect(menu.visibleIdle).toBe(false)
+
+    function menuScreen(): string {
+      return ['some output', '───', ' ❯ pick one — enter to select · tab/arrow keys to navigate', '───'].join('\n')
+    }
   })
   it('the transcript viewer freezes state (skip)', () => {
     const screen = ['big transcript', 'Showing detailed transcript', 'ctrl+o to toggle · ↑↓ scroll'].join('\n')
@@ -1713,39 +1722,41 @@ describe('AgentStateDetector', () => {
   it('holds working → idle across confirmations, then publishes idle', () => {
     const h = makeHarness()
     h.detector.start()
+    // The grace-crossing tick scans an EMPTY screen and settles to idle
+    // (the no-match fallback) — that leading publish is expected.
     h.tick(SPAWN_GRACE_MS)
     h.setScreen('thinking… esc to interrupt')
     h.tick()
-    expect(h.published).toEqual(['working'])
+    expect(h.published).toEqual(['idle', 'working'])
     h.setScreen('$ quiet prompt')
     h.tick() // idle verdict #1 — held
     h.tick(100) // #2
     h.tick(100) // #3
     h.tick(100) // #4 — released
-    expect(h.published).toEqual(['working', 'idle'])
+    expect(h.published).toEqual(['idle', 'working', 'idle'])
   })
 
   it('reset returns to unknown and re-arms the grace window', () => {
     const h = makeHarness()
     h.detector.start()
-    h.tick(SPAWN_GRACE_MS)
+    h.tick(SPAWN_GRACE_MS) // empty screen settles to idle
     h.setScreen('Do you want to proceed?')
     h.tick()
-    expect(h.published).toEqual(['blocked'])
+    expect(h.published).toEqual(['idle', 'blocked'])
     h.detector.reset()
-    expect(h.published).toEqual(['blocked', 'unknown'])
+    expect(h.published).toEqual(['idle', 'blocked', 'unknown'])
     h.tick() // still inside the fresh grace window — no detection
-    expect(h.published).toEqual(['blocked', 'unknown'])
+    expect(h.published).toEqual(['idle', 'blocked', 'unknown'])
   })
 
   it('noteExit stops the loop and publishes unknown', () => {
     const h = makeHarness()
     h.detector.start()
-    h.tick(SPAWN_GRACE_MS)
+    h.tick(SPAWN_GRACE_MS) // empty screen settles to idle
     h.setScreen('thinking… esc to interrupt')
     h.tick()
     h.detector.noteExit()
-    expect(h.published).toEqual(['working', 'unknown'])
+    expect(h.published).toEqual(['idle', 'working', 'unknown'])
   })
 })
 ```
