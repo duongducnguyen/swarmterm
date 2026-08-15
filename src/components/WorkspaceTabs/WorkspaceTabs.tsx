@@ -23,8 +23,7 @@ import { cn } from '@/lib/utils'
 import { collectLeaves } from '@/lib/layout-tree'
 import { useTerminalActivityStore } from '@/store/terminal-activity-store'
 import { useAgentStateStore } from '@/store/agent-state-store'
-import { displayState, workspaceDot } from '@/lib/agent-state/rollup'
-import type { DisplayState } from '@/lib/agent-state/types'
+import { displayState, workspaceDot, type DotState } from '@/lib/agent-state/rollup'
 import { ActivityDot } from '@/components/ActivityDot'
 import { StateDot } from '@/components/StateDot'
 
@@ -204,7 +203,7 @@ function WelcomeTab({ active, closable, onSelect, onClose }: WelcomeTabProps): R
 interface WorkspaceTabProps {
   workspace: Workspace
   active: boolean
-  dot: DisplayState | 'activity' | null
+  dot: DotState | null
   renaming: boolean
   onSelect: () => void
   onStartRename: () => void
@@ -253,9 +252,7 @@ function SortableWorkspaceTab({
         />
       ) : (
         <>
-          {dot !== null && dot !== 'idle' && dot !== 'unknown' && (
-            dot === 'activity' ? <ActivityDot /> : <StateDot state={dot} />
-          )}
+          {dot !== null && (dot === 'activity' ? <ActivityDot /> : <StateDot state={dot} />)}
           <span className="flex-1 truncate" title="Double-click to rename">
             {workspace.name}
           </span>

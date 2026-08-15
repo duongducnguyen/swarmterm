@@ -70,7 +70,7 @@ export function TerminalList(): ReactElement | null {
                     displayState(agentStates[leaf.terminalId]),
                     activity[leaf.terminalId] === true
                   )
-                  if (dot === null || dot === 'idle' || dot === 'unknown') return null
+                  if (dot === null) return null
                   return dot === 'activity' ? <ActivityDot /> : <StateDot state={dot} />
                 })()}
               </div>

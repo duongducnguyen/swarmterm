@@ -53,7 +53,7 @@ function MemberRow({ member }: { member: WarRoomMember }): ReactElement {
         <div className="truncate text-[10px] text-muted-foreground">{member.cwd}</div>
       </div>
       {member.connected ? (
-        dot !== null && dot !== 'idle' && dot !== 'unknown' ? (
+        dot !== null ? (
           dot === 'activity' ? (
             <ActivityDot className="h-1.5 w-1.5" />
           ) : (
