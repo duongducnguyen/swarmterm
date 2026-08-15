@@ -802,6 +802,9 @@ export function disposeTerminal(id: string): void {
   activityTracker.cancel(id)
   useTerminalActivityStore.getState().clear(id)
   useTerminalTypingStore.getState().clearTyping(id)
+  // Same ordering concern as activityTracker above: dispose() clears the
+  // detector's pending timer first so a late tick can't re-publish a state
+  // for an id the store is about to drop.
   entry.detector?.dispose()
   useAgentStateStore.getState().clear(id)
 }
