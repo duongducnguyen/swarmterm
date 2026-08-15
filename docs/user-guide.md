@@ -19,7 +19,7 @@ Agent detection re-runs every time the composer opens, so installing a CLI needs
 
 ## Running several agents at once
 
-- **Activity dots** light up while a pane produces output, so you can see who is working and who is waiting for you.
+- **Activity dots** light up while a pane produces output, so you can see who is working — for Claude Code, Codex and OpenCode panes this becomes the richer [agent state dot](#agent-state-dots) instead.
 - **Broadcast input** — `⌘/Ctrl + Shift + B`, then `Alt + Click` panes into the group and type once; every pane receives the same keystrokes ("now run the tests" × 5). `Esc` leaves.
 - A badge counts War Room messages queued for a pane that is busy.
 

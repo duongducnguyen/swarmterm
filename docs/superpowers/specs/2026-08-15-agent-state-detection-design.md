@@ -25,10 +25,11 @@ Engine states (what rules can produce): `working`, `blocked`, `idle`,
 `state === 'idle' && !seen`.
 
 - `seen` starts `true`. Any publish of a non-idle state sets `seen = true`.
-- A **completion transition** — `working|blocked → idle`, or `unknown → idle`
-  with the agent unchanged — sets `seen = false` (i.e. "done") *unless* the
-  pane is currently the focused pane of the active workspace and the app
-  window has focus.
+- A **completion transition** — `working|blocked → idle` — sets `seen = false`
+  (i.e. "done") *unless* the pane is currently the focused pane of the active
+  workspace and the app window has focus. `unknown → idle` is deliberately
+  excluded: `unknown` only occurs at spawn/respawn/exit, and a freshly
+  spawned or respawned agent settling to idle must not read as "done".
 - `seen` flips back to `true` (done → idle) when the pane becomes the focused
   pane of the active workspace: on `setFocusedLeaf`, on workspace switch, and
   on window refocus.

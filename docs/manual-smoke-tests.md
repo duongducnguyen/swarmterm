@@ -257,7 +257,7 @@ Needs two published releases (the older installed locally). Full flow in
 - [ ] With Wi-Fi off, launching the app shows no update UI at all; the tray
       check surfaces a dismissible error toast.
 
-## Agent state detection (Đ1)
+## Agent state detection
 
 - [ ] Claude pane: ask for a long task → dot turns yellow (working) while it runs.
 - [ ] Claude pane: trigger a permission prompt (e.g. a Bash command without allow rules) → dot turns red (blocked) within ~1s.
