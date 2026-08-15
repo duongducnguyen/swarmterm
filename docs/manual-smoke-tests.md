@@ -256,3 +256,16 @@ Needs two published releases (the older installed locally). Full flow in
       "Swarmterm is up to date".
 - [ ] With Wi-Fi off, launching the app shows no update UI at all; the tray
       check surfaces a dismissible error toast.
+
+## Agent state detection (Đ1)
+
+- [ ] Claude pane: ask for a long task → dot turns yellow (working) while it runs.
+- [ ] Claude pane: trigger a permission prompt (e.g. a Bash command without allow rules) → dot turns red (blocked) within ~1s.
+- [ ] Answer the prompt, let the task finish while ANOTHER workspace is active → its workspace tab shows a green dot; switching to it and focusing the pane clears the green.
+- [ ] Finish a task while WATCHING the pane → no green dot appears (goes straight to idle).
+- [ ] Claude transcript viewer (ctrl+o): state does not flap while it is open.
+- [ ] Codex pane: same working / blocked (Action Required) / done pass.
+- [ ] OpenCode pane: same working / blocked (Permission required) / done pass.
+- [ ] Plain terminal pane: yellow output dot behaves exactly as before.
+- [ ] Respawn an agent pane (switch agent) → no stale dot; detection resumes after ~3s.
+- [ ] Scroll an agent pane far up during a working task → dot still tracks the live bottom of the buffer.
