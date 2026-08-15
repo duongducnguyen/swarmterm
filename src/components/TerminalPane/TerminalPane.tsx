@@ -142,7 +142,8 @@ export function TerminalPane({
       shellId: resolvedShellId,
       initialCommand: resolvedCommand,
       worktreeMode: worktreeMode || undefined,
-      repoRoot: worktreeMode ? cwd : undefined
+      repoRoot: worktreeMode ? cwd : undefined,
+      agentId: resolvedAgentId
     })
     setStatus(getTerminalStatus(terminalId))
     const unsubscribe = subscribeTerminalStatus(terminalId, () =>
@@ -179,7 +180,8 @@ export function TerminalPane({
       shellId: resolvedShellId,
       initialCommand: resolvedCommand,
       worktreeMode: worktreeMode || undefined,
-      repoRoot: worktreeMode ? cwd : undefined
+      repoRoot: worktreeMode ? cwd : undefined,
+      agentId: resolvedAgentId
     })
     // A same-id respawn (agent/cwd/shell switch) starts a new session; the old
     // agent's title no longer describes it. Clear it — the new agent re-titles.

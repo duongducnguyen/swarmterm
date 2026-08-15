@@ -8,7 +8,7 @@ import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
 import { useTerminalTextStore } from '@/store/terminal-text-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
 import { resolveBroadcastTargets } from '@/lib/broadcast-input'
-import { useAppStore, selectWorkspaceByTerminalId } from '@/store/app-store'
+import { useAppStore, selectWorkspaceByTerminalId, selectFocusedTerminalId } from '@/store/app-store'
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { isWindowsPlatform } from '@/lib/platform'
@@ -45,6 +45,10 @@ import {
   shouldSuppressInput,
   type SuppressState
 } from '@/lib/terminal-input-client'
+import { AgentStateDetector, type DetectorDeps } from '@/lib/agent-state/detector'
+import { manifestForAgent } from '@/lib/agent-state/manifests'
+import { useAgentStateStore } from '@/store/agent-state-store'
+import type { BufferView } from '@/lib/agent-state/snapshot'
 
 export type { TerminalStatus }
 
@@ -91,6 +95,7 @@ export interface AttachConfig {
   initialCommand?: string
   worktreeMode?: boolean
   repoRoot?: string
+  agentId?: string
 }
 
 interface Entry {
@@ -110,6 +115,18 @@ interface Entry {
   lastMouseDown?: ClickPoint
   opened: boolean
   observer?: ResizeObserver
+  /**
+   * The running detection loop for this pane's agent, if any — absent for
+   * plain `terminal` panes (`manifestForAgent` returns undefined for those)
+   * and until the first attach, since the manifest is only known once
+   * `config.agentId` is set. Rebuilt by `refreshDetector` whenever the
+   * resolved manifest changes (agent switch via respawn).
+   */
+  detector?: AgentStateDetector
+  /** The manifest id `detector` was built from, so `refreshDetector` can tell
+   *  "same agent, keep the loop" from "different agent, rebuild it" without
+   *  re-deriving the manifest from `entry.config` on every check. */
+  detectorManifestId?: string
   /**
    * Clears the IME input segment's `committed` baseline and the textarea it
    * tracks. Exists on `Entry` — rather than staying a closure private to
@@ -178,6 +195,42 @@ function safeFit(entry: Entry): boolean {
   }
 }
 
+/**
+ * (Re)build the detection loop for this entry's agent. Called from attach
+ * and respawn — the two places `config.agentId` can change. Plain terminals
+ * get no detector at all; their dot stays the output-activity one.
+ */
+function refreshDetector(id: string, entry: Entry): void {
+  const manifest = manifestForAgent(entry.config.agentId)
+  if (entry.detector !== undefined && (manifest === undefined || manifest.id !== entry.detectorManifestId)) {
+    entry.detector.dispose()
+    entry.detector = undefined
+    useAgentStateStore.getState().clear(id)
+  }
+  if (manifest === undefined || entry.detector !== undefined) return
+  entry.detectorManifestId = manifest.id
+  const deps: DetectorDeps = {
+    getView: (): BufferView | null => {
+      const e = entries.get(id)
+      if (!e || !e.opened) return null
+      const buffer = e.term.buffer.active
+      return {
+        rows: e.term.rows,
+        length: buffer.length,
+        line: (i) => buffer.getLine(i)?.translateToString(true) ?? ''
+      }
+    },
+    isPaneWatched: () =>
+      document.hasFocus() && selectFocusedTerminalId(useAppStore.getState()) === id,
+    publish: (state, opts) => useAgentStateStore.getState().publish(id, state, opts),
+    now: () => Date.now(),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
+  }
+  entry.detector = new AgentStateDetector(manifest, deps)
+  entry.detector.start()
+}
+
 function getOrCreate(id: string): Entry {
   const existing = entries.get(id)
   if (existing) return existing
@@ -222,6 +275,16 @@ function getOrCreate(id: string): Entry {
     const store = useTerminalTitleStore.getState()
     if (trimmed) store.setTitle(id, trimmed.slice(0, 120))
     else store.clearTitle(id)
+  })
+  // Second title listener: detection needs the RAW title (spinner prefix and
+  // spacing intact), not the header's whitespace-collapsed one above.
+  term.onTitleChange((title) => {
+    entries.get(id)?.detector?.noteTitle(title)
+  })
+  // OSC 9 progress (ConEmu-style "4;st;pct") — detection evidence only.
+  term.parser.registerOscHandler(9, (data) => {
+    entries.get(id)?.detector?.noteProgress(data)
+    return true
   })
   // OSC 7 is how a shell reports its working directory ("ESC ] 7 ; file://host/path
   // BEL") — the same mechanism VS Code, kitty and WezTerm use. Handled here rather
@@ -651,11 +714,18 @@ function getOrCreate(id: string): Entry {
         // while bytes flow (including agent spinner redraws) and goes idle after
         // ACTIVITY_IDLE_MS of silence.
         activityTracker.notify(id)
+        entries.get(id)?.detector?.noteOutput()
         term.write(data)
       }
     },
     { createTerminal, killTerminal }
   )
+  // Mirror pty death into the detector: the session is the source of truth for
+  // exit/error, and the detector has no pty visibility of its own.
+  session.subscribe(() => {
+    const kind = session.getStatus().kind
+    if (kind === 'exited' || kind === 'error') entries.get(id)?.detector?.noteExit()
+  })
 
   const entry: Entry = {
     term,
@@ -685,6 +755,7 @@ export function attachTerminal(id: string, container: HTMLElement, config: Attac
     // out from under the user.
     shellId: entry.config.shellId ?? config.shellId
   }
+  refreshDetector(id, entry)
   // Seed the link-resolution cwd from the spawn config. OSC 7 overwrites this as
   // soon as the shell draws its first prompt; until then (and forever, in shells
   // that don't report it) the spawn directory is the best answer available.
@@ -731,6 +802,8 @@ export function disposeTerminal(id: string): void {
   activityTracker.cancel(id)
   useTerminalActivityStore.getState().clear(id)
   useTerminalTypingStore.getState().clearTyping(id)
+  entry.detector?.dispose()
+  useAgentStateStore.getState().clear(id)
 }
 
 /** Dispose every terminal whose id is not in `keep` (its leaf was removed). */
@@ -841,6 +914,9 @@ export function retryTerminal(id: string): void {
   // (dirty survives until the user types and submits, or clicks Deliver now)
   // for a line that no longer exists anywhere.
   useTerminalTypingStore.getState().clearTyping(id)
+  // And to the detector: it holds evidence (title/progress/pending-idle) from
+  // the dead pty, which the new one hasn't produced.
+  entry.detector?.reset()
   safeFit(entry)
   entry.session.retry({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
@@ -854,6 +930,11 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   const entry = entries.get(id)
   if (!entry) return
   entry.config = { ...entry.config, ...config }
+  // Agent id may have just changed (agent switch) — rebuild the detector for
+  // the new manifest before resetting it below, so reset() acts on the loop
+  // that's actually about to watch the new pty, not a stale one for the
+  // previous agent.
+  refreshDetector(id, entry)
   entry.term.reset()
   // The pty this segment's committed baseline described is gone.
   entry.resetInputSegment()
@@ -862,6 +943,9 @@ export function respawnTerminal(id: string, config: AttachConfig): void {
   // (dirty survives until the user types and submits, or clicks Deliver now)
   // for a line that no longer exists anywhere.
   useTerminalTypingStore.getState().clearTyping(id)
+  // And to the detector: it holds evidence (title/progress/pending-idle) from
+  // the dead pty, which the new one hasn't produced.
+  entry.detector?.reset()
   safeFit(entry)
   entry.session.respawn({ ...entry.config, cols: entry.term.cols, rows: entry.term.rows })
 }
