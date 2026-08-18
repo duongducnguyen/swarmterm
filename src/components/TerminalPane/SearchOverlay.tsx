@@ -120,7 +120,11 @@ export function SearchOverlay({ terminalId }: SearchOverlayProps): ReactElement 
   }
 
   return (
-    <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md border border-border bg-card px-1.5 py-1 text-xs shadow-lg">
+    // Hard-coded VS Code dark-widget colors on purpose: this floats over the
+    // terminal, whose palette is fixed Dark Modern regardless of app theme
+    // (see VSCODE_DARK_THEME) — theme tokens like bg-card sit at the same
+    // lightness as the terminal background and the widget disappears into it.
+    <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md border border-[#454545] bg-[#2d2d30] px-1.5 py-1 text-xs text-[#cccccc] shadow-[0_4px_12px_rgba(0,0,0,0.55)]">
       <input
         ref={inputRef}
         value={query}
@@ -142,9 +146,9 @@ export function SearchOverlay({ terminalId }: SearchOverlayProps): ReactElement 
         }}
         placeholder="Find"
         aria-label="Find in terminal"
-        className="h-6 w-40 rounded border border-input bg-transparent px-1.5 text-foreground outline-none focus:border-ring"
+        className="h-6 w-40 rounded border border-transparent bg-[#3c3c3c] px-1.5 text-[#cccccc] placeholder:text-[#8c8c8c] outline-none focus:border-[#0078d4]"
       />
-      <span className="min-w-[3.5rem] shrink-0 whitespace-nowrap px-1 text-center text-muted-foreground">
+      <span className="min-w-[3.5rem] shrink-0 whitespace-nowrap px-1 text-center text-[#a0a0a0]">
         {matchSummary(query, resultIndex, resultCount)}
       </span>
       <ToggleButton label="Match case" pressed={toggles.caseSensitive} onClick={() => handleToggle('caseSensitive')}>
