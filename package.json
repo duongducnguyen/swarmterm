@@ -1,7 +1,7 @@
 {
   "name": "swarmterm",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "One window for a whole swarm of AI coding agents — split terminals, per-agent git worktrees, live web previews, and a War Room where agents collaborate",
   "license": "GPL-3.0-only",
   "homepage": "https://swarmterm.dev",
