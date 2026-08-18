@@ -2,6 +2,7 @@ import { Terminal, type ILink, type ILinkHandler, type ITheme } from '@xterm/xte
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { createTerminal, killTerminal, resizeTerminal, writeTerminal } from '@/tauri/terminal'
 import { TerminalSession, type TerminalStatus } from '@/lib/terminal-session'
@@ -101,6 +102,9 @@ export interface AttachConfig {
 interface Entry {
   term: Terminal
   fit: FitAddon
+  /** Backs the find overlay (SearchOverlay.tsx) via the terminalSearch* functions
+   *  below. Disposes with the terminal — xterm addons tear down as a group. */
+  search: SearchAddon
   /** Stable host the xterm renders into; moved between pane containers. */
   host: HTMLDivElement
   session: TerminalSession
@@ -261,6 +265,8 @@ function getOrCreate(id: string): Entry {
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
+  const search = new SearchAddon()
+  term.loadAddon(search)
   // Forward the terminal title straight from the program running in the pty.
   // xterm parses the standard OSC 0/2 title escape sequences ("ESC ] 0 ; text
   // BEL") natively and fires onTitleChange — the same mechanism VS Code uses to
@@ -730,6 +736,7 @@ function getOrCreate(id: string): Entry {
   const entry: Entry = {
     term,
     fit,
+    search,
     host,
     session,
     config: {},
@@ -995,6 +1002,94 @@ export function getTerminalCwd(id: string): string | undefined {
 
 export function subscribeTerminalStatus(id: string, listener: () => void): () => void {
   return entries.get(id)?.session.subscribe(listener) ?? (() => {})
+}
+
+// --- find overlay (SearchOverlay.tsx) -------------------------------------
+// Thin wrappers around each terminal's SearchAddon: components only ever see
+// these functions, never the addon itself, matching every other entry point
+// in this file.
+
+export interface TerminalSearchOptions {
+  caseSensitive: boolean
+  wholeWord: boolean
+  regex: boolean
+  /** True while typing in the find input: re-run the match under the cursor
+   *  instead of advancing (VS Code behavior). */
+  incremental?: boolean
+}
+
+/**
+ * VS Code Dark Modern find-widget palette (editor.findMatchBackground /
+ * findMatchHighlightBackground), used verbatim so the in-terminal highlight
+ * matches the rest of the app's chrome. Decorations must be re-supplied on
+ * EVERY search call — the addon only draws them for calls that carry the
+ * `decorations` field, it does not "stay enabled" after the first one.
+ */
+function searchOptions(opts: TerminalSearchOptions): ISearchOptions {
+  return {
+    caseSensitive: opts.caseSensitive,
+    wholeWord: opts.wholeWord,
+    regex: opts.regex,
+    incremental: opts.incremental,
+    decorations: {
+      activeMatchBackground: '#9E6A03',
+      activeMatchColorOverviewRuler: '#9E6A03',
+      matchBackground: '#EA5C0055',
+      matchOverviewRuler: '#EA5C0055'
+    }
+  }
+}
+
+/**
+ * Advance to the next match. A no-op when the terminal is dead (pane closed
+ * mid-search) or when `query` is malformed regex — `regex: true` hands the
+ * query straight to `RegExp(...)` with no validation of its own, so a
+ * trailing `\` or unbalanced `(` throws a SyntaxError the caller (the find
+ * input's onChange) must not have to guard against on every keystroke.
+ */
+export function terminalSearchNext(id: string, query: string, opts: TerminalSearchOptions): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  try {
+    entry.search.findNext(query, searchOptions(opts))
+  } catch {
+    // Bad regex syntax mid-type — see doc comment above.
+  }
+}
+
+/** Same as `terminalSearchNext`, searching backwards. */
+export function terminalSearchPrevious(id: string, query: string, opts: TerminalSearchOptions): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  try {
+    entry.search.findPrevious(query, searchOptions(opts))
+  } catch {
+    // Bad regex syntax mid-type — see terminalSearchNext.
+  }
+}
+
+/**
+ * Drop every match highlight AND the terminal's own text selection —
+ * `findNext`/`findPrevious` select the active match on the underlying
+ * `Terminal` (visible under the decoration), so `clearDecorations()` alone
+ * would leave that selection showing once the decoration is gone.
+ */
+export function clearTerminalSearch(id: string): void {
+  const entry = entries.get(id)
+  if (!entry) return
+  entry.search.clearDecorations()
+  entry.term.clearSelection()
+}
+
+/** Subscribe to match-count updates; no-op unsubscribe when the terminal is dead. */
+export function onTerminalSearchResults(
+  id: string,
+  cb: (r: { resultIndex: number; resultCount: number }) => void
+): () => void {
+  const entry = entries.get(id)
+  if (!entry) return () => {}
+  const disposable = entry.search.onDidChangeResults(cb)
+  return () => disposable.dispose()
 }
 
 /**
