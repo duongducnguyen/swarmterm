@@ -257,6 +257,11 @@ function getOrCreate(id: string): Entry {
   host.style.fontFeatureSettings = ligatureFeatureSettings(text.ligatures)
 
   const term = new Terminal({
+    // The find overlay's highlight-all decorations go through xterm's
+    // registerDecoration, which is proposed API — without this flag the
+    // SearchAddon throws inside findNext and the search silently finds
+    // nothing (the regex guard in terminalSearchNext would swallow it).
+    allowProposedApi: true,
     cursorBlink: true,
     fontFamily: text.fontFamily,
     fontSize: text.fontSize,
@@ -1076,8 +1081,11 @@ export function terminalSearchNext(id: string, query: string, opts: TerminalSear
   if (!entry) return
   try {
     entry.search.findNext(query, searchOptions(opts))
-  } catch {
-    // Bad regex syntax mid-type — see doc comment above.
+  } catch (err) {
+    // Bad regex syntax mid-type is expected (SyntaxError); anything else is a
+    // real search failure and swallowing it silently is how the missing
+    // allowProposedApi flag went unnoticed — surface it.
+    if (!(err instanceof SyntaxError)) console.warn('terminal search failed', err)
   }
 }
 
@@ -1087,8 +1095,9 @@ export function terminalSearchPrevious(id: string, query: string, opts: Terminal
   if (!entry) return
   try {
     entry.search.findPrevious(query, searchOptions(opts))
-  } catch {
-    // Bad regex syntax mid-type — see terminalSearchNext.
+  } catch (err) {
+    // See terminalSearchNext: SyntaxError = user's mid-typed regex, expected.
+    if (!(err instanceof SyntaxError)) console.warn('terminal search failed', err)
   }
 }
 
