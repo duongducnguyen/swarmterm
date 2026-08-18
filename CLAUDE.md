@@ -225,6 +225,13 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   App.tsx store subscription so download progress never re-renders App.
   Windows: `downloadAndInstall` never resolves — the NSIS installer exits the
   app.
+- **Anonymous telemetry is compile-time gated.** `analytics.rs` sends a GA4
+  Measurement Protocol `app_open` + 5-minute heartbeat, but only when
+  `SWARMTERM_GA_MEASUREMENT_ID` / `SWARMTERM_GA_API_SECRET` were in the env
+  when **cargo compiled** (`option_env!` — the release scripts export them
+  from `.env.release`). Dev and source builds are no-ops; don't add runtime
+  key lookups, and never send more than version + OS (the user-guide
+  Telemetry section is the contract).
 - **No persistence.** Every launch starts fresh (one Welcome → one workspace).
   Don't assume saved state.
 - **Session resume.** The composer's "Resume sessions" list is read live from

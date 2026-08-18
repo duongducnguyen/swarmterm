@@ -257,6 +257,12 @@ Needs two published releases (the older installed locally). Full flow in
 - [ ] With Wi-Fi off, launching the app shows no update UI at all; the tray
       check surfaces a dismissible error toast.
 
+## Telemetry (release builds only)
+
+- [ ] Release build (built with GA keys in `.env.release`): launch, then GA →
+      Reports → Realtime shows 1 active user within ~a minute.
+- [ ] `npm run tauri dev` (no keys): nothing appears in GA Realtime.
+
 ## Agent state detection
 
 - [ ] Claude pane: ask for a long task → dot turns yellow (working) while it runs.

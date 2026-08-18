@@ -97,7 +97,7 @@ The full list lives in the guide's [known limits](docs/user-guide.md#known-limit
 
 ## Contributing & community
 
-Bug reports and questions are welcome in [issues](https://github.com/duongducnguyen/swarmterm/issues); [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the test/CI checklist, and how to propose features — design discussion happens in an issue first for anything non-trivial. Swarmterm is free software under [GPL-3.0](LICENSE).
+Bug reports and questions are welcome in [issues](https://github.com/duongducnguyen/swarmterm/issues); [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the test/CI checklist, and how to propose features — design discussion happens in an issue first for anything non-trivial. Swarmterm is free software under [GPL-3.0](LICENSE). Official release builds send an anonymous launch ping (app version + OS, nothing else) so we can see how many people use Swarmterm; builds from source contain none — details in the guide's [telemetry](docs/user-guide.md#telemetry) section.
 
 ---
 

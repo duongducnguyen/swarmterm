@@ -62,6 +62,22 @@ signature does not verify.
 > Apple credentials. Leaking the key is bad but not fatal (an attacker would
 > also need write access to GitHub Releases); losing it is fatal.
 
+## Analytics keys
+
+Official builds report anonymous usage to Google Analytics (see the user
+guide's *Telemetry* section for exactly what is sent). The keys are baked in
+at **compile** time via `option_env!`, so they must be present in
+`.env.release` on **both** build machines:
+
+- `SWARMTERM_GA_MEASUREMENT_ID` — the GA4 web stream's `G-…` id.
+- `SWARMTERM_GA_API_SECRET` — Measurement Protocol API secret, created under
+  the same stream (Admin → Data streams → Measurement Protocol API secrets).
+
+Forgetting them does not fail the build — it silently ships a release that
+reports nothing (exactly what community source builds get). If usage drops to
+zero after a release, check this first. Leaking the secret only lets someone
+send garbage events into the property; rotate it in GA and rebuild.
+
 ## `latest.json` anatomy
 
 Assembled by `scripts/release/manifest.mjs` (unit-tested; the publish script

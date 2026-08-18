@@ -99,6 +99,28 @@ Toggle it in **Settings → Terminal**. Swarmterm merge-writes the entry into `~
 
 Swarmterm quietly checks GitHub Releases for a newer version shortly after launch, then every few hours while it stays open. When one exists, an **Update to vX.Y.Z** button appears at the bottom of the navbar, under Settings — nothing downloads until you click it. The button shows download progress, then turns into **Restart to update** (on Windows the installer takes over and relaunches the app itself). No update, no button — that's the whole notification. To check on demand, use tray → **Check for Updates…** — that one also tells you when you're already up to date, in a native dialog. Offline or flaky network? The automatic check stays silent; it never nags.
 
+## Telemetry
+
+Official release builds send an anonymous usage ping so we can see how many
+people actually run Swarmterm: one `app_open` event at launch, then a
+heartbeat every five minutes while the app is open. Each event carries a
+random id, the app version and the OS name (`macos` / `windows` / `linux`) —
+nothing else. No paths, no terminal content, no hostname, no account.
+Google Analytics infers a country from the request's IP, as any website does;
+Swarmterm never sends the IP itself.
+
+The random id lives in one small file so restarts count as the same person —
+`~/Library/Application Support/com.swarmterm.app/telemetry-id` on macOS,
+`%APPDATA%\com.swarmterm.app\telemetry-id` on Windows,
+`~/.config/com.swarmterm.app/telemetry-id` on Linux. Delete it any time to
+start over as a new anonymous user.
+
+**Builds from source contain no telemetry at all.** The analytics keys are
+injected only when official releases are built; compile Swarmterm yourself
+(`npm run tauri dev` or `npm run tauri build`) and the reporting code
+compiles to nothing. Offline use is fine too — a failed ping is silently
+dropped, never retried loudly, and never blocks the app.
+
 ## What your agents can do
 
 Every pane is automatically connected to the app over MCP for exactly as long as it lives — nothing to configure. Agents that speak MCP (Claude Code, Codex, and others) can drive Swarmterm themselves: **open a web preview** beside their own pane, **spawn / list / remove worktrees** to hand tasks to fresh parallel agents (removal refuses uncommitted changes), and use the **War Room** — list peers, message them in probe or execute mode, read their inbox and reply.
