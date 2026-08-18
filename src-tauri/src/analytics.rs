@@ -75,7 +75,10 @@ pub fn init(app: &tauri::AppHandle) {
 }
 
 fn client_id_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join(CLIENT_ID_FILE))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(CLIENT_ID_FILE))
 }
 
 fn collect_url(measurement_id: &str, api_secret: &str) -> String {
