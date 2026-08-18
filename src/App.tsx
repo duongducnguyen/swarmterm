@@ -23,6 +23,7 @@ import { onFullscreenChanged } from '@/tauri/window'
 import {
   disposeOrphanTerminals,
   focusTerminal,
+  getTerminalAgentId,
   getTerminalCwd,
   isAnyTerminalFocused
 } from '@/lib/terminal-registry'
@@ -55,6 +56,10 @@ import { useRecentsStore } from '@/store/recents-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { useNotificationPrefStore } from '@/store/notification-pref-store'
+import { startNotificationWatch } from '@/lib/notification-watch'
+import { playChime } from '@/lib/notification-sound'
+import { sendSystemNotification } from '@/tauri/notification'
 import { useTerminalSearchStore } from '@/store/terminal-search-store'
 import { useWarRoomStore } from '@/store/war-room-store'
 import {
@@ -549,6 +554,26 @@ export default function App(): ReactElement {
         useUpdaterStore.getState().dismiss()
         void showMessage(`Update check failed:\n${detail}`, { title: 'Swarmterm', kind: 'error' })
       }
+    })
+  }, [])
+
+  // Đ3 notifications: subscribed outside the render path (updater precedent)
+  // so per-tick agent-state churn never re-renders App.
+  useEffect(() => {
+    return startNotificationWatch({
+      subscribeAgentStates: (listener) =>
+        useAgentStateStore.subscribe((cur, prev) => listener(cur.byId, prev.byId)),
+      getAgentStates: () => useAgentStateStore.getState().byId,
+      isPaneWatched: (id) =>
+        document.hasFocus() && selectFocusedTerminalId(useAppStore.getState()) === id,
+      isWindowFocused: () => document.hasFocus(),
+      getAgentId: getTerminalAgentId,
+      getPrefs: () => useNotificationPrefStore.getState().prefs,
+      getPaneTitle: (id) => useTerminalTitleStore.getState().titles[id] ?? '',
+      playChime,
+      sendSystemNotification: (opts) => void sendSystemNotification(opts),
+      setTimer: (fn, ms) => window.setTimeout(fn, ms),
+      clearTimer: (h) => window.clearTimeout(h as number)
     })
   }, [])
 

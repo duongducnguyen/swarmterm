@@ -1019,6 +1019,11 @@ export function getTerminalCwd(id: string): string | undefined {
   return entries.get(id)?.cwd || undefined
 }
 
+/** The agent template id this terminal was spawned with, if any. */
+export function getTerminalAgentId(id: string): string | undefined {
+  return entries.get(id)?.config.agentId
+}
+
 export function subscribeTerminalStatus(id: string, listener: () => void): () => void {
   return entries.get(id)?.session.subscribe(listener) ?? (() => {})
 }
