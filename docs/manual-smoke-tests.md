@@ -275,3 +275,14 @@ Needs two published releases (the older installed locally). Full flow in
 - [ ] Plain terminal pane: yellow output dot behaves exactly as before.
 - [ ] Respawn an agent pane (switch agent) → no stale dot; detection resumes after ~3s.
 - [ ] Scroll an agent pane far up during a working task → dot still tracks the live bottom of the buffer.
+
+## Notifications
+
+- [ ] Agent blocks (permission prompt) in a background workspace → chime after ~1 s, no OS banner while the window is focused.
+- [ ] Same, but with the window unfocused → chime + silent OS banner ("<Agent> needs your input").
+- [ ] Agent finishes in a background pane → completion chime; banner only when window unfocused.
+- [ ] Blocked flash that resolves within ~1 s → no chime.
+- [ ] Blocked while you are watching that pane → nothing.
+- [ ] Settings → Notifications: Sound off → banner still works; System off → chime still works; per-agent off → that agent is fully silent.
+- [ ] macOS: first banner triggers the system permission prompt; denying it keeps chimes working.
+- [ ] Plain Terminal pane never notifies.

@@ -29,6 +29,14 @@ A Claude Code, Codex or OpenCode pane shows a coloured dot instead of the plain 
 
 A workspace tab in the navbar rolls this up across all its panes and shows the highest-priority dot — blocked beats done, done beats working, working beats plain activity — but only while that tab is **inactive**; the tab you're looking at never needs a dot. War Room member rows show the same coloured dot, or a muted grey dot labelled "Connected, idle" when a member has nothing to report.
 
+## Notifications
+
+A background Claude Code, Codex or OpenCode pane chimes when it blocks (needs your input) or finishes — a short WebAudio tone, so you don't have to keep watching the dots. The chime fires about a second after the state change, and Swarmterm re-checks at that moment: a blocked flash that resolves itself, or a pane you've since switched to, never sounds.
+
+A system notification (banner) only appears while the Swarmterm window is **unfocused** — it's sent silent, since the chime is already the audible part; focus the window and you get the chime alone. macOS asks for notification permission the first time a banner would show, and declining it still leaves the chime working.
+
+Turn channels on or off in **Settings → Notifications**: **Sound** and **System notifications** apply everywhere, and a **per-agent** toggle below silences one CLI (Claude Code, Codex, OpenCode) without touching the others — all three default to on. Plain Terminal panes never notify; there's no agent state to notify about.
+
 ## Resume past agent sessions
 
 Picking a working folder also lists that folder's recent Claude Code, Codex and OpenCode sessions, read from each CLI's own history (never modified). Tick any of them — each reopens as an extra pane, right where the conversation left off. Tabs filter by agent, and "Show all" opens a searchable dialog over the full list.
