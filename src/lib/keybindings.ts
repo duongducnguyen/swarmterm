@@ -11,7 +11,7 @@ export interface KeybindingGroup {
 }
 
 /** Window-level app shortcuts App.tsx listens for. */
-export type AppShortcutAction = 'toggle-navbar' | 'toggle-broadcast'
+export type AppShortcutAction = 'toggle-navbar' | 'toggle-broadcast' | 'find-in-terminal'
 
 /** The subset of a KeyboardEvent the matcher needs, kept pure for unit tests. */
 export interface ShortcutKeyEvent {
@@ -35,8 +35,12 @@ export function matchAppShortcut(
   const modifier = isMac ? event.metaKey : event.ctrlKey
   const opposite = isMac ? event.ctrlKey : event.metaKey
   if (!modifier || opposite || event.altKey) return null
-  if (event.key.toLowerCase() !== 'b') return null
-  return event.shiftKey ? 'toggle-broadcast' : 'toggle-navbar'
+  const key = event.key.toLowerCase()
+  if (key === 'b') return event.shiftKey ? 'toggle-broadcast' : 'toggle-navbar'
+  // No shifted variant exists for find, so Shift+F falls through untouched
+  // (returns null) rather than claiming a binding nothing implements.
+  if (key === 'f' && !event.shiftKey) return 'find-in-terminal'
+  return null
 }
 
 // If you change a binding in App.tsx, update this list to match.
@@ -57,8 +61,10 @@ export function getShortcutGroups(isMac: boolean): KeybindingGroup[] {
       id: 'window',
       label: 'Window',
       entries: [
-        { description: 'Toggle sidebar',              keys: [mod, 'B'] },
-        { description: 'Close Settings',              keys: ['Esc'] },
+        { description: 'Toggle sidebar',   keys: [mod, 'B'] },
+        { description: 'Find in terminal', keys: [mod, 'F'] },
+        { description: 'Close find',       keys: ['Esc'] },
+        { description: 'Close Settings',   keys: ['Esc'] },
       ],
     },
   ]

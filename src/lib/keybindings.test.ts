@@ -114,3 +114,56 @@ describe('matchAppShortcut', () => {
     expect(matchAppShortcut(key({}), true)).toBeNull()
   })
 })
+
+describe('matchAppShortcut find-in-terminal', () => {
+  it('Ctrl+F opens find on non-mac', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, key: 'f' }), false)).toBe('find-in-terminal')
+  })
+
+  it('Cmd+F opens find on mac', () => {
+    expect(matchAppShortcut(key({ metaKey: true, key: 'f' }), true)).toBe('find-in-terminal')
+  })
+
+  it('Ctrl+F does NOT match on mac (wrong modifier)', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, key: 'f' }), true)).toBeNull()
+  })
+
+  it('Cmd+F does not match on non-mac', () => {
+    expect(matchAppShortcut(key({ metaKey: true, key: 'f' }), false)).toBeNull()
+  })
+
+  it('Shift+F must NOT match (no shifted find binding)', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, shiftKey: true, key: 'f' }), false)).toBeNull()
+    expect(matchAppShortcut(key({ metaKey: true, shiftKey: true, key: 'f' }), true)).toBeNull()
+  })
+
+  it('rejects when Alt is held', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, altKey: true, key: 'f' }), false)).toBeNull()
+    expect(matchAppShortcut(key({ metaKey: true, altKey: true, key: 'f' }), true)).toBeNull()
+  })
+
+  it('rejects when the opposite modifier is also held', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, metaKey: true, key: 'f' }), false)).toBeNull()
+    expect(matchAppShortcut(key({ ctrlKey: true, metaKey: true, key: 'f' }), true)).toBeNull()
+  })
+
+  it('plain F without modifier does not match', () => {
+    expect(matchAppShortcut(key({ key: 'f' }), false)).toBeNull()
+    expect(matchAppShortcut(key({ key: 'f' }), true)).toBeNull()
+  })
+
+  it('matches uppercase F (shift held on the key itself, no modifier flag)', () => {
+    expect(matchAppShortcut(key({ ctrlKey: true, key: 'F' }), false)).toBe('find-in-terminal')
+  })
+})
+
+describe('getShortcutGroups window group: find in terminal', () => {
+  it('lists Find in terminal and Close find with the right tokens', () => {
+    const nonMac = getShortcutGroups(false).find((g) => g.id === 'window')
+    const mac = getShortcutGroups(true).find((g) => g.id === 'window')
+    expect(nonMac?.entries).toContainEqual({ description: 'Find in terminal', keys: ['Ctrl', 'F'] })
+    expect(nonMac?.entries).toContainEqual({ description: 'Close find', keys: ['Esc'] })
+    expect(mac?.entries).toContainEqual({ description: 'Find in terminal', keys: ['⌘', 'F'] })
+    expect(mac?.entries).toContainEqual({ description: 'Close find', keys: ['Esc'] })
+  })
+})
