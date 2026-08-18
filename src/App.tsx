@@ -324,6 +324,7 @@ export default function App(): ReactElement {
         if (terminalId) {
           e.preventDefault()
           useTerminalSearchStore.getState().open(terminalId)
+          return
         }
       }
     }
@@ -557,7 +558,7 @@ export default function App(): ReactElement {
     })
   }, [])
 
-  // Đ3 notifications: subscribed outside the render path (updater precedent)
+  // Agent notifications: subscribed outside the render path (updater precedent)
   // so per-tick agent-state churn never re-renders App.
   useEffect(() => {
     return startNotificationWatch({

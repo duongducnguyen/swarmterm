@@ -33,7 +33,7 @@ interface Armed {
 }
 
 /**
- * The impure half of Đ3: diffs agent-state snapshots, holds ONE pending
+ * The impure half of agent notifications: diffs agent-state snapshots, holds ONE pending
  * notification per terminal (a newer qualifying transition replaces it — the
  * user cares about the latest fact, not the history), and delegates every
  * decision to the pure rules in notification-flow. Timers are injected so the

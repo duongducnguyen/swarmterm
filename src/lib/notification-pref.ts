@@ -1,4 +1,4 @@
-/** User preferences for Đ3 agent notifications. Persisted to localStorage. */
+/** User preferences for agent notifications. Persisted to localStorage. */
 export interface NotificationPrefs {
   sound: boolean
   system: boolean

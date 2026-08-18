@@ -240,6 +240,12 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   (error ⇒ empty, never blocks Create); session ids are regex-validated in
   `lib/resume-command.ts` before they reach a shell line; resume panes spawn
   at the session's recorded cwd and are exempt from worktree provisioning.
+- **App shortcut gate contract.** Window-level app shortcuts matched by
+  `matchAppShortcut` must go through TWO places: `App.tsx`'s keydown handler
+  (dispatch) AND `terminal-registry.ts::attachCustomKeyEventHandler` (gate that
+  suppresses the combo toward the pty, since xterm ignores `preventDefault` and
+  would otherwise write a control byte like `^F`/`^B` into the shell on non-mac).
+  Omit either and the shortcut either doesn't work or leaks bytes to the shell.
 
 ## Dev workflow
 
