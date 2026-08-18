@@ -55,6 +55,7 @@ import { useRecentsStore } from '@/store/recents-store'
 import { useAgentAvailabilityStore } from '@/store/agent-availability-store'
 import { useShellAvailabilityStore } from '@/store/shell-availability-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { useTerminalSearchStore } from '@/store/terminal-search-store'
 import { useWarRoomStore } from '@/store/war-room-store'
 import {
   warRoomJoin,
@@ -290,8 +291,8 @@ export default function App(): ReactElement {
           return
         }
       }
-      // Cmd+B / Cmd+Shift+B on mac, Ctrl+B / Ctrl+Shift+B elsewhere.
-      // If these bindings change, update src/lib/keybindings.ts.
+      // Cmd+B / Cmd+Shift+B / Cmd+F on mac, Ctrl+B / Ctrl+Shift+B / Ctrl+F
+      // elsewhere. If these bindings change, update src/lib/keybindings.ts.
       const action = matchAppShortcut(e, isMac)
       if (action === 'toggle-broadcast') {
         e.preventDefault()
@@ -301,6 +302,24 @@ export default function App(): ReactElement {
       if (action === 'toggle-navbar') {
         e.preventDefault()
         useNavbarVisibilityStore.getState().toggle()
+        return
+      }
+      if (action === 'find-in-terminal') {
+        // Same "does something else legitimately own the keyboard" guard as
+        // the broadcast-Esc handler above: stand down while the composer, a
+        // rename field, or an open menu has focus. isAnyTerminalFocused()
+        // still carves the terminal itself back out, and re-covers the case
+        // where the overlay is already open but the user clicked back into
+        // the terminal — open() below is idempotent, so this just re-focuses
+        // the existing find input.
+        if (!isAnyTerminalFocused() && !shouldReturnFocus(describeFocusedElement(document.activeElement))) {
+          return
+        }
+        const terminalId = selectFocusedTerminalId(useAppStore.getState())
+        if (terminalId) {
+          e.preventDefault()
+          useTerminalSearchStore.getState().open(terminalId)
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })

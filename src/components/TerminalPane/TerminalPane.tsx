@@ -6,8 +6,10 @@ import { collectLeaves } from '@/lib/layout-tree'
 import { useAppStore, type ClearTarget } from '@/store/app-store'
 import { useTerminalPrefStore } from '@/store/terminal-pref-store'
 import { useTerminalTitleStore } from '@/store/terminal-title-store'
+import { useTerminalSearchStore } from '@/store/terminal-search-store'
 import { Button } from '@/components/ui/button'
 import { HeldDeliveryPill } from '@/components/TerminalPane/HeldDeliveryPill'
+import { SearchOverlay } from '@/components/TerminalPane/SearchOverlay'
 import { PaneHeader } from './PaneHeader'
 import {
   ContextMenu,
@@ -79,6 +81,10 @@ export function TerminalPane({
   const { id: leafId, terminalId } = leaf
 
   const agentTitle = useTerminalTitleStore((s) => s.titles[terminalId])
+  // Narrow boolean selector: only THIS pane re-renders when the find overlay
+  // opens/closes for it, not every pane on every keystroke in some other one
+  // (the overlay owns its own query/toggle state, not the store).
+  const searchOpen = useTerminalSearchStore((s) => s.openFor === terminalId)
 
   // Reorder-DnD: the whole pane root is both the drop target AND the draggable
   // node (so the drag overlay assumes the pane's size); the header (below) is the
@@ -329,6 +335,7 @@ export function TerminalPane({
         <div ref={containerRef} className="absolute inset-0" />
 
         <HeldDeliveryPill terminalId={terminalId} />
+        {searchOpen && <SearchOverlay terminalId={terminalId} />}
 
         {status.kind === 'error' && (
           <StatusOverlay
