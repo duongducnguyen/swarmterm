@@ -1,4 +1,5 @@
 import type { AgentPaneState } from '@/lib/agent-state/rollup'
+import { agentNotificationsEnabled, type NotificationPrefs } from '@/lib/notification-pref'
 
 export type NotificationKind = 'attention' | 'completion'
 
@@ -35,4 +36,51 @@ export function diffAgentStates(
     if (!(terminalId in next)) out.push({ terminalId, kind: 'removed' })
   }
   return out
+}
+
+export interface PendingNotification {
+  terminalId: string
+  kind: NotificationKind
+  agentId: string
+}
+
+export interface FireContext {
+  current: AgentPaneState | undefined
+  paneWatched: boolean
+  windowFocused: boolean
+  prefs: NotificationPrefs
+}
+
+export interface FireVerdict {
+  sound: boolean
+  system: boolean
+}
+
+const DROP: FireVerdict = { sound: false, system: false }
+
+/**
+ * Fire-time re-validation, ~1 s after the transition: a blocked flash that
+ * resolved itself, a pane the user has since looked at, or a dead terminal
+ * must not notify. The banner additionally requires the window to be
+ * unfocused AT THIS INSTANT — inside the app the chime alone is the signal.
+ */
+export function resolveFire(pending: PendingNotification, ctx: FireContext): FireVerdict {
+  const { current } = ctx
+  if (current === undefined) return DROP
+  if (pending.kind === 'attention' && current.state !== 'blocked') return DROP
+  if (pending.kind === 'completion' && !(current.state === 'idle' && !current.seen)) return DROP
+  if (ctx.paneWatched) return DROP
+  if (!agentNotificationsEnabled(ctx.prefs, pending.agentId)) return DROP
+  return { sound: ctx.prefs.sound, system: ctx.prefs.system && !ctx.windowFocused }
+}
+
+export function notificationCopy(
+  kind: NotificationKind,
+  agentName: string,
+  paneTitle: string
+): { title: string; body: string } {
+  return {
+    title: kind === 'attention' ? `${agentName} needs your input` : `${agentName} finished`,
+    body: paneTitle
+  }
 }
