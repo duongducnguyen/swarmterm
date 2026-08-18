@@ -31,11 +31,12 @@ function ToggleRow({ label, description, checked, onChange, icon }: ToggleRowPro
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+          'relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
           checked ? 'bg-primary' : 'bg-muted'
         )}
       >
         <span
+          aria-hidden
           className={cn(
             'absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform',
             checked ? 'translate-x-4' : 'translate-x-0.5'
@@ -56,17 +57,21 @@ export function NotificationsPanel(): ReactElement {
   return (
     <div className="space-y-8">
       <section>
-        <h3 className="mb-1 text-base font-semibold text-foreground">Notifications</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Notifications
+        </h1>
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
           When a background agent pane needs your input or finishes, Swarmterm plays a short
           chime — and shows a system notification if the window is unfocused.
         </p>
-        <ToggleRow label="Sound" description="Chime when a background agent blocks or finishes." checked={prefs.sound} onChange={setSound} />
-        <ToggleRow label="System notifications" description="Only shown while the Swarmterm window is unfocused." checked={prefs.system} onChange={setSystem} />
+        <div className="mt-4">
+          <ToggleRow label="Sound" description="Chime when a background agent blocks or finishes." checked={prefs.sound} onChange={setSound} />
+          <ToggleRow label="System notifications" description="Only shown while the Swarmterm window is unfocused." checked={prefs.system} onChange={setSystem} />
+        </div>
       </section>
 
       <section>
-        <h3 className="mb-1 text-sm font-semibold text-foreground">Per agent</h3>
+        <h2 className="mb-1 text-sm font-semibold text-foreground">Per agent</h2>
         <p className="mb-2 text-xs text-muted-foreground">Turn off both channels for a specific agent.</p>
         {AGENT_TEMPLATES.map((t) => (
           <ToggleRow
