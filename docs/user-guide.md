@@ -138,6 +138,7 @@ War Room abilities only work for panes you dragged into a room, worktree abiliti
 | `⌘/Ctrl + Enter` | Create the workspace from the composer |
 | `⌘/Ctrl + C` · `⌘/Ctrl + V` | Copy (when text is selected) · paste |
 | `⌘/Ctrl + Click` | Open a file path in your editor, at that line |
+| `⌘/Ctrl + F` | Find in the focused terminal · `Esc` closes it |
 
 On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the terminal for tmux.
 
@@ -155,5 +156,5 @@ On macOS the modifier is `⌘`, which deliberately leaves `Ctrl + B` to the term
 - **One visual style** — VS Code Dark Modern; a light theme is on the list.
 - **War Room membership doesn't survive a pane restart** — re-drag the pane.
 - **The preview column has no devtools, zoom, tabs, or per-terminal cookie isolation**, and a failed page shows the platform's own error view.
-- **No terminal search yet.**
+- **Terminal search covers the visible scrollback only** — matches beyond xterm's own buffer, and search-and-replace, aren't available.
 - **Linux** is implemented but less tested than Windows and macOS.
