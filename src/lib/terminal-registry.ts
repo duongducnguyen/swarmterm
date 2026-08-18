@@ -13,6 +13,7 @@ import { useAppStore, selectWorkspaceByTerminalId, selectFocusedTerminalId } fro
 import type { TerminalTextPref } from '@/lib/terminal-text'
 import { decideClipboardAction, isMacPlatform } from '@/lib/terminal-clipboard'
 import { isWindowsPlatform } from '@/lib/platform'
+import { matchAppShortcut } from '@/lib/keybindings'
 import { readClipboard, writeClipboard } from '@/tauri/clipboard'
 import {
   isDragNotClick,
@@ -676,6 +677,24 @@ function getOrCreate(id: string): Entry {
     }
   })
   term.attachCustomKeyEventHandler((event) => {
+    // App.tsx's window-capture listener calls `event.preventDefault()` for a
+    // claimed app shortcut (Cmd/Ctrl+B, +Shift+B, +F — see keybindings.ts),
+    // but that only suppresses the BROWSER's default action; it does nothing
+    // to xterm's OWN key handling, which lives entirely inside this same
+    // event's later `_keyDown` — that method never checks
+    // `event.defaultPrevented`. Left alone, `evaluateKeyboardEvent` maps a
+    // bare Ctrl+<letter> to its control byte (Ctrl+F -> '\x06') and sends it
+    // straight to the pty on top of whatever App.tsx did. Returning `false`
+    // here makes `_keyDown` bail before that mapping runs — the same
+    // mechanism the copy/paste branch below already relies on. Gated to
+    // `keydown` only: `_keyPress` already refuses to send anything for a
+    // ctrl/alt/meta-held combo on its own (see its own
+    // `(ev.ctrlKey || ev.altKey || ev.metaKey) && !thirdLevelShift` bail), so
+    // there's nothing left for this handler to intercept at that stage.
+    if (event.type === 'keydown' && matchAppShortcut(event, isMac) !== null) {
+      event.preventDefault()
+      return false
+    }
     // xterm calls this same callback from `_keyDown`, `_keyPress` AND `_keyUp`
     // — not just keydown. For a multi-character correction (`ownsMultiCharKey`,
     // shared with the `keydown` listener above) the keydown stage needs no
