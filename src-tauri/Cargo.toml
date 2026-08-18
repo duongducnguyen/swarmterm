@@ -32,6 +32,7 @@ url = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-notification = "2"
 rmcp = { version = "2.1", features = ["server", "transport-streamable-http-server"] }
 # Both already in the tree via tauri-plugin-updater — direct deps for analytics.
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }

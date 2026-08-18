@@ -25,6 +25,7 @@
     "clipboard-manager:allow-write-text",
     "updater:default",
     "process:default",
+    "notification:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
