@@ -45,6 +45,7 @@ import {
   diffToEdit,
   encodeEdit,
   isOrdinaryCharKey,
+  isSoftLineBreakKey,
   isThirdLevelShiftKey,
   nextSuppressState,
   ownsInputEvent,
@@ -401,18 +402,18 @@ function getOrCreate(id: string): Entry {
   // (term.paste) flows through onData too, so it fans out — and gets recorded
   // — for free. Each target pty echoes independently: this is real broadcast,
   // not a text mirror.
-  const sendInput = (data: string): void => {
+  const sendInput = (data: string, kindOverride?: 'edit' | 'submit' | 'nav'): void => {
     const state = useAppStore.getState()
     const ws = selectWorkspaceByTerminalId(state, id)
     const targets = ws
       ? resolveBroadcastTargets(ws.layout, ws.broadcastActive, ws.broadcastLeafIds, id)
       : [id]
     for (const target of targets) {
-      useTerminalTypingStore.getState().noteInput(target, data)
+      useTerminalTypingStore.getState().noteInput(target, data, kindOverride)
       void writeTerminal(target, data)
     }
   }
-  term.onData(sendInput)
+  term.onData((data) => sendInput(data))
 
   // Hoisted above the input adapter below (which needs them for
   // `isThirdLevelShiftKey`) as well as the clipboard/link handling further
@@ -761,6 +762,15 @@ function getOrCreate(id: string): Entry {
     }
   })
   term.attachCustomKeyEventHandler((event) => {
+    // xterm maps Enter to CR without looking at Shift. Agent composers use LF
+    // for a literal line break, so own this exact chord and send it through
+    // the normal input path (including broadcast) once. The explicit `edit`
+    // semantic keeps War Room deliveries behind the still-open draft.
+    if (isSoftLineBreakKey(event)) {
+      event.preventDefault()
+      sendInput('\n', 'edit')
+      return false
+    }
     // App.tsx's window-capture listener calls `event.preventDefault()` for a
     // claimed app shortcut (Cmd/Ctrl+B, +Shift+B, +F — see keybindings.ts),
     // but that only suppresses the BROWSER's default action; it does nothing

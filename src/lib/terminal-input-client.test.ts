@@ -6,6 +6,7 @@ import {
   ownsMultiCharKey,
   isOrdinaryCharKey,
   isThirdLevelShiftKey,
+  isSoftLineBreakKey,
   ownsInputEvent,
   breaksSegment,
   nextSuppressState,
@@ -99,6 +100,41 @@ describe('ownsKeydown', () => {
     expect(ownsKeydown({ keyCode: 229, isComposing: true })).toBe(false)
     // isComposing is checked before keyCode, so it wins regardless of keyCode.
     expect(ownsKeydown({ keyCode: 65, isComposing: true })).toBe(false)
+  })
+})
+
+describe('isSoftLineBreakKey', () => {
+  const event = (overrides: Partial<Parameters<typeof isSoftLineBreakKey>[0]> = {}) => ({
+    type: 'keydown',
+    key: 'Enter',
+    shiftKey: true,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    isComposing: false,
+    ...overrides
+  })
+
+  it('owns exactly Shift+Enter on keydown', () => {
+    expect(isSoftLineBreakKey(event())).toBe(true)
+    // Both physical Enter keys report the same UI Events key value.
+    expect(isSoftLineBreakKey(event({ key: 'Enter' }))).toBe(true)
+  })
+
+  it('leaves plain Enter and mixed modifier chords to xterm', () => {
+    expect(isSoftLineBreakKey(event({ shiftKey: false }))).toBe(false)
+    expect(isSoftLineBreakKey(event({ ctrlKey: true }))).toBe(false)
+    expect(isSoftLineBreakKey(event({ altKey: true }))).toBe(false)
+    expect(isSoftLineBreakKey(event({ metaKey: true }))).toBe(false)
+  })
+
+  it('does not fire again on keypress or keyup', () => {
+    expect(isSoftLineBreakKey(event({ type: 'keypress' }))).toBe(false)
+    expect(isSoftLineBreakKey(event({ type: 'keyup' }))).toBe(false)
+  })
+
+  it('does not interrupt an active IME composition', () => {
+    expect(isSoftLineBreakKey(event({ isComposing: true }))).toBe(false)
   })
 })
 

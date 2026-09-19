@@ -77,6 +77,32 @@ export function ownsKeydown(event: { keyCode: number; isComposing: boolean }): b
 }
 
 /**
+ * Shift+Enter is a soft line break in agent composers. xterm 6 otherwise maps
+ * every Enter keydown to CR and ignores Shift, so the registry must take this
+ * exact chord and write LF itself. Keep mixed modifier chords untouched: a
+ * foreground terminal app may assign them its own meaning. The event-type
+ * check matters because xterm invokes its custom handler for keydown,
+ * keypress, and keyup; owning all three would duplicate the newline.
+ */
+export function isSoftLineBreakKey(event: {
+  type: string
+  key: string
+  shiftKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  isComposing: boolean
+}): boolean {
+  return event.type === 'keydown'
+    && event.key === 'Enter'
+    && event.shiftKey
+    && !event.ctrlKey
+    && !event.altKey
+    && !event.metaKey
+    && !event.isComposing
+}
+
+/**
  * Named keys from the UI Events spec. Anything here is a key, never text, no
  * matter what `code` says — "Enter" on NumpadEnter is still Enter.
  */

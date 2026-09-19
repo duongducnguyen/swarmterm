@@ -210,6 +210,7 @@ War Room abilities only work for panes you dragged into a room, worktree abiliti
 | `Alt + Click` | Add or remove a pane from the broadcast group |
 | `Esc` | Leave broadcast mode · close Settings |
 | `⌘/Ctrl + Enter` | Create the workspace from the composer |
+| `Shift + Enter` | Insert a line break in supported terminal apps and agent prompts |
 | `⌘/Ctrl + C` · `⌘/Ctrl + V` | Copy (when text is selected) · paste |
 | `⌘/Ctrl + Click` | Open a file path in your editor, at that line |
 | `⌘/Ctrl + F` | Find in the focused terminal · press again to re-select the query · `Esc` closes it |

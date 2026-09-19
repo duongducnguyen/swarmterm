@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { classifyInput } from '@/lib/terminal-typing'
+import { classifyInput, type InputKind } from '@/lib/terminal-typing'
 
 /**
  * Per-terminal "the user is typing here" signal, keyed by terminalId. Runtime
@@ -17,7 +17,7 @@ export interface TerminalTypingStore {
   lastKeyAt: Record<string, number>
   /** True while a line has been typed and not yet submitted or abandoned. */
   dirty: Record<string, boolean>
-  noteInput: (terminalId: string, data: string) => void
+  noteInput: (terminalId: string, data: string, kindOverride?: InputKind) => void
   /** "Done typing here" — used by the Deliver-now buttons, by pane disposal,
    *  and by `noteInput` itself on a submit, all of which want the same thing:
    *  drop this terminal's entries. */
@@ -28,8 +28,12 @@ export const useTerminalTypingStore = create<TerminalTypingStore>((set, get) => 
   lastKeyAt: {},
   dirty: {},
 
-  noteInput: (terminalId, data) => {
-    const kind = classifyInput(data)
+  noteInput: (terminalId, data, kindOverride) => {
+    // Most input can be classified from its bytes. Shift+Enter is the one
+    // intentional exception: it writes LF (normally a line-ending byte) but
+    // semantically keeps an agent prompt open, so the registry marks it as an
+    // edit to keep War Room delivery held behind the multi-line draft.
+    const kind = kindOverride ?? classifyInput(data)
     if (kind === 'submit') {
       // "The line is done, nothing pending in this pane" is exactly what
       // clearTyping means, so share its logic rather than duplicating it.

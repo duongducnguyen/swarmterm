@@ -45,6 +45,14 @@ A longer scripted War Room scenario lives in [`war-room-demo.md`](war-room-demo.
 - [ ] **Keyboard focus:** click the titlebar / a tab / a pane header, then type
       immediately → characters reach the terminal; Tab triggers shell
       completion instead of walking the focus ring.
+- [ ] **Soft line break:** in Claude Code and Codex prompts, type `line one`,
+      press `Shift+Enter`, then type `line two` → both lines remain in the
+      composer and nothing runs until plain Enter is pressed. No duplicate
+      blank line appears; `Ctrl+J` continues to work as before.
+- [ ] **Broadcast soft line break:** arm two agent panes for broadcast and
+      repeat the previous check → each pane receives exactly one line break.
+- [ ] **Shortcut isolation:** with terminal Find open, `Shift+Enter` still
+      selects the previous match instead of inserting terminal input.
 - [ ] **Activity dot:** lights while a pane streams output, clears when quiet.
 
 ## Terminal links

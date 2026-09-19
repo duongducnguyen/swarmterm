@@ -62,6 +62,18 @@ describe('getShortcutGroups platform tokens', () => {
   })
 })
 
+describe('getShortcutGroups terminal input', () => {
+  it('lists Shift+Enter as Insert line break on every platform', () => {
+    for (const isMac of [false, true]) {
+      const terminal = getShortcutGroups(isMac).find((g) => g.id === 'terminal')
+      expect(terminal?.entries).toContainEqual({
+        description: 'Insert line break',
+        keys: ['Shift', 'Enter']
+      })
+    }
+  })
+})
+
 function key(overrides: Partial<ShortcutKeyEvent>): ShortcutKeyEvent {
   return { key: 'b', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...overrides }
 }

@@ -34,6 +34,16 @@ describe('noteInput', () => {
     expect(after.lastKeyAt['t1']).toBeUndefined()
   })
 
+  it('keeps a Shift+Enter soft line break dirty despite writing LF to the pty', () => {
+    const s = useTerminalTypingStore.getState()
+    s.noteInput('t1', 'first line')
+    vi.advanceTimersByTime(500)
+    s.noteInput('t1', '\n', 'edit')
+    const after = useTerminalTypingStore.getState()
+    expect(after.dirty['t1']).toBe(true)
+    expect(after.lastKeyAt['t1']).toBe(Date.now())
+  })
+
   it('leaves dirty untouched on navigation but refreshes the timestamp', () => {
     const s = useTerminalTypingStore.getState()
     s.noteInput('t1', 'abc')

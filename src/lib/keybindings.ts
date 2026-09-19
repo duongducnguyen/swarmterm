@@ -56,6 +56,13 @@ export function getShortcutGroups(isMac: boolean): KeybindingGroup[] {
   const alt = isMac ? '⌥' : 'Alt'
   return [
     {
+      id: 'terminal',
+      label: 'Terminal',
+      entries: [
+        { description: 'Insert line break', keys: ['Shift', 'Enter'] },
+      ],
+    },
+    {
       id: 'broadcast',
       label: 'Broadcast',
       entries: [
