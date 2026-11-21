@@ -210,7 +210,11 @@ touched `src-tauri/` — `cargo test`. Don't assert success without the output.
   Back/forward are `eval("history.back()")` — there is no native API. Popups
   are denied and navigate the same preview in place. Webviews close on
   terminal death in `kill_terminal` AND `read_loop` (belt-and-braces, like the
-  War Room auto-leave).
+  War Room auto-leave). Any command that CREATES a webview/window must be
+  `async`: a sync command runs on the main thread inside WebView2's
+  IPC request handler, `run_on_main_thread` then executes inline, and wry's
+  nested controller wait never completes (WebView2 ≥ 157) — every later IPC
+  call hangs forever (no typing, no new panes, no War Room joins).
 - **Auto-update.** `tauri-plugin-updater` against GitHub Releases
   (`latest.json` assembled by `scripts/release/publish.mjs` onto a draft
   release — see `docs/release-process.md`). Updater trust is the minisign key

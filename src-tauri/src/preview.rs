@@ -76,8 +76,21 @@ fn emit_state(app: &AppHandle, ev: PreviewStateEvent) {
 /// Created hidden: the renderer decides visibility (focused pane, no overlay)
 /// via preview_set_visible, so a background agent opening a preview never
 /// paints over whatever the user is looking at.
+///
+/// `async` is load-bearing, not stylistic. On Windows a SYNC command runs on
+/// the main thread *inside* WebView2's `WebResourceRequested` handler for the
+/// IPC request itself, and `run_on_main_thread` from the main thread executes
+/// inline — so `add_child` would build a WebView2 controller (wry blocks in a
+/// nested `wait_with_pump`) while that event handler is still on the stack.
+/// WebView2 does not re-enter its own events/completions there: from runtime
+/// 157 on the creation never completes, the deferral for this request is
+/// never answered, and EVERY later custom-protocol request (all IPC, even
+/// asset loads) hangs forever — panes stop accepting input, new panes never
+/// spawn, War Room joins never land. As an async command this body runs on
+/// the tokio pool, `run_on_main_thread` *posts* the closure, the IPC reply
+/// goes out first, and `add_child` runs from a clean event-loop turn.
 #[tauri::command]
-pub fn preview_open(
+pub async fn preview_open(
     app: AppHandle,
     terminal_id: String,
     url: String,
